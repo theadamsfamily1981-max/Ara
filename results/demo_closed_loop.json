@@ -1,0 +1,26 @@
+{
+  "initial_epr_cv": 0.31337127830342826,
+  "final_epr_cv": 0.0,
+  "stability_restored": false,
+  "initial_valence": -0.3078964803138693,
+  "final_valence": 0.0,
+  "initial_arousal": 0.7700569174551424,
+  "final_arousal": 0.0,
+  "temperature_mult": 0.6384207039372262,
+  "memory_mult": 1.019210351968613,
+  "policy_conservative": true,
+  "mask_proposed": true,
+  "mask_accepted": true,
+  "structural_change": 0.05371585533343507,
+  "pgu_verified": true,
+  "pgu_latency_ms": 910.05257300003,
+  "constraints_satisfied": {
+    "betti": true,
+    "connectivity": true,
+    "spectral": "True"
+  },
+  "backend_selected": "pgu_verified",
+  "backend_confidence": 1.0,
+  "total_time_ms": 1171.298127,
+  "success": true
+}
