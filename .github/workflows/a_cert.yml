@@ -1,0 +1,415 @@
+name: A-Cert Pipeline (Antifragility Certification)
+
+# =============================================================================
+# A-Cert: Antifragility Certification Pipeline
+# =============================================================================
+#
+# Three-stage certification system:
+#   Stage 1: Structural and Formal Audit (Hard Gates)
+#   Stage 2: Performance and Resource Certification
+#   Stage 3: End-to-End Deployment and Antifragility Validation
+#
+# All results are uploaded as artifacts for dashboard visualization.
+# =============================================================================
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      full_certification:
+        description: 'Run full certification (including GPU benchmarks)'
+        required: false
+        default: 'false'
+        type: boolean
+      burst_factor:
+        description: 'Burst load factor for antifragility test'
+        required: false
+        default: '2.0'
+        type: string
+
+env:
+  PYTHON_VERSION: '3.11'
+  ARTIFACTS_DIR: artifacts/a_cert
+
+jobs:
+  # ===========================================================================
+  # STAGE 1: STRUCTURAL AND FORMAL AUDIT
+  # ===========================================================================
+
+  stage1-hard-gates:
+    name: "Stage 1: Hard Gates"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    outputs:
+      param_reduction: ${{ steps.validate.outputs.param_reduction }}
+      epr_cv: ${{ steps.validate.outputs.epr_cv }}
+      topo_gap: ${{ steps.validate.outputs.topo_gap }}
+      gates_passed: ${{ steps.validate.outputs.gates_passed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip wheel
+          pip install -r requirements.txt
+          pip install -e .
+          pip install pytest
+
+      - name: Create artifacts directory
+        run: mkdir -p ${{ env.ARTIFACTS_DIR }}/stage1
+
+      # A. Parameter Efficiency Gate
+      - name: "Gate A: Parameter Efficiency (≥97% reduction)"
+        id: param_gate
+        run: |
+          python scripts/validate_all_gates.py \
+            --gate param_efficiency \
+            --output ${{ env.ARTIFACTS_DIR }}/stage1/param_gate.json
+
+      # B. Training Stability Gate
+      - name: "Gate B: Training Stability (EPR-CV ≤ 0.15)"
+        id: stability_gate
+        run: |
+          python scripts/validate_all_gates.py \
+            --gate training_stability \
+            --output ${{ env.ARTIFACTS_DIR }}/stage1/stability_gate.json
+
+      # C. Topological Integrity Gate
+      - name: "Gate C: Topological Integrity (topo_gap ≤ 2%)"
+        id: topo_gate
+        run: |
+          python scripts/validate_all_gates.py \
+            --gate topological_integrity \
+            --output ${{ env.ARTIFACTS_DIR }}/stage1/topo_gate.json
+
+      # Aggregate validation
+      - name: Validate All Stage 1 Gates
+        id: validate
+        run: |
+          python scripts/validate_all_gates.py \
+            --all \
+            --output ${{ env.ARTIFACTS_DIR }}/stage1/all_gates.json \
+            --summary ${{ env.ARTIFACTS_DIR }}/stage1/summary.md
+
+          # Extract outputs for downstream jobs
+          python -c "
+          import json
+          with open('${{ env.ARTIFACTS_DIR }}/stage1/all_gates.json') as f:
+              data = json.load(f)
+
+          print(f\"param_reduction={data.get('param_reduction_pct', 0):.2f}\")
+          print(f\"epr_cv={data.get('epr_cv', 1.0):.4f}\")
+          print(f\"topo_gap={data.get('topo_gap', 1.0):.4f}\")
+          print(f\"gates_passed={'true' if data.get('all_passed', False) else 'false'}\")
+          " >> $GITHUB_OUTPUT
+
+      - name: Upload Stage 1 Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a_cert_stage1
+          path: ${{ env.ARTIFACTS_DIR }}/stage1/
+
+      - name: Stage 1 Summary
+        if: always()
+        run: |
+          echo "## Stage 1: Hard Gates" >> $GITHUB_STEP_SUMMARY
+          cat ${{ env.ARTIFACTS_DIR }}/stage1/summary.md >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # STAGE 2: PERFORMANCE AND RESOURCE CERTIFICATION
+  # ===========================================================================
+
+  stage2-performance:
+    name: "Stage 2: Performance"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: stage1-hard-gates
+    if: needs.stage1-hard-gates.outputs.gates_passed == 'true'
+
+    outputs:
+      pgu_p95: ${{ steps.pgu.outputs.p95_latency }}
+      pgu_cache_hit: ${{ steps.pgu.outputs.cache_hit_rate }}
+      performance_passed: ${{ steps.validate.outputs.performance_passed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip wheel
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Create artifacts directory
+        run: mkdir -p ${{ env.ARTIFACTS_DIR }}/stage2
+
+      # A. PGU Verification Latency
+      - name: "Benchmark A: PGU Latency (p95 ≤ 120ms)"
+        id: pgu
+        run: |
+          python scripts/bench_pgu_cache.py \
+            --n-queries 5000 \
+            --output ${{ env.ARTIFACTS_DIR }}/stage2/pgu_bench.json
+
+          python -c "
+          import json
+          with open('${{ env.ARTIFACTS_DIR }}/stage2/pgu_bench.json') as f:
+              data = json.load(f)
+          print(f\"p95_latency={data.get('p95_ms', 999):.2f}\")
+          print(f\"cache_hit_rate={data.get('cache_hit_rate', 0):.2f}\")
+          " >> $GITHUB_OUTPUT
+
+      # B. CXL Memory Benchmark (simulated on CPU runners)
+      - name: "Benchmark B: CXL Memory Latency"
+        id: cxl
+        run: |
+          python scripts/benchmark_cxl_memory.py \
+            --simulated \
+            --output ${{ env.ARTIFACTS_DIR }}/stage2/cxl_bench.json
+
+      # C. Energy/Pareto Benchmark
+      - name: "Benchmark C: Energy Efficiency"
+        id: energy
+        run: |
+          python scripts/bench_accuracy_energy.py \
+            --quick \
+            --output ${{ env.ARTIFACTS_DIR }}/stage2/energy_bench.json
+
+      # Validate Stage 2
+      - name: Validate Stage 2 Performance
+        id: validate
+        run: |
+          python scripts/validate_all_gates.py \
+            --stage performance \
+            --artifacts-dir ${{ env.ARTIFACTS_DIR }}/stage2 \
+            --output ${{ env.ARTIFACTS_DIR }}/stage2/validation.json \
+            --summary ${{ env.ARTIFACTS_DIR }}/stage2/summary.md
+
+          python -c "
+          import json
+          with open('${{ env.ARTIFACTS_DIR }}/stage2/validation.json') as f:
+              data = json.load(f)
+          print(f\"performance_passed={'true' if data.get('all_passed', False) else 'false'}\")
+          " >> $GITHUB_OUTPUT
+
+      - name: Upload Stage 2 Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a_cert_stage2
+          path: ${{ env.ARTIFACTS_DIR }}/stage2/
+
+      - name: Stage 2 Summary
+        if: always()
+        run: |
+          echo "## Stage 2: Performance Certification" >> $GITHUB_STEP_SUMMARY
+          cat ${{ env.ARTIFACTS_DIR }}/stage2/summary.md >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # STAGE 3: ANTIFRAGILITY CERTIFICATION
+  # ===========================================================================
+
+  stage3-antifragility:
+    name: "Stage 3: Antifragility"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [stage1-hard-gates, stage2-performance]
+    if: |
+      always() &&
+      needs.stage1-hard-gates.outputs.gates_passed == 'true'
+
+    outputs:
+      delta_p99: ${{ steps.certify.outputs.delta_p99 }}
+      antifragility_score: ${{ steps.certify.outputs.antifragility_score }}
+      certification_passed: ${{ steps.certify.outputs.certification_passed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip wheel
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Create artifacts directory
+        run: mkdir -p ${{ env.ARTIFACTS_DIR }}/stage3
+
+      # A. Closed-Loop Demo
+      - name: "Demo: Closed-Loop Antifragility"
+        run: |
+          python scripts/demo_closed_loop_antifragility.py \
+            --stress-level high \
+            --output ${{ env.ARTIFACTS_DIR }}/stage3/closed_loop_demo.json
+
+      # B. Antifragility Certification
+      - name: "Certify: Antifragility Delta (Δp99)"
+        id: certify
+        run: |
+          BURST_FACTOR="${{ github.event.inputs.burst_factor || '2.0' }}"
+
+          python scripts/certify_antifragility_delta.py \
+            --burst-factor $BURST_FACTOR \
+            --duration 15 \
+            --output ${{ env.ARTIFACTS_DIR }}/stage3/certification.json
+
+          python -c "
+          import json
+          with open('${{ env.ARTIFACTS_DIR }}/stage3/certification.json') as f:
+              data = json.load(f)
+          print(f\"delta_p99={data.get('delta_p99_burst_ms', 0):.2f}\")
+          print(f\"antifragility_score={data.get('antifragility_score', 0):.2f}\")
+          print(f\"certification_passed={'true' if data.get('certification_passed', False) else 'false'}\")
+          " >> $GITHUB_OUTPUT
+
+      # C. CLV Analysis
+      - name: "Analyze: Cognitive Load Vector"
+        run: |
+          python -c "
+          from tfan.system import create_clv_from_state, RiskLevel
+          import json
+
+          # Simulate high-stress CLV
+          clv = create_clv_from_state(
+              epr_cv=0.12,
+              topo_gap=0.25,
+              jerk=0.1,
+              valence=-0.3,
+              arousal=0.8,
+          )
+
+          result = {
+              'instability': clv.instability,
+              'resource': clv.resource,
+              'structural': clv.structural,
+              'risk_level': clv.risk_level.value,
+              'risk_score': clv.risk_score,
+              'recommend_conservative': clv.recommend_conservative,
+              'recommend_pgu_check': clv.recommend_pgu_check,
+          }
+
+          with open('${{ env.ARTIFACTS_DIR }}/stage3/clv_analysis.json', 'w') as f:
+              json.dump(result, f, indent=2)
+
+          print(f'CLV Risk Level: {clv.risk_level.value}')
+          print(f'Instability: {clv.instability:.3f}')
+          print(f'Resource: {clv.resource:.3f}')
+          print(f'Structural: {clv.structural:.3f}')
+          "
+
+      # D. Generate Certification Report
+      - name: Generate A-Cert Report
+        run: |
+          python scripts/generate_acert_report.py \
+            --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
+            --output ${{ env.ARTIFACTS_DIR }}/stage3/acert_report.md
+
+      - name: Upload Stage 3 Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a_cert_stage3
+          path: ${{ env.ARTIFACTS_DIR }}/stage3/
+
+      - name: Stage 3 Summary
+        if: always()
+        run: |
+          echo "## Stage 3: Antifragility Certification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "${{ env.ARTIFACTS_DIR }}/stage3/acert_report.md" ]; then
+            cat ${{ env.ARTIFACTS_DIR }}/stage3/acert_report.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ===========================================================================
+  # FINAL CERTIFICATION BADGE
+  # ===========================================================================
+
+  certification-badge:
+    name: "Certification Badge"
+    runs-on: ubuntu-latest
+    needs: [stage1-hard-gates, stage2-performance, stage3-antifragility]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.ARTIFACTS_DIR }}
+
+      - name: Generate Final Certification
+        run: |
+          STAGE1="${{ needs.stage1-hard-gates.outputs.gates_passed }}"
+          STAGE2="${{ needs.stage2-performance.outputs.performance_passed }}"
+          STAGE3="${{ needs.stage3-antifragility.outputs.certification_passed }}"
+          DELTA_P99="${{ needs.stage3-antifragility.outputs.delta_p99 }}"
+          SCORE="${{ needs.stage3-antifragility.outputs.antifragility_score }}"
+
+          echo "## A-Cert Certification Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage 1: Hard Gates | $([[ \"$STAGE1\" == \"true\" ]] && echo '✅ PASS' || echo '❌ FAIL') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage 2: Performance | $([[ \"$STAGE2\" == \"true\" ]] && echo '✅ PASS' || echo '❌ FAIL') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage 3: Antifragility | $([[ \"$STAGE3\" == \"true\" ]] && echo '✅ PASS' || echo '❌ FAIL') |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Antifragility Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- **Δp99 (burst):** ${DELTA_P99}ms" >> $GITHUB_STEP_SUMMARY
+          echo "- **Antifragility Score:** ${SCORE}×" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$STAGE1" == "true" && "$STAGE3" == "true" ]]; then
+            echo "### 🏆 CERTIFICATION: **PASSED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The system demonstrates certifiable antifragility." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ CERTIFICATION: **INCOMPLETE**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Some certification stages did not pass." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create Certification Badge
+        if: needs.stage3-antifragility.outputs.certification_passed == 'true'
+        run: |
+          mkdir -p badges
+          SCORE="${{ needs.stage3-antifragility.outputs.antifragility_score }}"
+          echo "{\"schemaVersion\":1,\"label\":\"antifragility\",\"message\":\"${SCORE}×\",\"color\":\"brightgreen\"}" > badges/antifragility.json
+
+      - name: Upload Certification Badge
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: certification_badge
+          path: badges/
