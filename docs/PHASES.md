@@ -9,6 +9,7 @@ This document tracks the development phases from research prototype to productio
 | Phase 1 | **DONE** | Software validation with synthetic workloads |
 | Phase 2 | PENDING | Hardware bring-up on real FPGA |
 | Phase 3 | PENDING | Live deployment with real workloads |
+| Phase 4 | **DONE** | Cognitive autonomy (L5/L6 meta-learning) |
 
 ---
 
@@ -172,14 +173,115 @@ See `docs/ANTIFRAGILITY_CERTIFICATION.md` for detailed metric definitions.
 
 ---
 
+## Phase 4: Cognitive Autonomy (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Enable the system to learn its own control laws and reason formally.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| L5 Meta-Learning | Done | `tfan/l5/__init__.py` |
+| L6 Reasoning Orchestrator | Done | `tfan/l6/__init__.py` |
+| Adaptive Geometry | Done | `tfan/geometry/__init__.py` |
+| Certification Script | Done | `scripts/certify_cognitive_autonomy.py` |
+
+### L5 Meta-Learning: AEPO Learns L3 Control Laws
+
+The system learns optimal emotional control parameters instead of using hand-tuned values.
+
+**Action Space (L3 Parameters):**
+- `jerk_threshold`: [0.05, 0.3] - State change rate sensitivity
+- `controller_weight`: [0.1, 0.5] - PAD gating blend weight
+- `arousal_temp_scale`: [0.3, 0.7] - Arousal → Temperature coupling
+- `valence_mem_scale`: [0.3, 0.7] - Valence → Memory coupling
+- `curvature_c`: [0.5, 2.0] - Hyperbolic geometry curvature
+
+**Reward Signal:**
+- Antifragility Score (40%)
+- Δp99% improvement (30%)
+- CLV risk level (20%)
+- PGU pass rate (10%)
+
+**Personality Profiles (learned):**
+- `cautious_stable`: Low jerk, high confidence threshold
+- `reactive_adaptive`: High jerk, fast response
+- `balanced_general`: Middle ground
+- `exploratory_creative`: High arousal coupling
+- `conservative_safe`: Low arousal, high memory coupling
+
+### L6 Reasoning: PGU + Knowledge Graph + LLM
+
+Tri-modal reasoning stack with L3-aware routing:
+
+```
+Query → ReasoningOrchestrator
+           │
+           ├─ High stakes / Low valence → FORMAL_FIRST (KG → PGU → LLM)
+           ├─ Safety-critical → PGU_VERIFIED (LLM → PGU check)
+           ├─ Creative / Exploratory → LLM_ONLY
+           └─ Default → KG_ASSISTED (KG + LLM)
+```
+
+**Mode Selection Policy:**
+| Task Type | Risk Level | Reasoning Mode |
+|-----------|------------|----------------|
+| HARDWARE_SAFETY | HIGH | FORMAL_FIRST |
+| SYSTEM_CONFIG | CRITICAL | PGU_VERIFIED |
+| CREATIVE | LOW | LLM_ONLY |
+| RETRIEVAL | * | KG_ASSISTED |
+
+### Adaptive Geometry: Task-Optimized Curvature
+
+The system selects optimal manifold curvature for different task types:
+
+| Task Type | Curvature Range | Geometry |
+|-----------|-----------------|----------|
+| Hierarchical (planning) | 1.2 - 2.5 | High hyperbolic |
+| Flat retrieval | 0.1 - 0.5 | Low hyperbolic |
+| Sequential reasoning | 0.7 - 1.3 | Standard |
+| Clustering | 0.6 - 1.0 | Adaptive |
+
+### Certification Results
+
+```
+L5 Meta-Learning:
+  ✅ Candidate proposal: 6 candidates with valid ranges
+  ✅ Reward computation: 0.788 for AF=2.21
+  ✅ Learning loop: reward improved +0.87%
+  ✅ Personality: balanced_general
+
+L6 Reasoning:
+  ✅ Mode selection: 4/4 correct routing
+  ✅ KG query: single-hop works
+  ✅ Consistency oracle: 0.09ms latency
+  ✅ Full reasoning: formal_first mode
+
+Adaptive Geometry:
+  ✅ Task-based selection: 4/4 in expected range
+  ✅ Hyperbolic math: d(x,y)=0.479
+  ✅ Curvature update: 1.500 → 1.550 from reward
+  ✅ Geometric routing: c=2.17, backend=fpga
+```
+
+---
+
 ## How to Run Certification
 
 ```bash
-# Quick check
+# Phase 1: Antifragility certification
 python scripts/certify_antifragility_delta.py --burst-factor 2.0 --duration 10
 
-# Full closed-loop demo
+# Phase 1: Full closed-loop demo
 python scripts/demo_closed_loop_antifragility.py --stress-level high
+
+# Phase 4: Cognitive autonomy certification
+python scripts/certify_cognitive_autonomy.py --iterations 5
+
+# Hardware readiness check
+python scripts/validate_hardware_ready.py
 
 # CI/CD (automatic)
 # Runs on push, PR, and daily at 02:00 UTC
