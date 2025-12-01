@@ -7,6 +7,13 @@ Modes:
   --mode api         Start full API server
   --mode test        Run end-to-end test
   --mode interactive Menu-driven interaction
+  --mode brain       Test brain-body integration
+  --mode train       Run autonomous training pipeline (NEW)
+
+Training Modes (with --mode train):
+  --train-mode tprl      TP-RL topological plasticity training
+  --train-mode pareto    Pareto multi-objective optimization
+  --train-mode full      Full autonomous pipeline
 
 Endpoints (when running API):
   /ara/pulse/estimate_affect  - Affect estimation from text
@@ -45,6 +52,17 @@ try:
     logger.info("✅ Unified ara package available")
 except ImportError as e:
     logger.warning(f"⚠️  Unified ara package not available: {e}")
+
+# Check if training modules are available
+TRAINING_AVAILABLE = False
+try:
+    from ara.training import ParetoTrainer, ParetoConfig, run_pareto_training
+    from ara.tprl import TPRLTrainer, TrainingConfig as TPRLConfig, train_tprl
+    from ara.interoception import InteroceptionCore
+    TRAINING_AVAILABLE = True
+    logger.info("✅ Training modules available")
+except ImportError as e:
+    logger.warning(f"⚠️  Training modules not available: {e}")
 
 # Check if enhanced modules are available
 ENHANCED_MODE = False
@@ -454,6 +472,179 @@ async def show_status():
     logger.info("=" * 60)
 
 
+# =============================================================================
+# TRAINING FUNCTIONS
+# =============================================================================
+
+async def run_tprl_training(
+    num_episodes: int = 500,
+    checkpoint_dir: str = "./checkpoints/tprl",
+    validate_every: int = 50,
+):
+    """Run TP-RL topological plasticity training."""
+    logger.info("=" * 60)
+    logger.info("TP-RL Topological Meta-Plasticity Training")
+    logger.info("=" * 60)
+
+    if not TRAINING_AVAILABLE:
+        logger.error("❌ Training modules not available!")
+        logger.error("Please ensure ara.tprl and ara.training are installed")
+        return None
+
+    logger.info(f"Episodes: {num_episodes}")
+    logger.info(f"Validate every: {validate_every} episodes")
+    logger.info(f"Checkpoints: {checkpoint_dir}")
+    logger.info("-" * 60)
+
+    try:
+        config = TPRLConfig(
+            num_episodes=num_episodes,
+            validate_every=validate_every,
+            checkpoint_dir=checkpoint_dir,
+        )
+
+        trainer = TPRLTrainer(config)
+
+        def progress_callback(episode, result):
+            if episode % 50 == 0:
+                logger.info(
+                    f"Episode {episode}: reward={result.total_reward:.3f}, "
+                    f"density={result.density:.4f}, acc={result.accuracy:.3f}"
+                )
+            return True
+
+        results = trainer.train(callback=progress_callback)
+
+        logger.info("=" * 60)
+        logger.info("Training Complete!")
+        logger.info("=" * 60)
+        logger.info(f"Total episodes: {results['total_episodes']}")
+        logger.info(f"Elapsed time: {results['elapsed_seconds']:.2f}s")
+        logger.info(f"Best Pareto score: {results['best_pareto_score']:.4f}")
+        logger.info(f"Pareto front size: {results['pareto_front_size']}")
+        logger.info(f"Checkpoints saved to: {checkpoint_dir}")
+
+        return results
+
+    except Exception as e:
+        logger.error(f"❌ Training failed: {e}", exc_info=True)
+        return None
+
+
+async def run_pareto_training(
+    num_episodes: int = 500,
+    checkpoint_dir: str = "./checkpoints/pareto",
+    accuracy_weight: float = 1.0,
+    energy_weight: float = 0.5,
+    latency_weight: float = 0.3,
+):
+    """Run Pareto multi-objective optimization training."""
+    logger.info("=" * 60)
+    logger.info("Pareto Multi-Objective Optimization Training")
+    logger.info("=" * 60)
+
+    if not TRAINING_AVAILABLE:
+        logger.error("❌ Training modules not available!")
+        return None
+
+    logger.info(f"Episodes: {num_episodes}")
+    logger.info(f"Objectives: accuracy={accuracy_weight}, energy={energy_weight}, latency={latency_weight}")
+    logger.info(f"Checkpoints: {checkpoint_dir}")
+    logger.info("-" * 60)
+
+    try:
+        from ara.training import ParetoObjective
+
+        config = ParetoConfig(
+            objectives=[
+                ParetoObjective("accuracy", weight=accuracy_weight, target=0.95),
+                ParetoObjective("energy", weight=energy_weight, target=0.1, minimize=True),
+                ParetoObjective("latency_us", weight=latency_weight, target=200.0, minimize=True),
+                ParetoObjective("stability", weight=0.3, target=0.9),
+            ],
+            num_episodes=num_episodes,
+            checkpoint_dir=checkpoint_dir,
+        )
+
+        trainer = ParetoTrainer(config)
+
+        def progress_callback(episode, result):
+            if episode % 50 == 0:
+                logger.info(
+                    f"Episode {episode}: pareto={result.pareto_score:.4f}, "
+                    f"acc={result.objectives['accuracy']:.3f}, front={len(trainer.pareto_front.solutions)}"
+                )
+            return True
+
+        results = trainer.train(callback=progress_callback)
+
+        logger.info("=" * 60)
+        logger.info("Pareto Training Complete!")
+        logger.info("=" * 60)
+        logger.info(f"Total episodes: {results['total_episodes']}")
+        logger.info(f"Elapsed time: {results['elapsed_seconds']:.2f}s")
+        logger.info(f"Best Pareto score: {results['best_pareto_score']:.4f}")
+        logger.info(f"Pareto front size: {results['pareto_front_size']}")
+
+        if results.get('best_result'):
+            br = results['best_result']
+            logger.info("\nBest Solution:")
+            for name, val in br.get('objectives', {}).items():
+                logger.info(f"  {name}: {val:.4f}")
+
+        return results
+
+    except Exception as e:
+        logger.error(f"❌ Training failed: {e}", exc_info=True)
+        return None
+
+
+async def run_full_training(
+    num_episodes: int = 500,
+    checkpoint_dir: str = "./checkpoints/ara",
+):
+    """Run full autonomous training pipeline with all components."""
+    logger.info("=" * 60)
+    logger.info("Full Autonomous Training Pipeline")
+    logger.info("=" * 60)
+    logger.info("Components: TP-RL + Interoception + CXL Control")
+    logger.info("=" * 60)
+
+    if not TRAINING_AVAILABLE:
+        logger.error("❌ Training modules not available!")
+        return None
+
+    try:
+        # Phase 1: TP-RL pre-training
+        logger.info("\n--- Phase 1: TP-RL Pre-training ---")
+        tprl_results = await run_tprl_training(
+            num_episodes=min(200, num_episodes // 2),
+            checkpoint_dir=f"{checkpoint_dir}/tprl",
+            validate_every=25,
+        )
+
+        # Phase 2: Pareto optimization with all components
+        logger.info("\n--- Phase 2: Pareto Multi-Objective Optimization ---")
+        pareto_results = await run_pareto_training(
+            num_episodes=num_episodes,
+            checkpoint_dir=f"{checkpoint_dir}/pareto",
+        )
+
+        logger.info("=" * 60)
+        logger.info("Full Training Pipeline Complete!")
+        logger.info("=" * 60)
+
+        return {
+            "tprl": tprl_results,
+            "pareto": pareto_results,
+            "checkpoint_dir": checkpoint_dir,
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Full training failed: {e}", exc_info=True)
+        return None
+
+
 async def interactive_menu():
     """Interactive menu for testing components."""
     while True:
@@ -469,6 +660,12 @@ async def interactive_menu():
         print("7. View configuration")
         print("8. Clear cache")
         print("9. Run validation tests")
+        print("-" * 30)
+        print("Training:")
+        print("T1. TP-RL Training (topological plasticity)")
+        print("T2. Pareto Training (multi-objective)")
+        print("T3. Full Pipeline Training")
+        print("-" * 30)
         print("0. Exit")
         print("=" * 60)
 
@@ -509,16 +706,41 @@ async def interactive_menu():
             # Run validation tests
             import subprocess
             subprocess.run([sys.executable, "ara/tests/test_l3_metacontrol.py"])
+        elif choice.lower() == "t1":
+            # TP-RL Training
+            episodes = input("Number of episodes (default 100): ").strip() or "100"
+            await run_tprl_training(num_episodes=int(episodes))
+        elif choice.lower() == "t2":
+            # Pareto Training
+            episodes = input("Number of episodes (default 100): ").strip() or "100"
+            await run_pareto_training(num_episodes=int(episodes))
+        elif choice.lower() == "t3":
+            # Full Pipeline Training
+            episodes = input("Number of episodes (default 100): ").strip() or "100"
+            await run_full_training(num_episodes=int(episodes))
         else:
             print("Invalid option")
 
 
 async def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Ara - Unified Brain-Body System")
-    parser.add_argument("--mode", choices=["api", "test", "brain", "interactive"],
+    parser = argparse.ArgumentParser(
+        description="Ara - Unified Brain-Body System",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Training Examples:
+  python run_ara.py --mode train --train-mode tprl --episodes 500
+  python run_ara.py --mode train --train-mode pareto --episodes 1000
+  python run_ara.py --mode train --train-mode full --episodes 500
+
+API Examples:
+  python run_ara.py --mode api --port 8000
+  python run_ara.py --mode api --quick
+        """
+    )
+    parser.add_argument("--mode", choices=["api", "test", "brain", "train", "interactive"],
                        default="interactive",
-                       help="Run mode: api=server, test=full test, brain=L3 test (default: interactive)")
+                       help="Run mode: api=server, test=full test, brain=L3 test, train=autonomous training (default: interactive)")
     parser.add_argument("--host", default="0.0.0.0",
                        help="API server host (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=8000,
@@ -528,6 +750,21 @@ async def main():
     parser.add_argument("--quick", action="store_true",
                        help="Skip system checks for quick start")
 
+    # Training arguments
+    parser.add_argument("--train-mode", choices=["tprl", "pareto", "full"],
+                       default="pareto",
+                       help="Training mode: tprl=TP-RL only, pareto=multi-objective, full=complete pipeline (default: pareto)")
+    parser.add_argument("--episodes", type=int, default=500,
+                       help="Number of training episodes (default: 500)")
+    parser.add_argument("--checkpoint-dir", default="./checkpoints",
+                       help="Directory for training checkpoints (default: ./checkpoints)")
+    parser.add_argument("--accuracy-weight", type=float, default=1.0,
+                       help="Weight for accuracy objective (default: 1.0)")
+    parser.add_argument("--energy-weight", type=float, default=0.5,
+                       help="Weight for energy objective (default: 0.5)")
+    parser.add_argument("--latency-weight", type=float, default=0.3,
+                       help="Weight for latency objective (default: 0.3)")
+
     args = parser.parse_args()
 
     # Check system (unless quick mode)
@@ -536,12 +773,13 @@ async def main():
             logger.error("System checks failed. Please fix issues and try again.")
             sys.exit(1)
 
-        # Load personality
-        await load_personality_system()
+        # Load personality (skip for training mode)
+        if args.mode != "train":
+            await load_personality_system()
 
-        # Check oobabooga
-        if ENHANCED_MODE:
-            await run_oobabooga_integration()
+            # Check oobabooga
+            if ENHANCED_MODE:
+                await run_oobabooga_integration()
 
     # Run selected mode
     if args.mode == "api":
@@ -553,6 +791,27 @@ async def main():
     elif args.mode == "brain":
         # Quick brain-body test
         await test_brain_body_integration()
+    elif args.mode == "train":
+        # Run training
+        logger.info(f"Training mode: {args.train_mode}")
+        if args.train_mode == "tprl":
+            await run_tprl_training(
+                num_episodes=args.episodes,
+                checkpoint_dir=f"{args.checkpoint_dir}/tprl",
+            )
+        elif args.train_mode == "pareto":
+            await run_pareto_training(
+                num_episodes=args.episodes,
+                checkpoint_dir=f"{args.checkpoint_dir}/pareto",
+                accuracy_weight=args.accuracy_weight,
+                energy_weight=args.energy_weight,
+                latency_weight=args.latency_weight,
+            )
+        elif args.train_mode == "full":
+            await run_full_training(
+                num_episodes=args.episodes,
+                checkpoint_dir=args.checkpoint_dir,
+            )
     elif args.mode == "test":
         await test_brain_body_integration()
         await test_avatar_generation()
