@@ -17,11 +17,57 @@ This module provides:
 - Latency monitoring for hardware offload decisions
 - CXL memory management abstractions
 
-Usage:
+Quickstart - Control Plane
+--------------------------
+::
+
     from ara.cxl_control import ControlPlane, FPGAEmulator
 
+    # Create control plane (uses HLS emulation by default)
     plane = ControlPlane()
-    result = plane.fast_control_step(pad_state, current_temp)
+
+    # Run fast control step with PAD state
+    result = plane.fast_control_step(
+        valence=-0.3,   # Stress detected
+        arousal=0.8,    # High activation
+        dominance=0.5,  # Neutral agency
+    )
+
+    print(f"Temperature mult: {result['temperature_mult']:.2f}")
+    print(f"Memory mult: {result['memory_mult']:.2f}")
+    print(f"Cache hit: {result['cache_hit']}")
+
+Quickstart - HLS Export
+-----------------------
+::
+
+    from ara.cxl_control import HLSExporter
+
+    # Export PGU cache kernel for Vitis HLS synthesis
+    exporter = HLSExporter(target_device="xcu250-figd2104-2L-e")
+    exporter.export_all(output_dir="build/hls")
+
+    # Generated files:
+    #   - pgu_cache_kernel.cpp   (HLS kernel)
+    #   - pgu_cache_kernel.h     (Header)
+    #   - pgu_cache_tb.cpp       (Testbench)
+    #   - run_hls.tcl            (Synthesis script)
+
+    # Or use convenience function:
+    from ara.cxl_control import export_hls_kernel
+    files = export_hls_kernel("build/hls")
+
+Running Vitis HLS
+-----------------
+::
+
+    cd build/hls
+    vitis_hls -f run_hls.tcl
+
+    # Expected results:
+    # - Target: 25 cycles @ 250MHz (100ns)
+    # - II=1 for pipelined cache lookup
+    # - BRAM utilization ~10% for 1K cache entries
 """
 
 import sys

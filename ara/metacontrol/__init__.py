@@ -13,6 +13,100 @@ Workspace Modes:
     - "relax": Low valence, low arousal → calm, conservative
     - "creative": High arousal, neutral valence → exploratory
     - "support": High valence, low arousal → warm, stable
+
+Quickstart - Python API
+-----------------------
+::
+
+    from ara.metacontrol import (
+        get_metacontrol_service,
+        set_workspace_mode,
+        compute_pad_gating,
+    )
+
+    # Set workspace mode
+    modulation = set_workspace_mode("creative")
+    print(f"Temperature: {modulation['temperature_multiplier']:.2f}")
+
+    # Or compute from raw PAD values
+    modulation = compute_pad_gating(
+        valence=-0.3,   # Stress
+        arousal=0.8,    # High activation
+        dominance=0.5,
+    )
+
+Quickstart - D-Bus Client (Listen to PADChanged)
+------------------------------------------------
+::
+
+    # Python D-Bus client example
+    import dbus
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import GLib
+
+    DBusGMainLoop(set_as_default=True)
+
+    bus = dbus.SessionBus()
+
+    def on_pad_changed(json_data):
+        import json
+        data = json.loads(json_data)
+        print(f"PAD Changed: V={data['valence']:.2f}, A={data['arousal']:.2f}")
+
+    def on_status_changed(json_data):
+        import json
+        data = json.loads(json_data)
+        print(f"Antifragility: {data.get('antifragility_score', 'N/A')}")
+        print(f"Risk Level: {data.get('risk_level', 'N/A')}")
+
+    # Subscribe to signals
+    bus.add_signal_receiver(
+        on_pad_changed,
+        signal_name="PADChanged",
+        dbus_interface="org.ara.metacontrol.L3Interface",
+        path="/org/ara/metacontrol/L3",
+    )
+
+    bus.add_signal_receiver(
+        on_status_changed,
+        signal_name="StatusChanged",
+        dbus_interface="org.ara.metacontrol.L3Interface",
+        path="/org/ara/metacontrol/L3",
+    )
+
+    # Call methods
+    proxy = bus.get_object(
+        "org.ara.metacontrol",
+        "/org/ara/metacontrol/L3"
+    )
+    iface = dbus.Interface(proxy, "org.ara.metacontrol.L3Interface")
+
+    # Get current status (includes antifragility metrics)
+    status = iface.GetStatus()
+    print(status)
+
+    # Run event loop to receive signals
+    loop = GLib.MainLoop()
+    loop.run()
+
+Cockpit Integration
+-------------------
+The StatusChanged signal emits antifragility metrics in real-time::
+
+    {
+        "antifragility_score": 2.21,
+        "last_delta_p99_ms": 17.78,
+        "risk_level": "LOW",
+        "clv_instability": 0.12,
+        "clv_resource": 0.08,
+        "workspace_mode": "work",
+        "temperature_multiplier": 1.1,
+        ...
+    }
+
+Use dbus-monitor to watch signals::
+
+    dbus-monitor "interface='org.ara.metacontrol.L3Interface'"
 """
 
 import sys
@@ -162,6 +256,46 @@ class L3MetacontrolService:
         # Metrics history for Pulse telemetry
         self._metrics_history: list = []
 
+        # Antifragility metrics (updated by certification runs)
+        self._antifragility_score: float = 0.0
+        self._last_delta_p99_ms: float = 0.0
+        self._risk_level: str = "UNKNOWN"
+        self._clv_instability: float = 0.0
+        self._clv_resource: float = 0.0
+        self._clv_structural: float = 0.0
+
+    def update_antifragility_metrics(
+        self,
+        antifragility_score: float = None,
+        delta_p99_ms: float = None,
+        risk_level: str = None,
+        clv_instability: float = None,
+        clv_resource: float = None,
+        clv_structural: float = None,
+    ):
+        """
+        Update antifragility metrics from certification or CLV computation.
+
+        These metrics are exposed via GetStatus and StatusChanged signals.
+        """
+        if antifragility_score is not None:
+            self._antifragility_score = antifragility_score
+        if delta_p99_ms is not None:
+            self._last_delta_p99_ms = delta_p99_ms
+        if risk_level is not None:
+            self._risk_level = risk_level
+        if clv_instability is not None:
+            self._clv_instability = clv_instability
+        if clv_resource is not None:
+            self._clv_resource = clv_resource
+        if clv_structural is not None:
+            self._clv_structural = clv_structural
+
+        logger.debug(
+            f"Antifragility updated: score={self._antifragility_score:.2f}, "
+            f"Δp99={self._last_delta_p99_ms:.2f}ms, risk={self._risk_level}"
+        )
+
     def set_workspace_mode(self, mode: WorkspaceMode) -> ControlModulation:
         """
         Set workspace mode and compute corresponding modulation.
@@ -305,9 +439,24 @@ class L3MetacontrolService:
         return self._metrics_history.copy()
 
     def get_status(self) -> Dict[str, Any]:
-        """Get full L3 metacontrol status."""
+        """
+        Get full L3 metacontrol status including antifragility metrics.
+
+        Returns dict with:
+            - workspace_mode: Current mode (work/relax/creative/support/default)
+            - temperature_multiplier: LLM temperature scaling
+            - memory_write_multiplier: Memory operation scaling
+            - attention_gain: Attention scaling factor
+            - antifragility_score: Latest certification score (>1.0 = antifragile)
+            - last_delta_p99_ms: Latest Δp99 latency improvement
+            - risk_level: CLV risk assessment (LOW/MEDIUM/HIGH/CRITICAL)
+            - clv_instability: CLV instability component [0, 1]
+            - clv_resource: CLV resource pressure component [0, 1]
+            - clv_structural: CLV structural health component [0, 1]
+        """
         mod = self._current_modulation
         return {
+            # Core modulation
             "workspace_mode": self._current_mode.value,
             "temperature_multiplier": mod.temperature_multiplier if mod else 1.0,
             "memory_write_multiplier": mod.memory_write_multiplier if mod else 1.0,
@@ -315,6 +464,14 @@ class L3MetacontrolService:
             "effective_weight": mod.effective_weight if mod else 1.0,
             "reason": mod.reason if mod else "No modulation active",
             "metrics_count": len(self._metrics_history),
+            # Antifragility metrics
+            "antifragility_score": self._antifragility_score,
+            "last_delta_p99_ms": self._last_delta_p99_ms,
+            "risk_level": self._risk_level,
+            # CLV components
+            "clv_instability": self._clv_instability,
+            "clv_resource": self._clv_resource,
+            "clv_structural": self._clv_structural,
         }
 
     def reset(self):
@@ -442,6 +599,7 @@ class L3MetacontrolDBusService:
             "PADChanged": [],
             "ModeChanged": [],
             "ModulationChanged": [],
+            "StatusChanged": [],
         }
 
         # Signal history for debugging
@@ -492,6 +650,8 @@ class L3MetacontrolDBusService:
                     self._dbus_object.ModeChanged(data.get("mode", "default"))
                 elif signal_name == "ModulationChanged":
                     self._dbus_object.ModulationChanged(json.dumps(data))
+                elif signal_name == "StatusChanged":
+                    self._dbus_object.StatusChanged(json.dumps(data))
             except Exception as e:
                 logger.warning(f"D-Bus signal emit failed: {e}")
 
@@ -546,6 +706,34 @@ class L3MetacontrolDBusService:
         status["dbus_running"] = self._running
         status["signal_history_count"] = len(self._signal_history)
         return status
+
+    def update_antifragility(
+        self,
+        antifragility_score: float = None,
+        delta_p99_ms: float = None,
+        risk_level: str = None,
+        clv_instability: float = None,
+        clv_resource: float = None,
+        clv_structural: float = None,
+    ):
+        """
+        Update antifragility metrics and emit StatusChanged signal.
+
+        Call this from certification scripts or CLV computation to
+        broadcast real-time antifragility status to cockpit.
+        """
+        # Update underlying service
+        self.service.update_antifragility_metrics(
+            antifragility_score=antifragility_score,
+            delta_p99_ms=delta_p99_ms,
+            risk_level=risk_level,
+            clv_instability=clv_instability,
+            clv_resource=clv_resource,
+            clv_structural=clv_structural,
+        )
+
+        # Emit StatusChanged with full status
+        self.emit_signal("StatusChanged", self.get_status())
 
     def get_signal_history(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Get recent signal history."""
@@ -660,6 +848,24 @@ if DBUS_AVAILABLE:
             """Signal emitted when modulation changes."""
             pass
 
+        @dbus.service.signal(DBUS_INTERFACE, signature='s')
+        def StatusChanged(self, json_data: str):
+            """
+            Signal emitted when status changes (includes antifragility metrics).
+
+            Payload includes:
+                - antifragility_score: float (>1.0 = antifragile)
+                - last_delta_p99_ms: float (latency improvement)
+                - risk_level: str (LOW/MEDIUM/HIGH/CRITICAL)
+                - clv_instability: float [0, 1]
+                - clv_resource: float [0, 1]
+                - clv_structural: float [0, 1]
+                - workspace_mode: str
+                - temperature_multiplier: float
+                - memory_write_multiplier: float
+            """
+            pass
+
         # Methods
         @dbus.service.method(DBUS_INTERFACE, in_signature='s', out_signature='s')
         def SetWorkspaceMode(self, mode: str) -> str:
@@ -715,6 +921,43 @@ def emit_pad_signal(valence: float, arousal: float, dominance: float = 0.5):
     service.compute_pad_gating(valence, arousal, dominance)
 
 
+def update_antifragility_status(
+    antifragility_score: float = None,
+    delta_p99_ms: float = None,
+    risk_level: str = None,
+    clv_instability: float = None,
+    clv_resource: float = None,
+    clv_structural: float = None,
+):
+    """
+    Update antifragility metrics and emit StatusChanged signal.
+
+    Call from certification scripts to broadcast real-time status:
+
+    Example::
+
+        from ara.metacontrol import update_antifragility_status
+
+        # After running certification
+        update_antifragility_status(
+            antifragility_score=2.21,
+            delta_p99_ms=17.78,
+            risk_level="LOW",
+            clv_instability=0.12,
+            clv_resource=0.08,
+        )
+    """
+    service = get_dbus_service()
+    service.update_antifragility(
+        antifragility_score=antifragility_score,
+        delta_p99_ms=delta_p99_ms,
+        risk_level=risk_level,
+        clv_instability=clv_instability,
+        clv_resource=clv_resource,
+        clv_structural=clv_structural,
+    )
+
+
 __all__ = [
     "WorkspaceMode",
     "PADState",
@@ -731,6 +974,7 @@ __all__ = [
     "get_dbus_service",
     "start_dbus_service",
     "emit_pad_signal",
+    "update_antifragility_status",
     "DBUS_BUS_NAME",
     "DBUS_OBJECT_PATH",
     "DBUS_INTERFACE",
