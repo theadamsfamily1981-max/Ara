@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T-FAN Topology Screensaver</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Canvas for Three.js rendering -->
+    <canvas id="screensaver"></canvas>
+
+    <!-- HUD overlay -->
+    <div id="hud">
+        <div id="mode-display">Mode: LANDSCAPE</div>
+        <div id="metrics-display">
+            <span id="metric-epr">EPR-CV: 0.000</span>
+            <span id="metric-acc">Accuracy: 0.000</span>
+            <span id="metric-lat">Latency: 0.0ms</span>
+            <span id="metric-hv">HV: 0</span>
+        </div>
+        <div id="ws-status" class="disconnected">⚫ Disconnected</div>
+    </div>
+
+    <!-- Controls help overlay (hidden by default, show on 'H') -->
+    <div id="help-overlay" class="hidden">
+        <h2>T-FAN Topology Screensaver</h2>
+        <div class="help-section">
+            <h3>Visualization Modes</h3>
+            <ul>
+                <li><strong>Barcode Nebula</strong> - Persistence barcodes in 3D space</li>
+                <li><strong>Landscape Waterfall</strong> - Flowing persistence landscapes</li>
+                <li><strong>Poincaré Orbits</strong> - Hyperbolic embeddings on disk</li>
+                <li><strong>Pareto Galaxy</strong> - Multi-objective config stars</li>
+            </ul>
+        </div>
+        <div class="help-section">
+            <h3>Keyboard Controls</h3>
+            <ul>
+                <li><strong>M</strong> or <strong>Tab</strong> - Cycle modes</li>
+                <li><strong>P</strong> or <strong>Space</strong> - Pause/unpause</li>
+                <li><strong>H</strong> - Toggle this help</li>
+                <li><strong>F</strong> - Toggle fullscreen</li>
+                <li><strong>Q</strong> or <strong>Esc</strong> - Exit fullscreen</li>
+            </ul>
+        </div>
+        <div class="help-section">
+            <h3>Mouse Controls</h3>
+            <ul>
+                <li><strong>Left drag</strong> - Rotate camera</li>
+                <li><strong>Right drag</strong> - Pan camera</li>
+                <li><strong>Scroll</strong> - Zoom in/out</li>
+            </ul>
+        </div>
+        <p class="help-footer">Press <strong>H</strong> to close</p>
+    </div>
+
+    <!-- Three.js library (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
+
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- Main screensaver application -->
+    <script src="screensaver.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="metricsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00ff88;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00d4ff;stop-opacity:1" />
+    </linearGradient>
+    <filter id="metricsGlow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Time-series graph line -->
+  <polyline points="30,180 60,150 90,160 120,110 150,130 180,80 210,100"
+            fill="none" stroke="url(#metricsGrad)" stroke-width="4"
+            stroke-linecap="round" stroke-linejoin="round" filter="url(#metricsGlow)"/>
+
+  <!-- Data points -->
+  <circle cx="30" cy="180" r="6" fill="#00ff88" filter="url(#metricsGlow)"/>
+  <circle cx="60" cy="150" r="6" fill="#00ff88" filter="url(#metricsGlow)"/>
+  <circle cx="90" cy="160" r="6" fill="#00ff88" filter="url(#metricsGlow)"/>
+  <circle cx="120" cy="110" r="6" fill="#00d4ff" filter="url(#metricsGlow)"/>
+  <circle cx="150" cy="130" r="6" fill="#00d4ff" filter="url(#metricsGlow)"/>
+  <circle cx="180" cy="80" r="6" fill="#00d4ff" filter="url(#metricsGlow)"/>
+  <circle cx="210" cy="100" r="6" fill="#00d4ff" filter="url(#metricsGlow)"/>
+
+  <!-- Grid lines -->
+  <line x1="30" y1="50" x2="30" y2="200" stroke="#ffffff" stroke-width="2" opacity="0.3"/>
+  <line x1="30" y1="200" x2="230" y2="200" stroke="#ffffff" stroke-width="2" opacity="0.3"/>
+</svg>

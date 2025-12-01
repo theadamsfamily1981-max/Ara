@@ -1,0 +1,38 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00d4ff;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Outer hexagon ring -->
+  <path d="M 128 20 L 200 60 L 200 140 L 128 180 L 56 140 L 56 60 Z"
+        fill="none" stroke="url(#gradient1)" stroke-width="4" filter="url(#glow)"/>
+
+  <!-- Inner topology symbol (simplified persistent homology diagram) -->
+  <circle cx="128" cy="80" r="8" fill="#00d4ff" filter="url(#glow)"/>
+  <circle cx="100" cy="120" r="8" fill="#667eea" filter="url(#glow)"/>
+  <circle cx="156" cy="120" r="8" fill="#00d4ff" filter="url(#glow)"/>
+  <circle cx="128" cy="150" r="8" fill="#667eea" filter="url(#glow)"/>
+
+  <!-- Connecting lines (persistence bars) -->
+  <line x1="128" y1="80" x2="100" y2="120" stroke="#00d4ff" stroke-width="2" opacity="0.6"/>
+  <line x1="128" y1="80" x2="156" y2="120" stroke="#00d4ff" stroke-width="2" opacity="0.6"/>
+  <line x1="100" y1="120" x2="128" y2="150" stroke="#667eea" stroke-width="2" opacity="0.6"/>
+  <line x1="156" y1="120" x2="128" y2="150" stroke="#667eea" stroke-width="2" opacity="0.6"/>
+
+  <!-- Central glow -->
+  <circle cx="128" cy="115" r="35" fill="#00d4ff" opacity="0.1"/>
+
+  <!-- T-FAN text (optional, comment out for icon-only version) -->
+  <text x="128" y="210" font-family="monospace" font-size="24" fill="url(#gradient1)"
+        text-anchor="middle" font-weight="bold">T-FAN</text>
+</svg>

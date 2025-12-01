@@ -1,0 +1,170 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip wheel
+          pip install -r requirements.txt
+          pip install -e .
+          pip install pytest pytest-cov
+
+      - name: Run Integration Tests
+        run: |
+          pytest tests/test_integration.py \
+            --cov=tfan \
+            --cov-report=xml \
+            --cov-report=term \
+            -v
+
+      - name: Test Multi-Modal Pipeline
+        run: |
+          python tests/test_mm_pipeline.py
+
+      - name: Test End-to-End Training Loop (CI Quick)
+        run: |
+          python tests/test_e2e_training.py \
+            --config configs/ci/ci_quick.yaml \
+            --steps 100 \
+            --validate-gates
+
+      - name: Test All Gates (CI Quick Config)
+        run: |
+          python scripts/validate_all_gates.py \
+            --config configs/ci/ci_quick.yaml
+
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: integration
+          fail_ci_if_error: false
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration_test_results
+          path: |
+            test-results/
+            coverage.xml
+
+  snn-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip wheel
+          pip install -r requirements.txt
+          pip install -e .
+          pip install pytest
+
+      - name: Run SNN Unit Tests
+        run: |
+          pytest tests/snn/ -v --tb=short
+
+      - name: SNN Parameter Audit (Enforce Gates)
+        run: |
+          mkdir -p artifacts
+          python scripts/bench_snn.py \
+            --audit \
+            --emit-json artifacts/snn_audit.json
+
+      - name: Validate SNN Gates
+        run: |
+          python -c "
+          import json
+          with open('artifacts/snn_audit.json') as f:
+              audit = json.load(f)
+
+          # Hard gates (non-negotiable)
+          gates = {
+              'param_reduction_pct >= 97.0': audit['param_reduction_pct'] >= 97.0,
+              'avg_degree <= 0.02*N': audit['avg_degree'] <= 0.02 * audit['N'],
+              'rank <= 0.02*N': audit['rank'] <= 0.02 * audit['N'],
+              'sparsity >= 0.98': audit['sparsity'] >= 0.98,
+          }
+
+          print('\\n' + '='*60)
+          print('SNN GATE VALIDATION')
+          print('='*60)
+          for gate, passed in gates.items():
+              status = '✓ PASS' if passed else '✗ FAIL'
+              print(f'{status}: {gate}')
+          print('='*60)
+
+          # Fail if any gate fails
+          if not all(gates.values()):
+              print('\\n❌ SNN gates failed!')
+              exit(1)
+          else:
+              print('\\n✅ All SNN gates passed!')
+          "
+
+      - name: Generate Gate Summary
+        if: always()
+        run: |
+          python -c "
+          import json
+          with open('artifacts/snn_audit.json') as f:
+              audit = json.load(f)
+
+          summary = f'''
+          ## SNN Parameter Audit
+
+          | Metric | Value | Gate | Status |
+          |--------|-------|------|--------|
+          | Param Reduction | {audit['param_reduction_pct']:.2f}% | ≥97% | {'✓' if audit['param_reduction_pct'] >= 97 else '✗'} |
+          | Avg Degree | {audit['avg_degree']:.1f} | ≤{0.02*audit['N']:.1f} | {'✓' if audit['avg_degree'] <= 0.02*audit['N'] else '✗'} |
+          | Rank | {audit['rank']} | ≤{int(0.02*audit['N'])} | {'✓' if audit['rank'] <= 0.02*audit['N'] else '✗'} |
+          | Sparsity | {audit['sparsity']:.2%} | ≥98% | {'✓' if audit['sparsity'] >= 0.98 else '✗'} |
+
+          **Configuration**: N={audit['N']}, r={audit['rank']}, k={audit['avg_degree']:.0f}
+
+          **Parameters**: {audit['lowrank_params']:,} vs {audit['dense_params']:,} (dense)
+          '''
+
+          print(summary)
+          with open('artifacts/snn_summary.md', 'w') as f:
+              f.write(summary)
+          "
+
+      - name: Upload SNN Audit Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: snn_audit
+          path: |
+            artifacts/snn_audit.json
+            artifacts/snn_summary.md

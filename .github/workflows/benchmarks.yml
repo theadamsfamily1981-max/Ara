@@ -1,0 +1,112 @@
+name: Weekly Long-Seq Benchmark
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday at 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: [self-hosted, gpu]  # Requires self-hosted GPU runner
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: GPU Info
+        run: |
+          nvidia-smi
+          python -c "import torch; print(f'PyTorch CUDA: {torch.cuda.is_available()}')"
+
+      - name: Benchmark Attention
+        run: |
+          python scripts/bench_attention.py \
+            --seq 8192 16384 32768 \
+            --batch 4 \
+            --n-runs 30 \
+            --device cuda \
+            --report artifacts/bench/attention_$(date +%Y%m%d).json
+
+      - name: Memory Scaling Test
+        run: |
+          python scripts/memory_fit.py \
+            --seq 1024 2048 4096 8192 16384 32768 \
+            --batch 1 \
+            --device cuda \
+            --report artifacts/memory/fit_$(date +%Y%m%d).json
+
+      - name: TTW Micro-Benchmark
+        run: |
+          python scripts/bench_ttw.py \
+            --n-samples 1000 \
+            --report artifacts/bench/ttw_$(date +%Y%m%d).json
+
+      - name: PGU Latency Benchmark
+        run: |
+          python scripts/bench_pgu.py \
+            --n-queries 10000 \
+            --report artifacts/bench/pgu_$(date +%Y%m%d).json
+
+      - name: Validate Gates
+        run: |
+          python scripts/check_gates.py \
+            --bench artifacts/bench \
+            --memory artifacts/memory \
+            --all-gates
+
+      - name: Generate Report
+        run: |
+          python tools/generate_report.py \
+            --bench-dir artifacts/bench \
+            --memory-dir artifacts/memory \
+            --output reports/weekly_$(date +%Y%m%d).md
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark_reports
+          path: |
+            artifacts/bench/
+            artifacts/memory/
+            reports/
+          retention-days: 90
+
+      - name: Comment Results on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('reports/weekly_$(date +%Y%m%d).md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            })
+
+      - name: Alert on Gate Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Benchmark Gate Failure',
+              body: 'Weekly benchmark failed. Check artifacts for details.',
+              labels: ['benchmark', 'gate-failure', 'P2']
+            })

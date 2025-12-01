@@ -1,0 +1,35 @@
+# QUANTA-focused TF-A-N 7B configuration
+#
+# This config focuses training on QUANTA domain data with optimized
+# hyperparameters for topological attention and neural architecture.
+
+# Model Architecture
+model:
+  name: "tfan-7b"
+  n_layers: 32
+  n_heads: 32
+  d_model: 4096
+  d_ff: 11008
+  vocab_size: 32000
+  max_seq_length: 4096
+
+# Dataset Configuration  
+dataset:
+  focus: "quanta"
+  train_splits:
+    - "quanta_train"
+    - "general_math"
+    - "topology_problems"
+  split_weights: [0.7, 0.2, 0.1]
+
+# Training Configuration
+training:
+  batch_size: 32
+  learning_rate: 3.0e-4
+  max_steps: 50000
+
+# Gates
+gates:
+  min_accuracy: 0.85
+  max_latency_p95: 200.0
+  max_epr_cv: 0.15

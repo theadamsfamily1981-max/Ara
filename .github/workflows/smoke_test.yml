@@ -1,0 +1,153 @@
+name: Smoke Test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, 'claude/**']
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Import Test
+        run: |
+          python -c "import tfan; print(f'TF-A-N version: {tfan.__version__}')"
+
+      - name: Config Load Test
+        run: |
+          python -c "
+          from tfan import TFANConfig
+          cfg = TFANConfig.from_yaml('config_examples/default.yaml')
+          violations = cfg.validate_gates()
+          assert len(violations) == 0, f'Config violations: {violations}'
+          print('✓ Config loaded and validated')
+          "
+
+      - name: Quick Forward Pass Test
+        run: |
+          python -c "
+          import torch
+          from tfan.attention import SparseAttention
+
+          attn = SparseAttention(d_model=256, n_heads=8)
+          x = torch.randn(2, 128, 256)
+          out, metrics = attn(x)
+          assert out.shape == x.shape
+          print(f'✓ Attention forward pass: sparsity={metrics[\"sparsity\"]:.1%}')
+          "
+
+      - name: Multi-Modal Smoke Test
+        run: |
+          python -c "
+          import torch
+          from tfan.mm import TextAdapter, pack_and_mask
+
+          adapter = TextAdapter(output_dim=128)
+          stream = adapter(['test sentence'])
+          print(f'✓ Text adapter: {stream.features.shape}')
+
+          fused = pack_and_mask(
+              {'text': torch.randn(1, 10, 128)},
+              {'text': torch.linspace(0, 1, 10).unsqueeze(0)},
+              d_model=128, n_heads=4
+          )
+          print(f'✓ Fusion: {fused.tokens.shape}')
+          "
+
+      - name: PGU Smoke Test
+        run: |
+          python -c "
+          from tfan.pgu import ProofGatedUpdater
+
+          pgu = ProofGatedUpdater(mode='soft')
+          result = pgu.verify_update({'test': 'payload'})
+          print(f'✓ PGU verification: proven={result.proven}, latency={result.latency_ms:.2f}ms')
+          "
+
+      - name: Topology Smoke Test
+        run: |
+          python -c "
+          import torch
+          from tfan.topo import TopologyRegularizer
+
+          topo = TopologyRegularizer(device='cpu')
+          latents = torch.randn(2, 50, 128)
+          penalty, metrics = topo(latents)
+          print(f'✓ Topology: penalty={penalty.item():.4f}')
+          "
+
+      - name: Emotion Smoke Test
+        run: |
+          python -c "
+          import torch
+          from tfan.emotion import EmotionHead
+
+          head = EmotionHead(d_model=128, mode='VA')
+          latents = torch.randn(2, 10, 128)
+          pred = head(latents)
+          print(f'✓ Emotion: valence shape={pred.valence.shape}')
+          "
+
+      - name: Metrics Wiring Test
+        run: |
+          python -c "
+          from tfan.viz import plot_training_curves
+          import matplotlib
+          matplotlib.use('Agg')  # Non-interactive backend
+
+          metrics = [
+              {'loss': 0.5, 'epr_cv': 0.12, 'lr': 3e-4},
+              {'loss': 0.4, 'epr_cv': 0.11, 'lr': 3e-4},
+          ]
+          plot_training_curves(metrics, save_path='/tmp/test_curves.png')
+          print('✓ Visualization working')
+          "
+
+      - name: All Components Import Test
+        run: |
+          python -c "
+          from tfan import (
+              TFANConfig,
+              TopologyRegularizer,
+              SparseAttention,
+              TLSLandmarkSelector,
+              ProofGatedUpdater,
+              TFANTrainer,
+          )
+          from tfan.mm import (
+              TextAdapter,
+              AudioAdapter,
+              VideoAdapter,
+              align_streams,
+              pack_and_mask,
+              TopologyGate,
+          )
+          from tfan.emotion import EmotionHead, EmotionController
+          from tfan.ctd import HyperbolicEmbedding, TreeLikenessDetector
+          from tfan.pareto import ParetoOptimizer
+          print('✓ All components import successfully')
+          "
+
+      - name: Lint Check
+        run: |
+          pip install flake8
+          flake8 tfan/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          echo "✓ No critical linting errors"

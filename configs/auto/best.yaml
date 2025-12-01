@@ -1,0 +1,43 @@
+# Auto-generated best configuration from Pareto optimization
+# This is a placeholder config for initial API testing
+
+model:
+  name: "tfan-7b-pareto-optimized"
+  n_layers: 32
+  n_heads: 32
+  d_model: 4096
+  d_ff: 11008
+  vocab_size: 32000
+  max_seq_length: 4096
+
+dataset:
+  focus: "quanta"
+  train_splits:
+    - "quanta_train"
+    - "general_math"
+    - "topology_problems"
+  split_weights: [0.7, 0.2, 0.1]
+
+training:
+  batch_size: 32
+  learning_rate: 3.0e-4
+  max_steps: 50000
+  warmup_steps: 1000
+  weight_decay: 0.1
+  grad_clip: 1.0
+
+# Pareto metrics (from optimization)
+pareto_metrics:
+  accuracy: 0.923
+  latency_ms: 145.2
+  hypervolume: 47500
+  epr_cv: 0.12
+  topo_gap: 0.015
+
+# Decision weights used
+decision_weights:
+  neg_accuracy: 10.0
+  latency: 1.0
+  epr_cv: 2.0
+  topo_gap: 1.0
+  energy: 0.5

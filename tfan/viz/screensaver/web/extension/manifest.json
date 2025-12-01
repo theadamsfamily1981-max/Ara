@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "T-FAN Topology Screensaver",
+  "version": "1.0.0",
+  "description": "Living mathematics visualization - topological data analysis screensaver for your new tab",
+  "author": "T-FAN Project",
+
+  "chrome_url_overrides": {
+    "newtab": "index.html"
+  },
+
+  "permissions": [
+    "storage"
+  ],
+
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://localhost:9101/*"
+  ],
+
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; object-src 'self'"
+  }
+}

@@ -1,0 +1,195 @@
+# SNN Emulation Configuration - Low-Rank Masked Synapses
+#
+# Achieves 97-99% parameter reduction via:
+# 1. Topological sparsity (TLS): avg degree k=64 (1.56% density)
+# 2. Low-rank factorization: W ≈ M ⊙ (U V^T) with r=32
+# 3. Temporal basis sharing: B=4 shared kernels per head
+# 4. Event-driven updates: 10-100× throughput gain
+
+project: snn-emulation-4096
+seed: 42
+dtype: float16
+
+# Backend selection
+backend: snn_emu  # vs "transformer"
+
+# Model Architecture
+model:
+  N: 4096                  # Number of neurons
+  lowrank_rank: 32         # Rank for U, V factorization
+  k_per_row: 64            # Avg outgoing degree (1.56% density)
+
+  # Neuron parameters
+  v_th: 1.0                # Spike threshold
+  alpha: 0.95              # Membrane leak decay
+  surrogate_scale: 0.3     # Surrogate gradient scale
+
+  # Temporal basis
+  temporal_basis:
+    B: 4                   # Number of basis kernels
+    taus: [2.0, 4.0, 8.0, 16.0]  # Time constants (ms)
+    tie_per_head: true     # Share coefficients per head
+
+  # TLS mask construction
+  tls:
+    alpha: 0.7             # Persistence vs diversity weight
+    method: "hybrid"       # hybrid | persistence | diversity
+    prevent_self_loops: true
+
+# Training Configuration
+training:
+  # Batch & sequence
+  batch_size: 2
+  time_steps: 256          # Simulation duration
+  max_steps: 50000
+
+  # Optimization
+  learning_rate: 1.5e-3
+  weight_decay: 0.01
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+
+  # Scheduling
+  warmup_steps: 1000
+  lr_schedule: "cosine"
+  min_lr_ratio: 0.1
+
+  # Regularization
+  grad_clip: 1.0
+
+  # Sparsity targets
+  target_sparsity: 0.75    # 75% zero spikes (3-5× activity reduction)
+  sparsity_loss_weight: 0.01
+
+# Hard Gates (Non-Negotiable)
+gates:
+  check_interval: 500
+
+  # Parameter reduction gate
+  param_reduction_pct: 97.0  # ≥ 97% reduction vs dense
+
+  # Sparsity gate
+  max_degree_frac: 0.02      # avg degree ≤ 2% of N
+
+  # Rank gate
+  max_rank_frac: 0.02        # r ≤ 2% of N
+
+  # Sparsity gate (activity)
+  min_spike_sparsity: 0.70   # ≥ 70% zero spikes
+
+  # Accuracy gate
+  accuracy_drop_max_pct: 2.0  # ≤ 2% drop vs baseline
+
+# TF-A-N Integration
+tfan:
+  # FDT homeostasis (still applies to SNN)
+  use_fdt: true
+  fdt:
+    kp: 0.30
+    ki: 0.02
+    kd: 0.10
+    ema_alpha: 0.85
+    target_epr_cv: 0.15
+    lr_range: [0.7, 1.2]
+    temp_range: [0.8, 1.3]  # Maps to firing threshold modulation
+
+  # Topology regularization
+  use_topology: false       # Disabled for SNN (already in mask construction)
+
+  # PGU verification
+  use_pgu: false            # Optional for safety-critical
+
+  # TTW-Sentry
+  use_ttw: false            # N/A for pure SNN
+
+  # Emotion modulation
+  use_emotion: false        # Could modulate v_th/alpha
+
+# Event-Driven Processing
+event_driven:
+  enabled: true
+  sparsity_threshold: 0.75  # Use event-driven if sparsity > 75%
+  update_mode: "sparse"     # sparse | dense | adaptive
+
+# Data Configuration
+data:
+  # Use same QUANTA data sources
+  root: null
+  s3_bucket: null
+  manifest: null
+
+  # Fallback
+  fallback_public:
+    enabled: true
+    name: "wikitext103"
+    max_samples: 10000
+
+tokenizer:
+  name: "tiktoken-llama-compatible"
+  seq_len: 2048
+  truncation: "right"
+
+# Logging & Checkpointing
+logging:
+  log_interval: 100
+  eval_interval: 1000
+  save_interval: 5000
+
+  metrics:
+    - "loss"
+    - "spike_sparsity"
+    - "avg_firing_rate"
+    - "param_reduction_pct"
+    - "avg_degree"
+    - "epr_cv"           # FDT
+    - "lr"
+    - "v_th_mean"        # Threshold adaptation
+    - "alpha_mean"       # Leak adaptation
+
+  use_tensorboard: true
+  tensorboard_dir: "runs/snn_emu_4096"
+  use_wandb: false
+
+checkpointing:
+  output_dir: "checkpoints/snn_emu_4096"
+  save_total_limit: 3
+  save_optimizer: true
+  save_neuron_state: true  # Save v, s for resumption
+
+# Distributed (single GPU for now)
+distributed:
+  backend: null
+  num_gpus: 1
+  zero_stage: 0
+
+# Expected Results
+expected:
+  param_reduction_pct: 98.4    # N=4096, r=32 -> 98.4% reduction
+  dense_params: 16_777_216     # 4096²
+  lowrank_params: 262_144      # 2 × 4096 × 32
+  avg_degree: 64               # k_per_row
+  degree_frac: 0.0156          # 64/4096 = 1.56%
+  spike_sparsity: 0.75         # 75% zero spikes
+  throughput_gain_x: 10        # vs dense (conservative estimate)
+
+notes: |
+  SNN Emulation with Low-Rank Masked Synapses
+
+  Parameter Reduction Strategy:
+  1. Topological sparsity: 98.44% (k=64/4096 = 1.56% density)
+  2. Low-rank factorization: W = M ⊙ (U V^T) with r=32
+  3. Temporal sharing: 4 basis kernels, tied per head
+  4. Combined: 98.4% reduction (262k vs 16.7M params)
+
+  Acceptance Gates:
+  - Param reduction ≥ 97%
+  - Avg degree ≤ 2% of N
+  - Spike sparsity ≥ 70%
+  - EPR-CV ≤ 0.15 (FDT)
+  - Accuracy drop ≤ 2%
+
+  Usage:
+    python training/train.py --config configs/snn_emu_4096.yaml
+
+  For smaller tests:
+    Modify N=512, r=16, k_per_row=32 for quick validation

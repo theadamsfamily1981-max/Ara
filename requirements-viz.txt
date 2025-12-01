@@ -1,0 +1,22 @@
+# T-FAN Topology Screensaver Dependencies
+
+# Core visualization
+vispy>=0.14.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Topology computation
+ripser>=0.6.4
+persim>=0.3.1
+scikit-learn>=1.3.0
+
+# Optional (for advanced features)
+# gudhi>=3.8.0  # More topology tools
+# geoopt>=0.5.0  # Hyperbolic geometry
+# torch>=2.0.0   # For live Poincaré updates
+
+# HTTP client for metrics
+requests>=2.31.0
+
+# Rendering backends
+PyOpenGL>=3.1.6
