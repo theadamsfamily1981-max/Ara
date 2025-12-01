@@ -1,0 +1,28 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="relaxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#764ba2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6ec7;stop-opacity:1" />
+    </linearGradient>
+    <filter id="relaxGlow">
+      <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Crescent moon for relax mode -->
+  <path d="M 128 40 A 60 60 0 1 0 128 200 A 50 50 0 1 1 128 40 Z"
+        fill="url(#relaxGrad)" filter="url(#relaxGlow)"/>
+
+  <!-- Soft glow circles -->
+  <circle cx="128" cy="128" r="70" fill="none" stroke="#ff6ec7" stroke-width="2" opacity="0.3"/>
+  <circle cx="128" cy="128" r="85" fill="none" stroke="#764ba2" stroke-width="2" opacity="0.2"/>
+
+  <!-- Stars -->
+  <circle cx="80" cy="80" r="4" fill="#ff6ec7" filter="url(#relaxGlow)"/>
+  <circle cx="180" cy="70" r="3" fill="#ce93d8" filter="url(#relaxGlow)"/>
+  <circle cx="170" cy="180" r="4" fill="#ff6ec7" filter="url(#relaxGlow)"/>
+</svg>

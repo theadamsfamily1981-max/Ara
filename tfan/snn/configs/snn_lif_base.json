@@ -1,0 +1,79 @@
+{
+  "profile": "S",
+  "time_steps": 256,
+  "encoder": "rate",
+  "target_rate_hz": 50.0,
+  "hidden_channels": 256,
+  "blocks": 4,
+  "neuron": "LIF",
+  "tau_init_ms": 20.0,
+  "tau_min_ms": 1.0,
+  "v_threshold": 1.0,
+  "v_reset": 0.0,
+  "surrogate": {
+    "type": "plinear",
+    "k": 1.0
+  },
+  "readout": "spike_count",
+  "optimizer": {
+    "lr": 0.0003,
+    "betas": [0.9, 0.999],
+    "weight_decay": 0.01
+  },
+  "lambda_topo": 0.1,
+  "lambda_rate": 0.001,
+  "truncated_bptt_steps": 128,
+  "grad_clip": 1.0,
+  "fdt": {
+    "kp": 0.30,
+    "ki": 0.02,
+    "kd": 0.10,
+    "ema": 0.85,
+    "target_epr_cv": 0.15,
+    "lr_range": [0.7, 1.2],
+    "threshold_range": [0.8, 1.2]
+  },
+  "ttw": {
+    "window": 64,
+    "p95_ms_target": 5.0,
+    "coverage_target": 0.9,
+    "vfe_threshold": 3.0,
+    "entropy_threshold": 0.5
+  },
+  "pgu": {
+    "timeout_ms": 120,
+    "fallback_ms": 180,
+    "mode": "soft",
+    "cache_size": 10000,
+    "rate_bounds": {
+      "min_hz": 1.0,
+      "max_hz": 200.0
+    }
+  },
+  "training": {
+    "batch_size": 16,
+    "num_epochs": 100,
+    "log_interval": 100,
+    "save_interval": 5000,
+    "gate_check_interval": 500,
+    "use_checkpointing": true,
+    "checkpoint_blocks": 4
+  },
+  "datasets": {
+    "nmnist": {
+      "resolution": [34, 34],
+      "num_classes": 10,
+      "dt_ms": 1.0
+    },
+    "dvs128": {
+      "resolution": [128, 128],
+      "num_classes": 11,
+      "dt_ms": 1.0
+    },
+    "shd": {
+      "num_channels": 700,
+      "num_classes": 20,
+      "dt_ms": 1.0
+    }
+  }
+}

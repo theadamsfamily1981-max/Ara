@@ -1,0 +1,307 @@
+name: CXL Memory Tiering
+
+on:
+  push:
+    branches: [ main, 'claude/**' ]
+    paths:
+      - 'tfan/memory/**'
+      - 'scripts/benchmark_cxl_memory.py'
+      - '.github/workflows/cxl_memory.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'tfan/memory/**'
+      - 'scripts/benchmark_cxl_memory.py'
+      - '.github/workflows/cxl_memory.yml'
+
+jobs:
+  test-imports:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install torch numpy zstandard
+
+      - name: Test CXL memory imports
+        run: |
+          python -c "
+          from tfan.memory import CXLPager, CXLPageConfig, BloomPrefetcher, BloomConfig
+          print('✓ CXL memory imports successful')
+          "
+
+      - name: Test CXL config
+        run: |
+          python -c "
+          from tfan.memory import CXLPageConfig
+
+          config = CXLPageConfig(
+              max_gpu_blocks=1024,
+              max_cpu_blocks=4096,
+              max_cxl_blocks=16384,
+              block_size=16
+          )
+
+          assert config.max_gpu_blocks == 1024
+          assert config.max_cxl_blocks == 16384
+          print('✓ CXL config test passed')
+          "
+
+  test-bloom-filter:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install numpy
+
+      - name: Test Bloom filter operations
+        run: |
+          python -c "
+          from tfan.memory.bloom import BloomFilter, BloomConfig
+
+          # Create Bloom filter
+          bloom = BloomFilter(capacity=1000, error_rate=0.01)
+
+          # Add items
+          bloom.add((0, 0))
+          bloom.add((0, 1))
+          bloom.add((1, 0))
+
+          # Check contains
+          assert bloom.contains((0, 0)), 'Should contain (0, 0)'
+          assert bloom.contains((0, 1)), 'Should contain (0, 1)'
+          assert bloom.contains((1, 0)), 'Should contain (1, 0)'
+
+          # Check doesn't contain (probabilistic, might have false positive)
+          result = bloom.contains((99, 99))
+          # Don't assert false, just note the result
+
+          print('✓ Bloom filter test passed')
+          print(f'  Size: {bloom.size:,} bits')
+          print(f'  Hash functions: {bloom.num_hashes}')
+          print(f'  Elements: {bloom.num_elements}')
+          "
+
+      - name: Test Bloom prefetcher
+        run: |
+          python -c "
+          from tfan.memory.bloom import BloomPrefetcher, BloomConfig
+
+          config = BloomConfig(capacity=1000, error_rate=0.01, lookahead=4)
+          prefetcher = BloomPrefetcher(config=config)
+
+          # Record sequential access pattern
+          for i in range(10):
+              prefetcher.record_access(layer_idx=0, block_idx=i)
+
+          # Predict next accesses
+          predictions = prefetcher.predict_next(layer_idx=0, block_idx=5)
+
+          print('✓ Bloom prefetcher test passed')
+          print(f'  Predictions: {predictions}')
+          print(f'  Stats: {prefetcher.get_stats()}')
+          "
+
+  test-cxl-pager:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install torch numpy zstandard
+
+      - name: Test CXL pager operations
+        run: |
+          python -c "
+          import torch
+          from tfan.memory import CXLPager, CXLPageConfig
+
+          # Initialize pager with small tiers for testing
+          config = CXLPageConfig(
+              max_gpu_blocks=2,
+              max_cpu_blocks=2,
+              max_cxl_blocks=4,
+              block_size=4,
+              enable_bloom_prefetch=False
+          )
+          pager = CXLPager(config=config)
+
+          # Create dummy KV blocks
+          key = torch.randn(8, 4, 64)
+          value = torch.randn(8, 4, 64)
+
+          # Store blocks
+          for i in range(6):
+              pager.store_block(layer_idx=0, block_idx=i, key=key, value=value)
+
+          # Load blocks (should trigger tier fallback)
+          for i in range(6):
+              result = pager.load_block(layer_idx=0, block_idx=i, device='cpu')
+              assert result is not None, f'Block {i} not found'
+
+          # Check stats
+          stats = pager.get_stats()
+          print('✓ CXL pager test passed')
+          print(f'  Hit rate: {stats[\"hit_rate\"]:.2%}')
+          print(f'  Tier distribution: {stats[\"tier_distribution\"]}')
+
+          # Cleanup
+          pager.clear()
+          "
+
+  test-cxl-with-bloom:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install torch numpy zstandard
+
+      - name: Test CXL pager with Bloom prefetching
+        run: |
+          python -c "
+          import torch
+          from tfan.memory import CXLPager, CXLPageConfig
+
+          config = CXLPageConfig(
+              max_gpu_blocks=4,
+              max_cpu_blocks=8,
+              max_cxl_blocks=16,
+              block_size=4,
+              enable_bloom_prefetch=True,
+              prefetch_lookahead=4
+          )
+          pager = CXLPager(config=config)
+
+          key = torch.randn(8, 4, 64)
+          value = torch.randn(8, 4, 64)
+
+          # Sequential access pattern
+          for i in range(20):
+              pager.store_block(layer_idx=0, block_idx=i, key=key, value=value)
+
+          # Access sequentially (should trigger prefetch)
+          for i in range(20):
+              result = pager.load_block(layer_idx=0, block_idx=i, device='cpu')
+              assert result is not None
+
+          stats = pager.get_stats()
+          print('✓ CXL + Bloom test passed')
+          print(f'  Hit rate: {stats[\"hit_rate\"]:.2%}')
+          print(f'  Prefetch accuracy: {stats[\"prefetch_accuracy\"]:.2%}')
+
+          pager.clear()
+          "
+
+  test-benchmark-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install torch numpy zstandard
+
+      - name: Test benchmark script (dry run)
+        run: |
+          python scripts/benchmark_cxl_memory.py \
+            --seq-lengths 1024 \
+            --num-trials 1 \
+            --output /tmp/cxl_test.json
+
+          # Check output file
+          cat /tmp/cxl_test.json
+
+  # This job would run on self-hosted runner with GPU
+  # benchmark-gates:
+  #   runs-on: [self-hosted, gpu]
+  #   if: github.event_name == 'pull_request'
+  #
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Setup Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: '3.11'
+  #
+  #     - name: Install dependencies
+  #       run: |
+  #         pip install torch numpy zstandard
+  #
+  #     - name: Run CXL benchmarks
+  #       run: |
+  #         python scripts/benchmark_cxl_memory.py \
+  #           --seq-lengths 4096 8192 16384 32768 65536 131072 \
+  #           --num-trials 10 \
+  #           --include-baseline \
+  #           --profile \
+  #           --output cxl_benchmark_results.json
+  #
+  #     - name: Check hard gates
+  #       run: |
+  #         python -c "
+  #         import json
+  #         with open('cxl_benchmark_results.json') as f:
+  #             results = json.load(f)
+  #
+  #         # Check 128k gate
+  #         for result in results:
+  #             if result['seq_length'] == 131072:
+  #                 gates = result['cxl'].get('gates', {})
+  #                 overall_pass = gates.get('overall', {}).get('pass', False)
+  #
+  #                 if not overall_pass:
+  #                     print('✗ Hard gates FAILED for 128k context')
+  #                     print(json.dumps(gates, indent=2))
+  #                     exit(1)
+  #
+  #         print('✓ Hard gates PASSED')
+  #         "
+  #
+  #     - name: Upload results
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: cxl-benchmark-results
+  #         path: cxl_benchmark_results.json

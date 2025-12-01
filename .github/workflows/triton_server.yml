@@ -1,0 +1,333 @@
+name: Triton SSA Server
+
+on:
+  push:
+    branches: [ main, 'claude/**' ]
+    paths:
+      - 'tfan/serve/**'
+      - 'deploy/triton/**'
+      - '.github/workflows/triton_server.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'tfan/serve/**'
+      - 'deploy/triton/**'
+      - '.github/workflows/triton_server.yml'
+
+jobs:
+  test-imports:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install torch numpy h5py tqdm zstandard
+
+      - name: Test SSA runner imports
+        run: |
+          python -c "
+          from tfan.serve import SSARunner, KVPager, TTWHook
+          from tfan.serve.ssa_runner import SSAConfig
+          from tfan.serve.kv_pager import KVPageConfig
+          from tfan.serve.ttw_hook import TTWConfig
+          print('✓ All serving imports successful')
+          "
+
+      - name: Test SSA config
+        run: |
+          python -c "
+          from tfan.serve.ssa_runner import SSAConfig
+
+          config = SSAConfig(
+              k_landmarks=64,
+              local_window=256,
+              persistence_threshold=0.1
+          )
+
+          assert config.k_landmarks == 64
+          assert config.local_window == 256
+          assert config.persistence_threshold == 0.1
+          print('✓ SSA config test passed')
+          "
+
+      - name: Test KV pager config
+        run: |
+          python -c "
+          from tfan.serve.kv_pager import KVPageConfig
+
+          config = KVPageConfig(
+              max_gpu_blocks=1024,
+              max_cpu_blocks=4096,
+              block_size=16
+          )
+
+          assert config.max_gpu_blocks == 1024
+          assert config.max_cpu_blocks == 4096
+          print('✓ KV pager config test passed')
+          "
+
+      - name: Test TTW hook config
+        run: |
+          python -c "
+          from tfan.serve.ttw_hook import TTWConfig, TTWHook
+
+          config = TTWConfig(
+              vfe_threshold=0.5,
+              action='flag'
+          )
+
+          hook = TTWHook(config=config)
+
+          # Test VFE check (should not trigger)
+          triggered = hook.check(0.3)
+          assert not triggered
+
+          # Test VFE check (should trigger)
+          triggered = hook.check(0.8)
+          assert triggered
+
+          print('✓ TTW hook test passed')
+          "
+
+  test-kv-pager:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install torch numpy zstandard
+
+      - name: Test KV pager operations
+        run: |
+          python -c "
+          import torch
+          from tfan.serve.kv_pager import KVPager, KVPageConfig
+
+          # Initialize pager
+          config = KVPageConfig(
+              max_gpu_blocks=2,
+              max_cpu_blocks=2,
+              block_size=4
+          )
+          pager = KVPager(config=config)
+
+          # Create dummy KV blocks
+          key = torch.randn(8, 4, 64)  # [num_heads, block_size, head_dim]
+          value = torch.randn(8, 4, 64)
+
+          # Store block
+          pager.store_block(layer_idx=0, block_idx=0, key=key, value=value)
+
+          # Load block (should hit GPU cache)
+          loaded = pager.load_block(layer_idx=0, block_idx=0)
+          assert loaded is not None
+
+          # Check stats
+          stats = pager.get_stats()
+          assert stats['gpu_hits'] == 1
+          assert stats['hit_rate'] == 1.0
+
+          print('✓ KV pager test passed')
+          print(f'  GPU hits: {stats[\"gpu_hits\"]}')
+          print(f'  Hit rate: {stats[\"hit_rate\"]:.2%}')
+
+          # Cleanup
+          pager.clear()
+          "
+
+  test-ssa-integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install torch numpy scipy
+
+      - name: Test SSA landmark selection
+        run: |
+          python -c "
+          import torch
+          import numpy as np
+          from tfan.serve.ssa_runner import SSARunner, SSAConfig
+
+          # Create mock model
+          class MockModel(torch.nn.Module):
+              def __init__(self):
+                  super().__init__()
+                  self.embeddings = torch.nn.Embedding(100, 64)
+                  self.lm_head = torch.nn.Linear(64, 100)
+                  self.landmark_indices = None
+
+              def set_landmark_indices(self, indices):
+                  self.landmark_indices = indices
+
+              def forward(self, input_ids, **kwargs):
+                  hidden = self.embeddings(input_ids)
+                  logits = self.lm_head(hidden)
+
+                  class MockOut:
+                      def __init__(self, logits):
+                          self.logits = logits
+                          self.past_key_values = None
+
+                  return MockOut(logits)
+
+          model = MockModel()
+
+          # Initialize SSA runner
+          config = SSAConfig(k_landmarks=8, local_window=16)
+          runner = SSARunner(model=model, config=config, device='cpu')
+
+          # Create dummy input
+          input_ids = torch.randint(0, 100, (1, 32))
+
+          # Test landmark selection
+          hidden_states = model.embeddings(input_ids)
+          landmarks, metadata = runner.select_topological_landmarks(hidden_states)
+
+          assert landmarks.shape == (1, 8), f'Expected (1, 8), got {landmarks.shape}'
+          assert 'persistence_diagrams' in metadata
+
+          print('✓ SSA landmark selection test passed')
+          print(f'  Landmarks shape: {landmarks.shape}')
+          print(f'  k_landmarks: {config.k_landmarks}')
+          "
+
+  test-triton-config:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Triton config
+        run: |
+          if [ ! -f "deploy/triton/model_repository/tfan_ssa/config.pbtxt" ]; then
+            echo "✗ Triton config not found"
+            exit 1
+          fi
+
+          echo "✓ Triton config found"
+          cat deploy/triton/model_repository/tfan_ssa/config.pbtxt
+
+      - name: Check Python backend
+        run: |
+          if [ ! -f "deploy/triton/model_repository/tfan_ssa/1/model.py" ]; then
+            echo "✗ Python backend not found"
+            exit 1
+          fi
+
+          echo "✓ Python backend found"
+          wc -l deploy/triton/model_repository/tfan_ssa/1/model.py
+
+      - name: Validate config syntax
+        run: |
+          # Check for required fields
+          grep -q "name:" deploy/triton/model_repository/tfan_ssa/config.pbtxt
+          grep -q "backend: \"python\"" deploy/triton/model_repository/tfan_ssa/config.pbtxt
+          grep -q "max_batch_size:" deploy/triton/model_repository/tfan_ssa/config.pbtxt
+
+          echo "✓ Config syntax valid"
+
+  benchmark-dry-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check benchmark script
+        run: |
+          if [ ! -f "deploy/triton/benchmark_ssa.py" ]; then
+            echo "✗ Benchmark script not found"
+            exit 1
+          fi
+
+          echo "✓ Benchmark script found"
+          python deploy/triton/benchmark_ssa.py --help
+
+  # This job would run on self-hosted runner with GPU
+  # benchmark-gates:
+  #   runs-on: [self-hosted, gpu]
+  #   if: github.event_name == 'pull_request'
+  #
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Start Triton server
+  #       run: |
+  #         cd deploy/triton
+  #         docker-compose up -d triton-server
+  #         sleep 10  # Wait for server to start
+  #
+  #     - name: Run benchmarks
+  #       run: |
+  #         pip install tritonclient[http] numpy requests
+  #         python deploy/triton/benchmark_ssa.py \
+  #           --url localhost:8000 \
+  #           --model tfan_ssa \
+  #           --seq-lengths 4096 8192 16384 \
+  #           --num-trials 5 \
+  #           --output benchmark_results.json
+  #
+  #     - name: Check hard gates
+  #       run: |
+  #         python -c "
+  #         import json
+  #         with open('benchmark_results.json') as f:
+  #             results = json.load(f)
+  #
+  #         # Check 128k gate (if tested)
+  #         for result in results:
+  #             if result['seq_length'] == 131072:
+  #                 gates = result['ssa'].get('gates', {})
+  #                 overall_pass = gates.get('overall', {}).get('pass', False)
+  #
+  #                 if not overall_pass:
+  #                     print('✗ Hard gates FAILED')
+  #                     exit(1)
+  #
+  #         print('✓ Hard gates PASSED')
+  #         "
+  #
+  #     - name: Upload results
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: benchmark-results
+  #         path: benchmark_results.json
+  #
+  #     - name: Cleanup
+  #       if: always()
+  #       run: |
+  #         cd deploy/triton
+  #         docker-compose down

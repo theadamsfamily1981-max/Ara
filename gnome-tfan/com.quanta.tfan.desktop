@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=T-FAN Neural Optimizer
+Comment=Topological, Fractal, Affective Neural network training and optimization
+Exec=tfan-gnome
+Icon=network-workgroup-symbolic
+Terminal=false
+Type=Application
+Categories=Development;Science;
+Keywords=neural;ai;machine-learning;optimization;pareto;
+StartupNotify=true
+StartupWMClass=tfan-gnome
+X-GNOME-Autostart-enabled=false

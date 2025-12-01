@@ -1,0 +1,15 @@
+{
+  "uuid": "tfan@quanta-meis-nib-cis",
+  "name": "T-FAN Neural Optimizer",
+  "description": "GNOME integration for T-FAN: Topological, Fractal, Affective Neural network training and optimization",
+  "version": 1,
+  "shell-version": [
+    "42",
+    "43",
+    "44",
+    "45",
+    "46"
+  ],
+  "url": "https://github.com/theadamsfamily1981-max/Quanta-meis-nib-cis",
+  "settings-schema": "org.gnome.shell.extensions.tfan"
+}

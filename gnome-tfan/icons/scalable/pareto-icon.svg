@@ -1,0 +1,35 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="paretoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffd700;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6ec7;stop-opacity:1" />
+    </linearGradient>
+    <filter id="paretoGlow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Pareto front curve -->
+  <path d="M 50 200 Q 80 150, 100 120 T 150 70 T 200 50"
+        fill="none" stroke="url(#paretoGrad)" stroke-width="5"
+        stroke-linecap="round" filter="url(#paretoGlow)"/>
+
+  <!-- Pareto-optimal points -->
+  <circle cx="50" cy="200" r="8" fill="#ffd700" filter="url(#paretoGlow)"/>
+  <circle cx="100" cy="120" r="8" fill="#ffd700" filter="url(#paretoGlow)"/>
+  <circle cx="150" cy="70" r="8" fill="#ff6ec7" filter="url(#paretoGlow)"/>
+  <circle cx="200" cy="50" r="8" fill="#ff6ec7" filter="url(#paretoGlow)"/>
+
+  <!-- Best point star -->
+  <path d="M 150 70 L 155 60 L 160 70 L 170 72 L 162 80 L 164 90 L 155 85 L 146 90 L 148 80 L 140 72 Z"
+        fill="#ffd700" filter="url(#paretoGlow)"/>
+
+  <!-- Dominated points (faded) -->
+  <circle cx="80" cy="180" r="5" fill="#ffffff" opacity="0.3"/>
+  <circle cx="120" cy="150" r="5" fill="#ffffff" opacity="0.3"/>
+  <circle cx="170" cy="110" r="5" fill="#ffffff" opacity="0.3"/>
+</svg>

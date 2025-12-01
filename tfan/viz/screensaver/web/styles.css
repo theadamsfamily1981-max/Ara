@@ -1,0 +1,254 @@
+/**
+ * T-FAN Topology Screensaver - WebGL Version Styles
+ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    overflow: hidden;
+    background: #020306;
+    color: #fff;
+}
+
+#screensaver {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* HUD Overlay */
+#hud {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 100;
+    font-size: 14px;
+}
+
+#mode-display {
+    background: rgba(102, 126, 234, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+}
+
+#metrics-display {
+    display: flex;
+    gap: 15px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+#metrics-display span {
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+#ws-status {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+#ws-status.connected {
+    background: rgba(52, 211, 153, 0.2);
+    border: 1px solid rgba(52, 211, 153, 0.4);
+    color: #34d399;
+    box-shadow: 0 0 20px rgba(52, 211, 153, 0.3);
+}
+
+#ws-status.disconnected {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #ef4444;
+}
+
+/* Help Overlay */
+#help-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 10, 20, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 16px;
+    padding: 40px;
+    max-width: 600px;
+    width: 90%;
+    z-index: 1000;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    animation: fadeIn 0.3s ease;
+}
+
+#help-overlay.hidden {
+    display: none;
+}
+
+#help-overlay h2 {
+    font-size: 28px;
+    margin-bottom: 30px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.help-section {
+    margin-bottom: 25px;
+}
+
+.help-section h3 {
+    font-size: 16px;
+    color: #667eea;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.help-section ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.help-section li {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.help-section li:last-child {
+    border-bottom: none;
+}
+
+.help-section li strong {
+    display: inline-block;
+    min-width: 120px;
+    color: #a78bfa;
+    font-weight: 600;
+}
+
+.help-footer {
+    margin-top: 30px;
+    text-align: center;
+    color: #888;
+    font-size: 13px;
+}
+
+.help-footer strong {
+    color: #667eea;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -45%);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+/* Metric value animations */
+#metrics-display span {
+    animation: pulse 3s ease-in-out infinite;
+}
+
+#metrics-display span:nth-child(1) {
+    animation-delay: 0s;
+}
+
+#metrics-display span:nth-child(2) {
+    animation-delay: 0.5s;
+}
+
+#metrics-display span:nth-child(3) {
+    animation-delay: 1.0s;
+}
+
+#metrics-display span:nth-child(4) {
+    animation-delay: 1.5s;
+}
+
+/* Fullscreen adjustments */
+:fullscreen #hud {
+    top: 30px;
+    left: 30px;
+    right: 30px;
+}
+
+:-webkit-full-screen #hud {
+    top: 30px;
+    left: 30px;
+    right: 30px;
+}
+
+:-moz-full-screen #hud {
+    top: 30px;
+    left: 30px;
+    right: 30px;
+}
+
+/* Cursor hiding in fullscreen after inactivity */
+:fullscreen {
+    cursor: none;
+}
+
+:fullscreen:active {
+    cursor: default;
+}
+
+/* Scrollbar styling (for any overflow) */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(102, 126, 234, 0.5);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(102, 126, 234, 0.7);
+}

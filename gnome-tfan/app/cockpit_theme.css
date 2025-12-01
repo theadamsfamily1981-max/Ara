@@ -1,0 +1,645 @@
+/*
+ * T-FAN Cockpit HUD Theme
+ *
+ * Futuristic neon theme for touchscreen cockpit.
+ * Includes overlay effects, animations, and touch feedback.
+ */
+
+/* ============================================================================
+   Color Variables
+   ============================================================================ */
+
+@define-color cockpit-bg-start #0a0e1a;
+@define-color cockpit-bg-end #020306;
+@define-color primary-start #667eea;
+@define-color primary-end #764ba2;
+@define-color accent-cyan #00d4ff;
+@define-color accent-magenta #ff00ff;
+@define-color text-primary #ffffff;
+@define-color text-secondary #a0aec0;
+@define-color success-color #00ff88;
+@define-color warning-color #ffaa00;
+@define-color error-color #ff4444;
+
+/* ============================================================================
+   Base Styles
+   ============================================================================ */
+
+.cockpit-window {
+    background: linear-gradient(180deg, @cockpit-bg-start, @cockpit-bg-end);
+}
+
+.cockpit-content {
+    background: transparent;
+}
+
+/* ============================================================================
+   Overlay Effects Layer
+   ============================================================================ */
+
+/* Scanline overlay */
+.cockpit-overlay {
+    background: transparent;
+    pointer-events: none;
+}
+
+.cockpit-scanlines {
+    background-image: repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 2px,
+        rgba(0, 212, 255, 0.015) 2px,
+        rgba(0, 212, 255, 0.015) 4px
+    );
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+/* Vignette effect */
+.cockpit-vignette {
+    background: radial-gradient(
+        ellipse at center,
+        transparent 50%,
+        rgba(0, 0, 0, 0.3) 80%,
+        rgba(0, 0, 0, 0.6) 100%
+    );
+    pointer-events: none;
+}
+
+/* Corner glow accents */
+.cockpit-corner-glow {
+    background:
+        radial-gradient(
+            ellipse at top left,
+            rgba(0, 212, 255, 0.1) 0%,
+            transparent 50%
+        ),
+        radial-gradient(
+            ellipse at bottom right,
+            rgba(118, 75, 162, 0.1) 0%,
+            transparent 50%
+        );
+    pointer-events: none;
+}
+
+/* ============================================================================
+   HUD Strip
+   ============================================================================ */
+
+.hud-strip {
+    background: linear-gradient(135deg, rgba(10, 14, 26, 0.95), rgba(2, 3, 6, 0.98));
+    border-bottom: 1px solid rgba(0, 212, 255, 0.3);
+    padding: 12px;
+}
+
+.hud-title {
+    font-size: 24px;
+    font-weight: bold;
+    color: @accent-cyan;
+    text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+    letter-spacing: 2px;
+}
+
+/* ============================================================================
+   HUD Buttons
+   ============================================================================ */
+
+.hud-button {
+    min-width: 90px;
+    min-height: 75px;
+    background: linear-gradient(135deg, @primary-start, @primary-end);
+    border: 2px solid @accent-cyan;
+    border-radius: 12px;
+    color: @text-primary;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    box-shadow:
+        0 0 15px rgba(0, 212, 255, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.15s ease;
+}
+
+.hud-button:hover {
+    background: linear-gradient(135deg, #7a8ff5, #8760b5);
+    box-shadow:
+        0 0 25px rgba(0, 212, 255, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.hud-button:active,
+.hud-button.active {
+    transform: scale(0.95);
+    background: linear-gradient(135deg, @accent-cyan, @primary-start);
+    border-color: @accent-cyan;
+    box-shadow:
+        0 0 30px rgba(0, 212, 255, 0.6),
+        inset 0 0 20px rgba(0, 212, 255, 0.2);
+}
+
+.hud-button.selected {
+    background: linear-gradient(135deg, @accent-cyan, #00a0cc);
+    border-color: #ffffff;
+    box-shadow:
+        0 0 25px rgba(0, 212, 255, 0.7),
+        inset 0 0 15px rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================================
+   Metric Cards
+   ============================================================================ */
+
+.metric-card {
+    background: linear-gradient(135deg, rgba(10, 14, 26, 0.9), rgba(20, 30, 60, 0.8));
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+    border-color: rgba(0, 212, 255, 0.4);
+    box-shadow:
+        0 6px 30px rgba(0, 0, 0, 0.4),
+        0 0 20px rgba(0, 212, 255, 0.1);
+}
+
+.metric-card-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: @accent-cyan;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+}
+
+.metric-value-huge {
+    font-size: 64px;
+    font-weight: bold;
+    color: @text-primary;
+    text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+    letter-spacing: -2px;
+}
+
+.metric-value-large {
+    font-size: 36px;
+    font-weight: bold;
+    color: @text-primary;
+}
+
+.metric-value-medium {
+    font-size: 24px;
+    font-weight: 600;
+    color: @text-primary;
+}
+
+.metric-unit {
+    font-size: 16px;
+    color: @text-secondary;
+    margin-left: 4px;
+}
+
+.metric-detail {
+    font-size: 14px;
+    color: @text-secondary;
+    margin-top: 8px;
+}
+
+/* ============================================================================
+   Status Indicators
+   ============================================================================ */
+
+.status-bar {
+    background: rgba(2, 3, 6, 0.8);
+    border-top: 1px solid rgba(0, 212, 255, 0.2);
+    padding: 12px 16px;
+}
+
+.status-indicator {
+    font-size: 14px;
+    color: @text-secondary;
+}
+
+.status-nominal {
+    color: @success-color;
+}
+
+.status-warning {
+    color: @warning-color;
+}
+
+.status-error {
+    color: @error-color;
+}
+
+.status-dot {
+    font-size: 8px;
+    margin-right: 6px;
+}
+
+/* ============================================================================
+   Avatar Controls
+   ============================================================================ */
+
+.avatar-dropdown {
+    min-height: 48px;
+    background: rgba(10, 14, 26, 0.9);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    color: @text-primary;
+}
+
+.avatar-dropdown:focus {
+    border-color: @accent-cyan;
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+}
+
+.avatar-apply-button {
+    min-height: 60px;
+    background: linear-gradient(135deg, @success-color, #00cc6a);
+    border: none;
+    border-radius: 12px;
+    color: #000000;
+    font-weight: bold;
+    font-size: 16px;
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+    transition: all 0.15s ease;
+}
+
+.avatar-apply-button:hover {
+    box-shadow: 0 0 30px rgba(0, 255, 136, 0.6);
+}
+
+.avatar-apply-button:active {
+    transform: scale(0.95);
+}
+
+.avatar-save-button {
+    min-height: 60px;
+    background: linear-gradient(135deg, @primary-start, @primary-end);
+    border: 2px solid @accent-cyan;
+    border-radius: 12px;
+    color: @text-primary;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+/* ============================================================================
+   Ripple Touch Effect
+   ============================================================================ */
+
+.ripple-effect {
+    overflow: hidden;
+    position: relative;
+}
+
+.ripple-effect::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    background: radial-gradient(
+        circle,
+        rgba(0, 212, 255, 0.6) 0%,
+        rgba(0, 212, 255, 0) 70%
+    );
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.ripple-effect.ripple-active::after {
+    animation: ripple-expand 0.4s ease-out forwards;
+}
+
+@keyframes ripple-expand {
+    0% {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(100);
+        opacity: 0;
+    }
+}
+
+/* ============================================================================
+   Loading States
+   ============================================================================ */
+
+.loading-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.loading-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+
+.loading-skeleton {
+    background: linear-gradient(
+        90deg,
+        rgba(30, 40, 70, 0.5) 0%,
+        rgba(50, 60, 100, 0.5) 50%,
+        rgba(30, 40, 70, 0.5) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    border-radius: 8px;
+}
+
+@keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ============================================================================
+   View Transitions
+   ============================================================================ */
+
+.view-container {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.view-enter {
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.view-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.view-exit {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.view-exit-active {
+    opacity: 0;
+    transform: translateY(-20px);
+}
+
+/* Slide transitions for page navigation */
+.slide-left-enter {
+    transform: translateX(100%);
+    opacity: 0;
+}
+
+.slide-left-enter-active {
+    transform: translateX(0);
+    opacity: 1;
+    transition: all 0.3s ease;
+}
+
+.slide-right-enter {
+    transform: translateX(-100%);
+    opacity: 0;
+}
+
+.slide-right-enter-active {
+    transform: translateX(0);
+    opacity: 1;
+    transition: all 0.3s ease;
+}
+
+/* ============================================================================
+   Error States
+   ============================================================================ */
+
+.error-card {
+    background: linear-gradient(135deg, rgba(255, 68, 68, 0.2), rgba(255, 68, 68, 0.1));
+    border: 1px solid rgba(255, 68, 68, 0.5);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.error-text {
+    color: @error-color;
+    font-weight: 500;
+}
+
+.error-icon {
+    color: @error-color;
+    font-size: 24px;
+    margin-bottom: 8px;
+}
+
+/* ============================================================================
+   Empty States
+   ============================================================================ */
+
+.empty-state {
+    opacity: 0.6;
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-state-text {
+    font-size: 16px;
+    color: @text-secondary;
+}
+
+/* ============================================================================
+   Glow Effects
+   ============================================================================ */
+
+.glow-cyan {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+}
+
+.glow-magenta {
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+}
+
+.glow-success {
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+}
+
+.text-glow-cyan {
+    text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+}
+
+/* Animated glow */
+.glow-pulse {
+    animation: glow-pulse-anim 2s ease-in-out infinite;
+}
+
+@keyframes glow-pulse-anim {
+    0%, 100% {
+        box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(0, 212, 255, 0.6);
+    }
+}
+
+/* ============================================================================
+   Progress Bars
+   ============================================================================ */
+
+.progress-bar {
+    height: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, @primary-start, @accent-cyan);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.progress-fill.high {
+    background: linear-gradient(90deg, @warning-color, @error-color);
+}
+
+.progress-fill.critical {
+    background: @error-color;
+    animation: progress-critical-pulse 0.5s ease-in-out infinite;
+}
+
+@keyframes progress-critical-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* ============================================================================
+   Scrollbar Styling
+   ============================================================================ */
+
+scrollbar {
+    background: transparent;
+}
+
+scrollbar slider {
+    background: rgba(0, 212, 255, 0.3);
+    border-radius: 4px;
+    min-width: 8px;
+    min-height: 8px;
+}
+
+scrollbar slider:hover {
+    background: rgba(0, 212, 255, 0.5);
+}
+
+scrollbar slider:active {
+    background: rgba(0, 212, 255, 0.7);
+}
+
+/* ============================================================================
+   Responsive Scaling (1080x1920)
+   ============================================================================ */
+
+@media (min-height: 1920px) {
+    .hud-button {
+        min-width: 122px;
+        min-height: 101px;
+        font-size: 14px;
+    }
+
+    .hud-title {
+        font-size: 32px;
+    }
+
+    .metric-value-huge {
+        font-size: 86px;
+    }
+
+    .metric-value-large {
+        font-size: 48px;
+    }
+
+    .metric-card {
+        padding: 27px;
+        border-radius: 22px;
+    }
+
+    .avatar-dropdown {
+        min-height: 65px;
+        font-size: 18px;
+    }
+
+    .avatar-apply-button,
+    .avatar-save-button {
+        min-height: 81px;
+        font-size: 22px;
+    }
+}
+
+/* ============================================================================
+   Animation Utilities
+   ============================================================================ */
+
+.fade-in {
+    animation: fade-in 0.3s ease forwards;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.slide-up {
+    animation: slide-up 0.3s ease forwards;
+}
+
+@keyframes slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.scale-in {
+    animation: scale-in 0.2s ease forwards;
+}
+
+@keyframes scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Staggered animations for lists */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+.stagger-7 { animation-delay: 0.35s; }

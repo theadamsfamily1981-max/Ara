@@ -1,0 +1,90 @@
+name: "tfan_ssa"
+backend: "python"
+max_batch_size: 8
+
+input [
+  {
+    name: "input_ids"
+    data_type: TYPE_INT64
+    dims: [-1]  # Variable sequence length
+  },
+  {
+    name: "attention_mask"
+    data_type: TYPE_INT64
+    dims: [-1]
+    optional: true
+  },
+  {
+    name: "max_new_tokens"
+    data_type: TYPE_INT32
+    dims: [1]
+    optional: true
+  }
+]
+
+output [
+  {
+    name: "output_ids"
+    data_type: TYPE_INT64
+    dims: [-1]
+  },
+  {
+    name: "logits"
+    data_type: TYPE_FP32
+    dims: [-1, -1]
+  },
+  {
+    name: "ssa_stats"
+    data_type: TYPE_STRING
+    dims: [1]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_GPU
+    gpus: [0]
+  }
+]
+
+parameters [
+  {
+    key: "k_landmarks"
+    value: { string_value: "64" }
+  },
+  {
+    key: "local_window"
+    value: { string_value: "256" }
+  },
+  {
+    key: "persistence_threshold"
+    value: { string_value: "0.1" }
+  },
+  {
+    key: "vfe_threshold"
+    value: { string_value: "0.5" }
+  },
+  {
+    key: "enable_kv_paging"
+    value: { string_value: "true" }
+  },
+  {
+    key: "max_context_length"
+    value: { string_value: "131072" }  # 128k
+  }
+]
+
+# Dynamic batching for better throughput
+dynamic_batching {
+  preferred_batch_size: [1, 2, 4, 8]
+  max_queue_delay_microseconds: 100
+}
+
+# Performance optimization
+optimization {
+  cuda {
+    graphs: true
+    busy_wait_events: true
+  }
+}

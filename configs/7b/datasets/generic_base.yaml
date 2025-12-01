@@ -1,0 +1,95 @@
+# Generic Large-Scale Base Mix for TF-A-N 7B
+#
+# Balanced pretraining on diverse internet-scale data.
+# Good baseline for general-purpose 7B model.
+
+mixture:
+  # The Pile / SlimPajama Mix
+  - name: "slim_pile_clean/*"
+    weight: 0.40
+    description: "Cleaned SlimPajama/Pile-like diverse web text"
+    path: "/data/shards/slim_pile_clean/"
+    enabled: true
+
+  # Books (long-form)
+  - name: "books3/*"
+    weight: 0.15
+    description: "Books corpus for long-form reasoning"
+    path: "/data/shards/books3/"
+    enabled: true
+
+  # arXiv (filtered)
+  - name: "arxiv_math_cs_physics/*"
+    weight: 0.15
+    description: "arXiv math, CS, physics papers"
+    path: "/data/shards/arxiv_math_cs_physics/"
+    enabled: true
+
+  # Code (permissive licenses)
+  - name: "code_stack-github/*"
+    weight: 0.20
+    description: "GitHub code with permissive licenses"
+    path: "/data/shards/code_stack_github/"
+    enabled: true
+
+  # Dialogue
+  - name: "dialogue_open/*"
+    weight: 0.10
+    description: "Cleaned dialogue/conversation data"
+    path: "/data/shards/dialogue_open/"
+    enabled: true
+
+# Packing & Sequence Configuration
+packing:
+  seq_len: 8192  # 8k for generic (can scale to 16k/32k)
+  pack_sequences: true
+  pad_to_multiple_of: 128
+
+# Filtering
+filters:
+  dedupe_nilsimsa: true
+  dedupe_threshold: 0.85
+  min_doc_len_tokens: 128
+  max_line_len: 2000
+  language: "en"
+  language_threshold: 0.90
+
+# Tokenization
+tokenization:
+  tokenizer_path: "tokenizers/llama_32k.model"
+  vocab_size: 32768
+  add_special_tokens: true
+
+# Data Loading
+dataloader:
+  num_workers: 8
+  prefetch_factor: 4
+  shuffle_buffer_size: 10000
+  streaming: true
+  buffer_size_mb: 1024
+
+# Validation
+validation:
+  enabled: true
+  split_ratio: 0.01
+  seed: 42
+
+# Fallback
+fallback:
+  use_fallback: true
+  fallback_dataset: "wikitext-103"
+  fallback_path: "/data/shards/wikitext_103/"
+
+# Notes
+notes: |
+  Generic Large-Scale Baseline Mix
+
+  Use for:
+  - General-purpose 7B pretraining
+  - Baseline comparisons
+  - Domain-agnostic applications
+
+  To use:
+    accelerate launch training/train.py \
+      --config configs/7b/model/7b_base.yaml \
+      --data configs/7b/datasets/generic_base.yaml

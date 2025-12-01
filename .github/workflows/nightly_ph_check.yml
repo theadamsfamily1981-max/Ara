@@ -1,0 +1,63 @@
+name: Nightly Topology Audit
+
+on:
+  schedule:
+    - cron: '0 5 * * *'  # Daily at 05:00 UTC
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  topology-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip wheel
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run exact PH audit
+        run: |
+          python tools/nightly_ph_check.py \
+            --max-samples 5000 \
+            --time-cap-min 20 \
+            --output artifacts/topology/audit_$(date +%Y%m%d).json
+        env:
+          CUDA_VISIBLE_DEVICES: ""  # CPU only for CI
+
+      - name: Validate topology gates
+        run: |
+          python scripts/check_gates.py \
+            --topology artifacts/topology/audit_$(date +%Y%m%d).json \
+            --thresholds wasserstein=0.02,cosine=0.90
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: topology_audit
+          path: artifacts/topology/
+          retention-days: 30
+
+      - name: Alert on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Nightly Topology Audit Failed',
+              body: `Topology audit failed on ${new Date().toISOString()}\n\nCheck artifacts for details.`,
+              labels: ['topology', 'gate-failure', 'P1']
+            })

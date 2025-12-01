@@ -1,0 +1,157 @@
+# QUANTA-Focused Dataset Mix for TF-A-N 7B
+#
+# Domain-specific training on:
+# - Quantum computing & systems
+# - Neuromorphic & SNN architectures
+# - HPC, GPU kernels, control systems
+# - Long-form technical content
+# - Instruction tuning for QUANTA tasks
+
+mixture:
+  # QUANTA Internal Corpus (if available)
+  - name: "quanta_internal_docs/*"
+    weight: 0.30
+    description: "Internal QUANTA documentation, research notes, codebases"
+    path: "/data/shards/quanta_internal_docs/"
+    enabled: true  # Set to false if not available
+
+  # arXiv: Systems, Neuro, HPC, Quantum
+  - name: "arxiv_sys_neuro_hpc/*"
+    weight: 0.20
+    description: "arXiv cs.DC, cs.NE, quant-ph, physics.comp-ph"
+    path: "/data/shards/arxiv_sys_neuro_hpc/"
+    enabled: true
+
+  # Technical Manuals & Specifications
+  - name: "manuals_specs_kernel/*"
+    weight: 0.15
+    description: "OS kernels, device drivers, hardware specs, CUDA docs"
+    path: "/data/shards/manuals_specs_kernel/"
+    enabled: true
+
+  # Code: HPC, CUDA, RT Kernels
+  - name: "code_permissive_hpc_cuda/*"
+    weight: 0.20
+    description: "CUDA/HIP kernels, HPC libraries, real-time systems"
+    path: "/data/shards/code_permissive_hpc_cuda/"
+    enabled: true
+
+  # Long-Form Books (for 16k-32k context)
+  - name: "long_books_pg19/*"
+    weight: 0.10
+    description: "Long-form books from PG-19 for context modeling"
+    path: "/data/shards/long_books_pg19/"
+    enabled: true
+
+  # Instruction SFT (for task following)
+  - name: "instruction_sft_clean/*"
+    weight: 0.05
+    description: "Cleaned instruction-following data for QUANTA tasks"
+    path: "/data/shards/instruction_sft_clean/"
+    enabled: true
+
+# Packing & Sequence Configuration
+packing:
+  seq_len: 16384  # Use 16k for QUANTA (can go up to 32k)
+  pack_sequences: true  # Pack multiple docs into single sequence
+  pad_to_multiple_of: 128  # For efficient attention kernels
+
+  # Dynamic sequence length (experimental)
+  dynamic_seq_length: false
+  seq_length_buckets: [2048, 4096, 8192, 16384, 32768]
+
+# Filtering & Preprocessing
+filters:
+  # Deduplication
+  dedupe_nilsimsa: true  # Fuzzy deduplication
+  dedupe_threshold: 0.85
+
+  # Quality Filters
+  min_doc_len_tokens: 128
+  max_doc_len_tokens: 100000
+  max_line_len: 2000
+
+  # Language
+  language: "en"
+  language_threshold: 0.95
+
+  # Code-specific
+  code_filter:
+    remove_auto_generated: true
+    min_code_quality_score: 0.7
+    allowed_licenses: ["MIT", "Apache-2.0", "BSD-3-Clause", "BSD-2-Clause"]
+
+# Tokenization
+tokenization:
+  tokenizer_path: "tokenizers/quanta_32k.model"  # SentencePiece
+  vocab_size: 32768
+  add_special_tokens: true
+
+  # Special handling
+  preserve_quantum_notation: true  # |ψ⟩, ⟨φ|, etc.
+  preserve_latex_math: true
+  preserve_code_structure: true
+
+# Data Loading
+dataloader:
+  num_workers: 8
+  prefetch_factor: 4
+  shuffle_buffer_size: 10000
+
+  # Streaming
+  streaming: true
+  buffer_size_mb: 1024
+
+# Validation Split
+validation:
+  enabled: true
+  split_ratio: 0.01  # 1% for validation
+  seed: 42
+
+# Fallback (if QUANTA data unavailable)
+fallback:
+  use_fallback: true
+  fallback_dataset: "wikitext-103"  # Small generic for smoke tests
+  fallback_path: "/data/shards/wikitext_103/"
+
+# Dataset-Specific Augmentation
+augmentation:
+  # No augmentation for exact domain match
+  enabled: false
+
+# Notes
+notes: |
+  QUANTA-Focused Dataset Configuration
+
+  Expected directory structure:
+    /data/shards/
+      quanta_internal_docs/
+        part-00000.jsonl.zst
+        part-00001.jsonl.zst
+        ...
+      arxiv_sys_neuro_hpc/
+        part-00000.jsonl.zst
+        ...
+      manuals_specs_kernel/
+        part-00000.jsonl.zst
+        ...
+      code_permissive_hpc_cuda/
+        part-00000.jsonl.zst
+        ...
+      long_books_pg19/
+        part-00000.jsonl.zst
+        ...
+      instruction_sft_clean/
+        part-00000.jsonl.zst
+        ...
+
+  JSONL format (each line):
+    {"text": "...", "source": "arxiv", "id": "...", "metadata": {...}}
+
+  To use:
+    accelerate launch training/train.py \
+      --config configs/7b/quanta_focus.yaml \
+      --data configs/7b/datasets/quanta_focus.yaml
+
+  For smoke tests with WikiText-103:
+    Set fallback.use_fallback: true and disable mixture sources

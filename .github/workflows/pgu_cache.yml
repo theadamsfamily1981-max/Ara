@@ -1,0 +1,330 @@
+name: PGU TurboCache
+
+on:
+  push:
+    branches: [ main, 'claude/**' ]
+    paths:
+      - 'tfan/pgu/**'
+      - 'scripts/bench_pgu_cache.py'
+      - '.github/workflows/pgu_cache.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'tfan/pgu/**'
+      - 'scripts/bench_pgu_cache.py'
+      - '.github/workflows/pgu_cache.yml'
+
+jobs:
+  test-imports:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install numpy
+
+      - name: Test PGU imports
+        run: |
+          python -c "
+          from tfan.pgu import (
+              alpha_rename,
+              normalize_formula,
+              TurboCache,
+              CacheStats,
+              CorpusReplayer,
+              replay_corpus
+          )
+          print('✓ PGU imports successful')
+          "
+
+  test-normalizer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Test alpha-rename
+        run: |
+          python -c "
+          from tfan.pgu.normalizer import alpha_rename
+
+          # Test basic renaming
+          canon1, mapping1 = alpha_rename('(x > y) and (y < 10)')
+          assert 'x1' in canon1
+          assert 'x2' in canon1
+
+          # Test that different variable names produce same canonical form
+          canon2, mapping2 = alpha_rename('(a > b) and (b < 10)')
+
+          assert canon1 == canon2, f'Expected same canonical form, got {canon1} vs {canon2}'
+
+          print('✓ Alpha-rename test passed')
+          print(f'  Canon: {canon1}')
+          print(f'  Mapping 1: {mapping1}')
+          print(f'  Mapping 2: {mapping2}')
+          "
+
+      - name: Test normalization
+        run: |
+          python -c "
+          from tfan.pgu.normalizer import normalize_formula
+
+          formula = '(x > y)  and  (y < 10)'
+          canon, metadata = normalize_formula(formula)
+
+          assert 'x1' in canon
+          assert metadata['num_vars'] == 2
+
+          print('✓ Normalization test passed')
+          print(f'  Canon: {canon}')
+          print(f'  Vars: {metadata[\"num_vars\"]}')
+          "
+
+      - name: Test reserved keywords
+        run: |
+          python -c "
+          from tfan.pgu.normalizer import alpha_rename
+
+          # Keywords should not be renamed
+          canon, mapping = alpha_rename('x and y or not z')
+
+          assert 'and' in canon
+          assert 'or' in canon
+          assert 'not' in canon
+          assert 'and' not in mapping
+          assert 'or' not in mapping
+          assert 'not' not in mapping
+
+          print('✓ Reserved keywords test passed')
+          "
+
+  test-cache:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install numpy
+
+      - name: Test cache operations
+        run: |
+          python -c "
+          from tfan.pgu import TurboCache
+
+          # Initialize cache
+          cache = TurboCache(backend='dict', max_entries=100)
+
+          # Test miss
+          result = cache.lookup('(x > y)', [])
+          assert result is None
+
+          # Store result
+          cache.store('(x > y)', [], {'sat': True, 'model': {'x': 1, 'y': 0}})
+
+          # Test hit
+          result = cache.lookup('(x > y)', [])
+          assert result is not None
+          assert result['sat'] == True
+
+          # Test alpha-rename equivalence
+          # (a > b) should hit same cache entry as (x > y)
+          result = cache.lookup('(a > b)', [])
+          assert result is not None, 'Alpha-rename should produce cache hit'
+
+          stats = cache.get_stats()
+          print('✓ Cache operations test passed')
+          print(f'  Hits: {stats[\"hits\"]}')
+          print(f'  Misses: {stats[\"misses\"]}')
+          print(f'  Hit rate: {stats[\"hit_rate\"]:.2%}')
+
+          assert stats['hits'] == 2, f'Expected 2 hits, got {stats[\"hits\"]}'
+          assert stats['misses'] == 1, f'Expected 1 miss, got {stats[\"misses\"]}'
+          "
+
+      - name: Test LRU eviction
+        run: |
+          python -c "
+          from tfan.pgu import TurboCache
+
+          # Small cache to trigger eviction
+          cache = TurboCache(backend='dict', max_entries=3)
+
+          # Store 4 items (should evict oldest)
+          for i in range(4):
+              cache.store(f'(x{i} > y{i})', [], {'sat': True})
+
+          stats = cache.get_stats()
+          assert stats['evictions'] > 0
+
+          print('✓ LRU eviction test passed')
+          print(f'  Evictions: {stats[\"evictions\"]}')
+          "
+
+  test-corpus-replay:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install numpy
+
+      - name: Test corpus replay
+        run: |
+          python -c "
+          from tfan.pgu import TurboCache, generate_synthetic_corpus, replay_corpus
+
+          # Generate synthetic corpus
+          corpus = generate_synthetic_corpus(num_queries=100, similarity=0.7)
+
+          # Save corpus
+          import json
+          from pathlib import Path
+
+          Path('data').mkdir(exist_ok=True)
+          with open('data/test_corpus.json', 'w') as f:
+              json.dump(corpus, f)
+
+          # Create cache
+          cache = TurboCache(backend='dict')
+
+          # Replay corpus
+          results = replay_corpus('data/test_corpus.json', cache, max_queries=100)
+
+          print('✓ Corpus replay test passed')
+          print(f'  Queries: {results.num_queries}')
+          print(f'  Hit rate: {results.hit_rate:.2%}')
+          print(f'  p95 latency: {results.p95_latency_ms:.1f}ms')
+
+          # With high similarity, hit rate should be good
+          assert results.hit_rate >= 0.5, f'Expected hit rate ≥50%, got {results.hit_rate:.2%}'
+          "
+
+  test-benchmark-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install numpy
+
+      - name: Test benchmark script
+        run: |
+          python scripts/bench_pgu_cache.py \
+            --num-queries 100 \
+            --similarity 0.8 \
+            --output /tmp/pgu_bench.json
+
+          # Check output file
+          cat /tmp/pgu_bench.json | python -m json.tool
+
+          # Verify gates
+          python -c "
+          import json
+          with open('/tmp/pgu_bench.json') as f:
+              results = json.load(f)
+
+          gates = results['cached']['gates']
+          print(f'Gates: {gates}')
+
+          # With high similarity, hit rate should be good
+          assert gates['hit_rate']['pass'], 'Hit rate gate should pass'
+          "
+
+  benchmark-gates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install numpy
+
+      - name: Run PGU benchmark
+        run: |
+          python scripts/bench_pgu_cache.py \
+            --num-queries 1000 \
+            --similarity 0.7 \
+            --include-baseline \
+            --backend dict \
+            --output pgu_benchmark_results.json
+
+      - name: Check hard gates
+        run: |
+          python -c "
+          import json
+
+          with open('pgu_benchmark_results.json') as f:
+              results = json.load(f)
+
+          gates = results['cached']['gates']
+          overall_pass = gates.get('overall', {}).get('pass', False)
+
+          print('\nGate Results:')
+          for gate_name, gate_data in gates.items():
+              if gate_name == 'overall':
+                  continue
+
+              value = gate_data.get('value')
+              threshold = gate_data.get('threshold')
+              passed = gate_data.get('pass')
+
+              status = '✓' if passed else '✗'
+              print(f'{status} {gate_name}: {value} (threshold: {threshold})')
+
+          if not overall_pass:
+              print('\n✗ Hard gates FAILED')
+              exit(1)
+
+          print('\n✓ Hard gates PASSED')
+          "
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pgu-benchmark-results
+          path: pgu_benchmark_results.json
