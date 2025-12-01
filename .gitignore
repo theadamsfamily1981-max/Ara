@@ -67,3 +67,14 @@ temp/
 # Generated test data
 data/pgu_corpus_*.json
 data/test_corpus.json
+
+# Generated benchmark/training outputs
+configs/best.yaml
+configs/structural_training_results.json
+pgu_benchmark_results.json
+certification/
+production/
+
+# MCP tools archive
+mcp-claude-restart.zip
+mcp-tools/

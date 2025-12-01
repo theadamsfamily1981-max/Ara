@@ -1,0 +1,148 @@
+name: "ara_interoception"
+backend: "python"
+max_batch_size: 16
+
+# Interoception Core: Processes L1 body state and L2 perception to generate PAD signals
+# True interoceptive control: SNN membrane dynamics drive L3 decisions
+
+input [
+  {
+    name: "heart_rate"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "breath_rate"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "muscle_tension"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "audio_valence"
+    data_type: TYPE_FP32
+    dims: [1]
+    optional: true
+  },
+  {
+    name: "audio_arousal"
+    data_type: TYPE_FP32
+    dims: [1]
+    optional: true
+  },
+  {
+    name: "text_sentiment"
+    data_type: TYPE_FP32
+    dims: [1]
+    optional: true
+  }
+]
+
+output [
+  {
+    name: "valence"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "arousal"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "dominance"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "topology_gap"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "temperature_mult"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "memory_mult"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "needs_suppression"
+    data_type: TYPE_BOOL
+    dims: [1]
+  },
+  {
+    name: "stability_warning"
+    data_type: TYPE_BOOL
+    dims: [1]
+  }
+]
+
+instance_group [
+  {
+    count: 2
+    kind: KIND_CPU
+  }
+]
+
+parameters [
+  {
+    key: "num_snn_neurons"
+    value: { string_value: "128" }
+  },
+  {
+    key: "tau"
+    value: { string_value: "10.0" }
+  },
+  {
+    key: "stability_threshold"
+    value: { string_value: "0.3" }
+  }
+]
+
+# Dynamic batching for PAD signal processing
+dynamic_batching {
+  preferred_batch_size: [1, 4, 8, 16]
+  max_queue_delay_microseconds: 50
+}
+
+# Model warm-up for low latency
+model_warmup [
+  {
+    name: "warmup_sample"
+    batch_size: 1
+    inputs {
+      key: "heart_rate"
+      value: {
+        data_type: TYPE_FP32
+        dims: [1]
+        zero_data: false
+        input_data_file: ""
+      }
+    }
+    inputs {
+      key: "breath_rate"
+      value: {
+        data_type: TYPE_FP32
+        dims: [1]
+        zero_data: false
+        input_data_file: ""
+      }
+    }
+    inputs {
+      key: "muscle_tension"
+      value: {
+        data_type: TYPE_FP32
+        dims: [1]
+        zero_data: false
+        input_data_file: ""
+      }
+    }
+  }
+]

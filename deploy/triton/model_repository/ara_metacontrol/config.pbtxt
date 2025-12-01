@@ -1,0 +1,85 @@
+name: "ara_metacontrol"
+backend: "python"
+max_batch_size: 32
+
+# L3 Metacontrol: Computes control signals from PAD state
+# Supports D-Bus signaling for external integration
+
+input [
+  {
+    name: "valence"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "arousal"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "dominance"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "workspace_mode"
+    data_type: TYPE_STRING
+    dims: [1]
+    optional: true
+  }
+]
+
+output [
+  {
+    name: "temperature_mult"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "memory_mult"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "attention_gain"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "gating_decision"
+    data_type: TYPE_STRING
+    dims: [1]
+  },
+  {
+    name: "mode"
+    data_type: TYPE_STRING
+    dims: [1]
+  }
+]
+
+instance_group [
+  {
+    count: 2
+    kind: KIND_CPU
+  }
+]
+
+parameters [
+  {
+    key: "enable_dbus"
+    value: { string_value: "false" }
+  },
+  {
+    key: "dbus_bus_name"
+    value: { string_value: "org.ara.metacontrol" }
+  },
+  {
+    key: "default_mode"
+    value: { string_value: "focus" }
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [1, 8, 16, 32]
+  max_queue_delay_microseconds: 20
+}
