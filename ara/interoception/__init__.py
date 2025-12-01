@@ -1073,6 +1073,372 @@ def process_sensory_input(
     return pad.to_dict()
 
 
+# =============================================================================
+# PHASE 1.2: SNN-TO-L3 BRIDGE - True Interoceptive Control
+# =============================================================================
+# Computes L3 metacontrol signals directly from SNN dynamics:
+# - Membrane potential variance (v_var) → Stability measure
+# - Firing rates (ρ) → Activation/arousal
+# - Topology gap → Structural instability
+# This closes the loop: SNN → PAD → L3 → SNN modulation
+
+
+@dataclass
+class SNNToL3Signal:
+    """
+    Signal structure bridging SNN dynamics to L3 Metacontrol.
+
+    Derived entirely from internal SNN state, not external predictions.
+    """
+    # SNN-derived PAD
+    valence: float = 0.0          # From membrane stability
+    arousal: float = 0.5          # From firing rate
+    dominance: float = 0.5        # From population synchrony
+
+    # SNN dynamics metrics
+    membrane_variance: float = 0.0  # v_var - instability indicator
+    mean_firing_rate: float = 0.0   # ρ - activation level
+    population_sync: float = 0.0    # Synchrony index
+    topology_gap: float = 0.0       # Structural instability (L2)
+
+    # Derived L3 control recommendations
+    temperature_mult: float = 1.0   # LLM temperature
+    memory_mult: float = 1.0        # Memory retrieval aggressiveness
+    attention_gain: float = 1.0     # Focus level
+
+    # Homeostatic signals
+    needs_suppression: bool = False
+    needs_boost: bool = False
+    stability_warning: bool = False
+
+    confidence: float = 0.5
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "valence": self.valence,
+            "arousal": self.arousal,
+            "dominance": self.dominance,
+            "membrane_variance": self.membrane_variance,
+            "mean_firing_rate": self.mean_firing_rate,
+            "population_sync": self.population_sync,
+            "topology_gap": self.topology_gap,
+            "temperature_mult": self.temperature_mult,
+            "memory_mult": self.memory_mult,
+            "attention_gain": self.attention_gain,
+            "needs_suppression": self.needs_suppression,
+            "needs_boost": self.needs_boost,
+            "stability_warning": self.stability_warning,
+            "confidence": self.confidence,
+            "timestamp": self.timestamp,
+        }
+
+
+class SNNToL3Bridge:
+    """
+    Bridge between SNN dynamics and L3 Metacontrol.
+
+    This is the TRUE interoceptive control loop - L3 decisions
+    are driven by actual SNN membrane potential and firing rates,
+    not external emotion predictions.
+
+    Control Law:
+        - High v_var (instability) → Low valence → Conservative (low LR/memory)
+        - High ρ (firing rate) → High arousal → Exploratory (high temp)
+        - High sync → High dominance → Assertive (high attention)
+
+    Usage:
+        bridge = SNNToL3Bridge(interoception_core)
+        signal = bridge.compute_l3_signal()
+        metacontrol.apply_signal(signal)
+    """
+
+    def __init__(
+        self,
+        core: InteroceptionCore,
+        stability_threshold: float = 0.3,
+        arousal_scale: float = 0.3,
+        sync_scale: float = 0.5,
+    ):
+        """
+        Initialize SNN-to-L3 bridge.
+
+        Args:
+            core: InteroceptionCore with SNN populations
+            stability_threshold: v_var threshold for instability warning
+            arousal_scale: Scale factor for firing rate → arousal
+            sync_scale: Scale factor for sync → dominance
+        """
+        self.core = core
+        self.stability_threshold = stability_threshold
+        self.arousal_scale = arousal_scale
+        self.sync_scale = sync_scale
+
+        # L2 topology reference (for gap computation)
+        self.l2_reference_density = 0.1  # Expected healthy density
+
+        # Signal history
+        self.signal_history: List[SNNToL3Signal] = []
+
+        logger.info("SNNToL3Bridge initialized")
+
+    def compute_topology_gap(self) -> float:
+        """
+        Compute topology gap (structural instability metric).
+
+        This measures how far the current SNN state is from
+        the expected "healthy" structural configuration.
+
+        High gap → Unstable → Conservative policy needed
+        """
+        val_stats = self.core.valence_pop.get_statistics()
+        aro_stats = self.core.arousal_pop.get_statistics()
+        dom_stats = self.core.dominance_pop.get_statistics()
+
+        # Compute variance gap (deviation from stable baseline)
+        v_var_mean = (val_stats.get("v_std", 0) + aro_stats.get("v_std", 0) + dom_stats.get("v_std", 0)) / 3
+
+        # Firing rate imbalance
+        rate_spread = abs(val_stats["firing_rate"] - aro_stats["firing_rate"])
+        rate_spread += abs(aro_stats["firing_rate"] - dom_stats["firing_rate"])
+
+        # Synchrony deviation
+        sync_deviation = abs(dom_stats.get("sync", 0) - 0.5)  # Ideal is 0.5
+
+        # Combined topology gap
+        gap = v_var_mean * 2.0 + rate_spread * 0.5 + sync_deviation * 0.3
+
+        return min(1.0, gap)
+
+    def compute_l3_signal(self) -> SNNToL3Signal:
+        """
+        Compute L3 metacontrol signal from current SNN state.
+
+        This is the core interoceptive computation:
+        SNN dynamics → PAD → L3 control recommendations
+
+        Returns:
+            SNNToL3Signal with PAD and control recommendations
+        """
+        # Get SNN statistics
+        val_stats = self.core.valence_pop.get_statistics()
+        aro_stats = self.core.arousal_pop.get_statistics()
+        dom_stats = self.core.dominance_pop.get_statistics()
+
+        # SNN metrics
+        membrane_variance = (val_stats.get("v_std", 0) + aro_stats.get("v_std", 0)) / 2
+        mean_firing_rate = (val_stats["firing_rate"] + aro_stats["firing_rate"] + dom_stats["firing_rate"]) / 3
+        population_sync = dom_stats.get("sync", 0.5)
+
+        # Topology gap
+        topology_gap = self.compute_topology_gap()
+
+        # =========================================
+        # PAD from SNN dynamics (TRUE INTEROCEPTION)
+        # =========================================
+
+        # Valence: HIGH instability → LOW valence
+        # Control law: valence = 1.0 - topo_gap_l2 * 2.0
+        valence = max(-1.0, min(1.0, 1.0 - topology_gap * 2.0))
+
+        # Also factor in membrane mean (positive = positive affect)
+        valence += math.tanh(val_stats["v_mean"]) * 0.3
+        valence = max(-1.0, min(1.0, valence))
+
+        # Arousal: From firing rate
+        arousal = min(1.0, mean_firing_rate / self.arousal_scale)
+
+        # Dominance: From population synchrony
+        dominance = 0.5 + (population_sync - 0.5) * self.sync_scale
+        dominance = max(0.0, min(1.0, dominance))
+
+        # =========================================
+        # L3 Control Recommendations
+        # =========================================
+
+        # Temperature: Higher arousal → higher exploration
+        # Bounded: [0.8, 1.3]
+        temp_mult = 0.8 + arousal * 0.5
+
+        # Memory: Lower valence → more conservative
+        # Bounded: [0.7, 1.2]
+        valence_norm = (valence + 1.0) / 2.0  # Map [-1,1] to [0,1]
+        memory_mult = 0.7 + valence_norm * 0.5
+
+        # Attention: Higher dominance → higher focus
+        # Bounded: [0.8, 1.2]
+        attention_gain = 0.8 + dominance * 0.4
+
+        # =========================================
+        # Homeostatic Warnings
+        # =========================================
+
+        # Suppression needed if arousal too high + instability
+        needs_suppression = arousal > 0.9 and topology_gap > 0.5
+
+        # Boost needed if low engagement
+        needs_boost = arousal < 0.2 and valence > 0.0
+
+        # Stability warning if topology gap exceeds threshold
+        stability_warning = topology_gap > self.stability_threshold
+
+        # Confidence based on stability
+        confidence = max(0.3, 1.0 - topology_gap)
+
+        # Create signal
+        signal = SNNToL3Signal(
+            valence=valence,
+            arousal=arousal,
+            dominance=dominance,
+            membrane_variance=membrane_variance,
+            mean_firing_rate=mean_firing_rate,
+            population_sync=population_sync,
+            topology_gap=topology_gap,
+            temperature_mult=temp_mult,
+            memory_mult=memory_mult,
+            attention_gain=attention_gain,
+            needs_suppression=needs_suppression,
+            needs_boost=needs_boost,
+            stability_warning=stability_warning,
+            confidence=confidence,
+        )
+
+        self.signal_history.append(signal)
+
+        # Keep last 500 signals
+        if len(self.signal_history) > 500:
+            self.signal_history = self.signal_history[-500:]
+
+        logger.debug(
+            f"SNN→L3 Signal: V={valence:.2f}, A={arousal:.2f}, D={dominance:.2f}, "
+            f"gap={topology_gap:.3f}, temp={temp_mult:.2f}"
+        )
+
+        return signal
+
+    def apply_to_l3(self, signal: Optional[SNNToL3Signal] = None):
+        """
+        Apply the signal to L3 metacontrol via the interoception core.
+
+        This closes the feedback loop by sending SNN-derived control
+        signals back to modulate future processing.
+
+        Args:
+            signal: SNNToL3Signal to apply (computes if None)
+        """
+        if signal is None:
+            signal = self.compute_l3_signal()
+
+        # Compute tau/threshold modifiers based on stability
+        # High instability → increase tau (slower response)
+        tau_mod = signal.topology_gap * 5.0  # Up to 5ms additional tau
+
+        # High instability → raise threshold (harder to spike)
+        thresh_mod = signal.topology_gap * 0.5  # Up to 0.5 additional threshold
+
+        # Apply L3 feedback through the core
+        self.core.receive_l3_feedback(
+            temp_mult=signal.temperature_mult,
+            mem_mult=signal.memory_mult,
+            attention_gain=signal.attention_gain,
+            tau_modifier=tau_mod,
+            threshold_modifier=thresh_mod,
+            suppress_arousal=signal.needs_suppression,
+            boost_attention=signal.needs_boost,
+        )
+
+        logger.info(
+            f"L3 feedback applied: temp={signal.temperature_mult:.2f}, "
+            f"mem={signal.memory_mult:.2f}, tau_mod={tau_mod:.2f}"
+        )
+
+    def run_control_step(
+        self,
+        l1_body: Optional[L1BodyState] = None,
+        l2_perception: Optional[L2PerceptionState] = None,
+        num_steps: int = 10,
+    ) -> SNNToL3Signal:
+        """
+        Run a complete interoceptive control step.
+
+        1. Process L1/L2 inputs through SNN
+        2. Compute L3 signal from SNN dynamics
+        3. Apply L3 feedback to modulate SNN
+        4. Return signal for external use
+
+        This is the full closed-loop interoceptive cycle.
+
+        Args:
+            l1_body: L1 Body state
+            l2_perception: L2 Perception state
+            num_steps: SNN simulation steps
+
+        Returns:
+            SNNToL3Signal for downstream use
+        """
+        # Step 1: Process through SNN
+        pad = self.core.process_with_layers(l1_body, l2_perception, num_steps)
+
+        # Step 2: Compute L3 signal
+        signal = self.compute_l3_signal()
+
+        # Step 3: Apply L3 feedback (closes loop)
+        self.apply_to_l3(signal)
+
+        return signal
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get bridge status."""
+        return {
+            "history_length": len(self.signal_history),
+            "stability_threshold": self.stability_threshold,
+            "last_signal": self.signal_history[-1].to_dict() if self.signal_history else None,
+        }
+
+
+# Global bridge
+_snn_l3_bridge: Optional[SNNToL3Bridge] = None
+
+
+def get_snn_l3_bridge() -> SNNToL3Bridge:
+    """Get or create global SNN-to-L3 bridge."""
+    global _snn_l3_bridge
+    if _snn_l3_bridge is None:
+        core = get_interoception_core()
+        _snn_l3_bridge = SNNToL3Bridge(core)
+    return _snn_l3_bridge
+
+
+def run_interoceptive_control(
+    l1_body: Optional[L1BodyState] = None,
+    l2_perception: Optional[L2PerceptionState] = None,
+) -> Dict[str, Any]:
+    """
+    Run a complete interoceptive control step.
+
+    This is the main entry point for the TRUE interoceptive control loop.
+    SNN dynamics drive L3 metacontrol, which modulates future SNN processing.
+
+    Args:
+        l1_body: L1 Body state (physical/somatic)
+        l2_perception: L2 Perception state (sensory)
+
+    Returns:
+        SNNToL3Signal dict with PAD and control recommendations
+
+    Example:
+        signal = run_interoceptive_control(
+            l1_body=L1BodyState(heart_rate=75),
+            l2_perception=L2PerceptionState(audio_valence=0.3),
+        )
+        # Use signal['temperature_mult'] for LLM sampling
+        # Use signal['memory_mult'] for memory retrieval
+    """
+    bridge = get_snn_l3_bridge()
+    signal = bridge.run_control_step(l1_body, l2_perception)
+    return signal.to_dict()
+
+
 __all__ = [
     # Enums
     "SensoryModality",
@@ -1093,4 +1459,9 @@ __all__ = [
     # Convenience functions
     "get_interoception_core",
     "process_sensory_input",
+    # Phase 1.2: SNN-to-L3 Bridge
+    "SNNToL3Signal",
+    "SNNToL3Bridge",
+    "get_snn_l3_bridge",
+    "run_interoceptive_control",
 ]
