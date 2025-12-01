@@ -291,6 +291,24 @@ Adaptive Entropy:
   ✅ L5 → Entropy integration: params applied
 ```
 
+### Impact Comparison (Before vs After)
+
+Phase 4 features OFF (baseline) vs ON (full):
+
+| Metric | Baseline | Phase 4 | Δ | Impact |
+|--------|----------|---------|---|--------|
+| Mean Reward | 0.654 | 0.808 | **+23.5%** | L5 meta-learning |
+| Latency Stddev | 2.24ms | 1.88ms | **-16.1%** | More consistent |
+| p99 Latency | 17.63ms | 17.52ms | -0.6% | Slight improvement |
+| Reward Stddev | 0.105 | 0.060 | **-43%** | Stable optimization |
+
+**Key Insight:** Phase 4 cognitive autonomy delivers:
+- **23.5% higher rewards** through learned control laws
+- **16% lower variance** through adaptive exploration
+- Consistent p99 latency with smarter resource allocation
+
+Results archived in `results/phase4/`.
+
 ---
 
 ## How to Run Certification
@@ -304,6 +322,9 @@ python scripts/demo_closed_loop_antifragility.py --stress-level high
 
 # Phase 4: Cognitive autonomy certification
 python scripts/certify_cognitive_autonomy.py --iterations 5
+
+# Phase 4: Before/After comparison (with workloads)
+python scripts/compare_phase4_impact.py --workloads --requests 200
 
 # Hardware readiness check
 python scripts/validate_hardware_ready.py

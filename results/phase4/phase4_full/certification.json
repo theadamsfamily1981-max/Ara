@@ -1,0 +1,36 @@
+{
+  "config": "full",
+  "timestamp": "2025-12-01T20:26:51.083656",
+  "tests": {
+    "l5": {
+      "passed": true,
+      "initial_reward": 0.8702286436109063,
+      "final_reward": 0.9525883681649951,
+      "improvement": 0.0823597245540888,
+      "personality": "balanced_general"
+    },
+    "l6": {
+      "passed": true,
+      "mode_accuracy": 1.0,
+      "correct_routes": 4,
+      "total_routes": 4
+    },
+    "geometry": {
+      "passed": true,
+      "curvature_accuracy": 1.0,
+      "mean_curvature": 0.95,
+      "in_range": 4,
+      "total": 4
+    },
+    "entropy": {
+      "passed": true,
+      "alpha_low_risk": 0.03,
+      "alpha_high_risk": 0.012,
+      "alpha_range": 0.018,
+      "mode_low": "exploratory",
+      "mode_high": "balanced"
+    }
+  },
+  "elapsed_seconds": 0.0027315616607666016,
+  "all_passed": true
+}
