@@ -10,6 +10,8 @@ This document tracks the development phases from research prototype to productio
 | Phase 2 | PENDING | Hardware bring-up on real FPGA |
 | Phase 3 | PENDING | Live deployment with real workloads |
 | Phase 4 | **DONE** | Cognitive autonomy (L5/L6 meta-learning) |
+| Phase 4b | **DONE** | Predictive control (L7/L8 temporal topology) |
+| Phase 5 | STUB | Self-healing fabric (automatic kernel repair) |
 
 ---
 
@@ -325,6 +327,194 @@ python scripts/certify_cognitive_autonomy.py --iterations 5
 
 # Phase 4: Before/After comparison (with workloads)
 python scripts/compare_phase4_impact.py --workloads --requests 200
+
+# Hardware readiness check
+python scripts/validate_hardware_ready.py
+
+# CI/CD (automatic)
+# Runs on push, PR, and daily at 02:00 UTC
+```
+
+---
+
+## Phase 4b: Predictive Control (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Enable proactive structural control via temporal topology analysis and cognitive phase transitions.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| L7 Temporal Topology Tracker | Done | `tfan/l7/__init__.py` |
+| L8 Cognitive Phase Controller | Done | `tfan/geometry/__init__.py` |
+| Self-Healing Fabric (stub) | Phase 5 | `tfan/fabric/__init__.py` |
+| Certification Script | Done | `scripts/certify_predictive_control.py` |
+
+### L7 Temporal Topology: Predictive Structural Control
+
+The system tracks topological features over time and computes the **Structural Rate (Ṡ)** to predict instability before it manifests in latency.
+
+**Key Concept:** Instead of reacting to performance degradation, L7 detects changes in the _structure of the problem_ by monitoring how topology evolves.
+
+**Tracked Features:**
+- β₀: Connected components count
+- β₁: Loop/cycle count
+- β₂: Void/cavity count
+- Spectral gap (λ₂ - λ₁)
+- Topological gap
+- EPR coefficient of variation
+- Spike rate
+
+**Structural Rate Computation:**
+```
+Ṡ = Σ |d(feature_i)/dt| / n_features
+```
+
+**Alert Levels:**
+| Alert Level | Ṡ Threshold | Action |
+|-------------|-------------|--------|
+| STABLE | < 0.05 | Normal operation |
+| ELEVATED | 0.05 - 0.15 | Increase monitoring |
+| WARNING | 0.15 - 0.30 | Reduce exploration |
+| CRITICAL | ≥ 0.30 | Protective measures |
+
+**CLV Extension:**
+```python
+clv.structural_dynamics = Ṡ
+clv.predicted_risk = temporal_topology_tracker.get_predicted_risk()
+```
+
+### L8 Cognitive Phase Transitions: Geometry as Cognitive State
+
+The system treats manifold curvature as an indicator of cognitive phase, enabling smooth transitions between reasoning modes.
+
+**Cognitive Phases:**
+| Phase | Curvature Range | L6 Mode | Behavior |
+|-------|-----------------|---------|----------|
+| FLAT_LOCAL | c ≈ 0 | KG_ASSISTED | Local, fast retrieval |
+| TRANSITIONAL | c ∈ (0.3, 0.7) | HYBRID | Mixed reasoning |
+| HIERARCHICAL | c ∈ [0.7, 1.5] | PGU_VERIFIED | Formal hierarchy |
+| DEEP_ABSTRACT | c > 1.5 | FORMAL_FIRST | Deep formal reasoning |
+
+**Phase Transition Rules:**
+1. **Gradual transitions:** Only move to adjacent phases
+2. **Stability gating:** Transitions blocked if stability < 0.9
+3. **Task-driven:** Complex/abstract tasks target higher curvature
+
+**Task → Phase Selection:**
+| Task Type | Target Phase |
+|-----------|--------------|
+| SIMPLE_LOOKUP | FLAT_LOCAL |
+| CREATIVE | TRANSITIONAL |
+| PLANNING | HIERARCHICAL |
+| ABSTRACT_REASONING | DEEP_ABSTRACT |
+
+### Self-Healing Fabric (Phase 5 Stub)
+
+The Self-Healing Fabric enables automatic kernel repair when PGU detects invariant violations.
+
+**Concept (Phase 5):**
+1. PGU detects formal invariant violation
+2. Fabric matches error to repair template
+3. Regenerates HLS kernel via HLSExporter
+4. Re-validates with PGU + A-Cert
+5. Atomically swaps new bitstream via CXL
+
+**Supported Repair Classes (planned):**
+- DAU address rewiring
+- v_th path insertion
+- Bounds clamp insertion
+- Bus width adjustment
+
+### Certification Results
+
+```
+L7 Temporal Topology:
+  ✅ Tracker initialization: window=20
+  ✅ Ṡ responds to topology changes: stable=0.00, unstable=0.13
+  ✅ Alert level classification: stable → critical on change
+  ✅ Proactive controller: elevated alert triggers actions
+  ✅ CLV extension: structural_dynamics and predicted_risk
+  ✅ Convenience functions: Ṡ, alert level, should_act
+
+L8 Cognitive Phase Transitions:
+  ✅ Controller initialization: c=1.0 → hierarchical
+  ✅ Curvature → Phase mapping: 4/4 correct
+  ✅ Gradual phase transition: flat_local → hierarchical via 2 phases
+  ✅ Task → Phase selection: 4/4 correct
+  ✅ L6 mode recommendations: 4/4 phases have correct modes
+  ✅ Stability gating: blocked at low, allowed at high
+
+Self-Healing Fabric:
+  ⏳ Stubbed for Phase 5
+```
+
+### How L7/L8 Integrate with L5/L6
+
+```
+L1 Metrics (EPR, topology)
+    ↓
+L7 Temporal Topology ─── Ṡ (structural rate) → CLV.structural_dynamics
+    ↓
+L2 Appraisal (PAD state)
+    ↓
+L8 Cognitive Phase ─── curvature → phase → L6 mode recommendation
+    ↓
+CLV Computation (instability, resource, structural + dynamics)
+    ↓
+L5 Meta-Learning (learns optimal Ṡ thresholds, phase boundaries)
+    ↓
+L3 Metacontrol (temperature, memory, policy)
+    ↓
+L6 Reasoning (mode selected by phase: KG/HYBRID/PGU/FORMAL)
+    ↓
+AEPO Structural Adaptation
+    ↓
+PGU Verification → Self-Healing Fabric (Phase 5)
+```
+
+**Key Insight:** L7/L8 add _predictive_ capability to the reactive L1-L6 stack:
+- L7 predicts instability from topological dynamics
+- L8 shifts cognitive modes based on geometric state
+- Together they enable proactive control vs reactive response
+
+---
+
+## Phase 5: Self-Healing Fabric (PLANNED)
+
+**Status:** Stubbed
+
+**Objective:** Enable automatic kernel repair when formal violations are detected.
+
+See `tfan/fabric/__init__.py` for the stub implementation and planned repair classes.
+
+### Prerequisites
+
+- Phase 2 hardware bring-up complete
+- PGU running on FPGA with formal invariant checking
+- HLS synthesis pipeline validated
+
+---
+
+## How to Run Certification
+
+```bash
+# Phase 1: Antifragility certification
+python scripts/certify_antifragility_delta.py --burst-factor 2.0 --duration 10
+
+# Phase 1: Full closed-loop demo
+python scripts/demo_closed_loop_antifragility.py --stress-level high
+
+# Phase 4: Cognitive autonomy certification
+python scripts/certify_cognitive_autonomy.py --iterations 5
+
+# Phase 4: Before/After comparison (with workloads)
+python scripts/compare_phase4_impact.py --workloads --requests 200
+
+# Phase 4b: Predictive control certification (L7/L8)
+python scripts/certify_predictive_control.py
 
 # Hardware readiness check
 python scripts/validate_hardware_ready.py

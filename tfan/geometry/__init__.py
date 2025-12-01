@@ -507,6 +507,305 @@ def select_geometry_for_task(
     }
 
 
+# =============================================================================
+# L8: COGNITIVE PHASE TRANSITIONS
+# =============================================================================
+
+class CognitivePhase(str, Enum):
+    """
+    Cognitive phases based on geometric regime.
+
+    The network shifts between phases like cognitive states,
+    each with different reasoning characteristics.
+    """
+    FLAT_LOCAL = "flat_local"           # c ≈ 0: Local, similarity-based
+    TRANSITIONAL = "transitional"       # c ∈ (0.3, 0.7): Mixed reasoning
+    HIERARCHICAL = "hierarchical"       # c ∈ [0.7, 1.5]: Tree-like structure
+    DEEP_ABSTRACT = "deep_abstract"     # c > 1.5: Deep hierarchy, abstraction
+
+
+@dataclass
+class PhaseTransitionState:
+    """State of cognitive phase transition."""
+    current_phase: CognitivePhase
+    previous_phase: CognitivePhase
+    curvature: float
+    transition_in_progress: bool
+    transition_progress: float  # 0-1 during transition
+    stability: float            # How stable the current phase is
+    recommended_mode: str       # L6 reasoning mode recommendation
+
+
+class CognitivePhaseController:
+    """
+    Controls cognitive phase transitions based on geometry.
+
+    This is the L8 component that treats curvature changes as
+    cognitive state shifts, not just parameter tweaks.
+    """
+
+    def __init__(
+        self,
+        initial_curvature: float = 1.0,
+        transition_rate: float = 0.1,  # Max change per step
+        stability_threshold: float = 0.8,  # Require stability before transition
+    ):
+        """
+        Initialize phase controller.
+
+        Args:
+            initial_curvature: Starting curvature
+            transition_rate: Maximum curvature change per update
+            stability_threshold: Required stability to complete transition
+        """
+        self.current_curvature = initial_curvature
+        self.target_curvature = initial_curvature
+        self.transition_rate = transition_rate
+        self.stability_threshold = stability_threshold
+
+        # Phase boundaries (must be defined before _curvature_to_phase)
+        self.phase_boundaries = {
+            CognitivePhase.FLAT_LOCAL: (0.0, 0.3),
+            CognitivePhase.TRANSITIONAL: (0.3, 0.7),
+            CognitivePhase.HIERARCHICAL: (0.7, 1.5),
+            CognitivePhase.DEEP_ABSTRACT: (1.5, 5.0),
+        }
+
+        # L6 mode recommendations per phase
+        self.phase_to_mode = {
+            CognitivePhase.FLAT_LOCAL: "KG_ASSISTED",
+            CognitivePhase.TRANSITIONAL: "HYBRID",
+            CognitivePhase.HIERARCHICAL: "PGU_VERIFIED",
+            CognitivePhase.DEEP_ABSTRACT: "FORMAL_FIRST",
+        }
+
+        # Phase state (after phase_boundaries is defined)
+        self._current_phase = self._curvature_to_phase(initial_curvature)
+        self._previous_phase = self._current_phase
+        self._transition_in_progress = False
+        self._transition_progress = 1.0
+        self._stability = 1.0
+
+        # History for analysis
+        self._phase_history: List[Tuple[float, CognitivePhase]] = []
+        self._max_history = 100
+
+        logger.info(f"CognitivePhaseController: c={initial_curvature}, phase={self._current_phase.value}")
+
+    def _curvature_to_phase(self, c: float) -> CognitivePhase:
+        """Determine cognitive phase from curvature."""
+        for phase, (low, high) in self.phase_boundaries.items():
+            if low <= c < high:
+                return phase
+        return CognitivePhase.DEEP_ABSTRACT if c >= 1.5 else CognitivePhase.FLAT_LOCAL
+
+    def request_phase_transition(self, target_phase: CognitivePhase) -> bool:
+        """
+        Request transition to a target phase.
+
+        Args:
+            target_phase: Desired cognitive phase
+
+        Returns:
+            True if transition started, False if blocked
+        """
+        if target_phase == self._current_phase:
+            return True  # Already there
+
+        # Check stability before allowing transition
+        if self._stability < self.stability_threshold:
+            logger.warning(
+                f"Phase transition blocked: stability {self._stability:.2f} "
+                f"< threshold {self.stability_threshold}"
+            )
+            return False
+
+        # Set target curvature (middle of target phase range)
+        low, high = self.phase_boundaries[target_phase]
+        self.target_curvature = (low + high) / 2
+
+        self._previous_phase = self._current_phase
+        self._transition_in_progress = True
+        self._transition_progress = 0.0
+
+        logger.info(
+            f"Phase transition: {self._current_phase.value} → {target_phase.value} "
+            f"(c: {self.current_curvature:.2f} → {self.target_curvature:.2f})"
+        )
+        return True
+
+    def request_curvature(self, target_c: float) -> bool:
+        """
+        Request specific curvature (may trigger phase transition).
+
+        Args:
+            target_c: Target curvature value
+
+        Returns:
+            True if request accepted
+        """
+        target_phase = self._curvature_to_phase(target_c)
+        self.target_curvature = max(0.01, target_c)  # Keep positive
+
+        if target_phase != self._current_phase:
+            if self._stability < self.stability_threshold:
+                logger.warning("Curvature change may destabilize: low stability")
+            self._previous_phase = self._current_phase
+            self._transition_in_progress = True
+            self._transition_progress = 0.0
+
+        return True
+
+    def update(self, stability_signal: float = 1.0) -> PhaseTransitionState:
+        """
+        Update phase controller state.
+
+        Args:
+            stability_signal: Current stability (0-1), e.g. from L7 or CLV
+
+        Returns:
+            Current phase transition state
+        """
+        # Update stability (smoothed)
+        self._stability = 0.8 * self._stability + 0.2 * stability_signal
+
+        # Progress transition
+        if self._transition_in_progress:
+            delta = self.target_curvature - self.current_curvature
+            max_step = self.transition_rate * self._stability  # Slower if unstable
+
+            if abs(delta) <= max_step:
+                # Transition complete
+                self.current_curvature = self.target_curvature
+                self._transition_in_progress = False
+                self._transition_progress = 1.0
+            else:
+                # Gradual transition
+                step = max_step if delta > 0 else -max_step
+                self.current_curvature += step
+                progress = 1.0 - abs(delta - step) / abs(self.target_curvature - self.current_curvature + 1e-6)
+                self._transition_progress = max(0, min(1, progress))
+
+            # Update phase
+            new_phase = self._curvature_to_phase(self.current_curvature)
+            if new_phase != self._current_phase:
+                self._previous_phase = self._current_phase
+                self._current_phase = new_phase
+
+                # Record transition
+                import time
+                self._phase_history.append((time.time(), new_phase))
+                if len(self._phase_history) > self._max_history:
+                    self._phase_history.pop(0)
+
+                logger.info(f"Phase transition complete: {new_phase.value} (c={self.current_curvature:.2f})")
+
+        return PhaseTransitionState(
+            current_phase=self._current_phase,
+            previous_phase=self._previous_phase,
+            curvature=self.current_curvature,
+            transition_in_progress=self._transition_in_progress,
+            transition_progress=self._transition_progress,
+            stability=self._stability,
+            recommended_mode=self.phase_to_mode[self._current_phase],
+        )
+
+    def get_current_phase(self) -> CognitivePhase:
+        """Get current cognitive phase."""
+        return self._current_phase
+
+    def get_recommended_l6_mode(self) -> str:
+        """Get recommended L6 reasoning mode for current phase."""
+        return self.phase_to_mode[self._current_phase]
+
+    def get_state(self) -> Dict[str, Any]:
+        """Get controller state for monitoring."""
+        return {
+            "current_phase": self._current_phase.value,
+            "previous_phase": self._previous_phase.value,
+            "curvature": self.current_curvature,
+            "target_curvature": self.target_curvature,
+            "transition_in_progress": self._transition_in_progress,
+            "transition_progress": self._transition_progress,
+            "stability": self._stability,
+            "recommended_mode": self.phase_to_mode[self._current_phase],
+            "phase_history_length": len(self._phase_history),
+        }
+
+
+def select_phase_for_task(
+    task_type: str,
+    complexity: float = 0.5,
+    hierarchy_depth: Optional[int] = None,
+) -> CognitivePhase:
+    """
+    Select appropriate cognitive phase for task.
+
+    Args:
+        task_type: Type of task (planning, retrieval, reasoning, etc.)
+        complexity: Task complexity 0-1
+        hierarchy_depth: Optional hierarchy depth hint
+
+    Returns:
+        Recommended cognitive phase
+    """
+    # Base selection from task type
+    task_phase_map = {
+        "planning": CognitivePhase.HIERARCHICAL,
+        "retrieval": CognitivePhase.FLAT_LOCAL,
+        "reasoning": CognitivePhase.TRANSITIONAL,
+        "abstraction": CognitivePhase.DEEP_ABSTRACT,
+        "navigation": CognitivePhase.HIERARCHICAL,
+        "similarity": CognitivePhase.FLAT_LOCAL,
+        "classification": CognitivePhase.TRANSITIONAL,
+    }
+
+    base_phase = task_phase_map.get(task_type, CognitivePhase.TRANSITIONAL)
+
+    # Adjust for complexity
+    if complexity > 0.8 and base_phase != CognitivePhase.DEEP_ABSTRACT:
+        # High complexity → deeper phase
+        phases = list(CognitivePhase)
+        idx = phases.index(base_phase)
+        if idx < len(phases) - 1:
+            base_phase = phases[idx + 1]
+
+    # Adjust for hierarchy depth
+    if hierarchy_depth is not None:
+        if hierarchy_depth > 5:
+            base_phase = CognitivePhase.DEEP_ABSTRACT
+        elif hierarchy_depth > 3:
+            base_phase = CognitivePhase.HIERARCHICAL
+
+    return base_phase
+
+
+# Global phase controller
+_phase_controller: Optional[CognitivePhaseController] = None
+
+
+def get_phase_controller() -> CognitivePhaseController:
+    """Get or create global phase controller."""
+    global _phase_controller
+    if _phase_controller is None:
+        _phase_controller = CognitivePhaseController()
+    return _phase_controller
+
+
+def get_cognitive_phase() -> str:
+    """Get current cognitive phase name."""
+    return get_phase_controller().get_current_phase().value
+
+
+def transition_to_phase(phase_name: str) -> bool:
+    """Request transition to named phase."""
+    phase_map = {p.value: p for p in CognitivePhase}
+    if phase_name not in phase_map:
+        logger.warning(f"Unknown phase: {phase_name}")
+        return False
+    return get_phase_controller().request_phase_transition(phase_map[phase_name])
+
+
 __all__ = [
     "GeometryType",
     "TaskGeometryHint",
@@ -519,4 +818,12 @@ __all__ = [
     "compute_geometric_routing",
     "get_geometry_selector",
     "select_geometry_for_task",
+    # L8 Phase Transitions
+    "CognitivePhase",
+    "PhaseTransitionState",
+    "CognitivePhaseController",
+    "select_phase_for_task",
+    "get_phase_controller",
+    "get_cognitive_phase",
+    "transition_to_phase",
 ]
