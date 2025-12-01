@@ -375,6 +375,346 @@ def get_metacontrol_status() -> Dict[str, Any]:
     return service.get_status()
 
 
+# =============================================================================
+# PHASE 5.3: D-BUS SIGNALING FOR L3 CONTROL INTEGRATION
+# =============================================================================
+
+import json
+import threading
+import time
+from typing import Callable, List
+
+# Check for D-Bus availability
+DBUS_AVAILABLE = False
+try:
+    import dbus
+    import dbus.service
+    import dbus.mainloop.glib
+    from gi.repository import GLib
+    DBUS_AVAILABLE = True
+except ImportError:
+    dbus = None
+    GLib = None
+
+
+# D-Bus interface specification
+DBUS_BUS_NAME = "org.ara.metacontrol"
+DBUS_OBJECT_PATH = "/org/ara/metacontrol/L3"
+DBUS_INTERFACE = "org.ara.metacontrol.L3Interface"
+
+
+@dataclass
+class DBusSignalEvent:
+    """Event structure for D-Bus signals."""
+    signal_name: str
+    data: Dict[str, Any]
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+class L3MetacontrolDBusService:
+    """
+    D-Bus service wrapper for L3 Metacontrol.
+
+    Provides:
+    - Signals: PADChanged, ModeChanged, ModulationChanged
+    - Methods: SetWorkspaceMode, ComputePADGating, GetStatus
+    - Properties: CurrentMode, Temperature, MemoryMultiplier
+
+    This enables Avatar/Cockpit integration via D-Bus IPC.
+    """
+
+    def __init__(self, service: L3MetacontrolService):
+        """
+        Initialize D-Bus service wrapper.
+
+        Args:
+            service: Underlying L3 metacontrol service
+        """
+        self.service = service
+        self._running = False
+        self._loop = None
+        self._bus = None
+        self._dbus_object = None
+        self._thread = None
+
+        # Signal listeners (for non-D-Bus callbacks)
+        self._signal_listeners: Dict[str, List[Callable]] = {
+            "PADChanged": [],
+            "ModeChanged": [],
+            "ModulationChanged": [],
+        }
+
+        # Signal history for debugging
+        self._signal_history: List[DBusSignalEvent] = []
+
+        logger.info("L3MetacontrolDBusService initialized")
+
+    def add_signal_listener(self, signal_name: str, callback: Callable):
+        """Add a callback for a signal (works without D-Bus)."""
+        if signal_name in self._signal_listeners:
+            self._signal_listeners[signal_name].append(callback)
+            logger.debug(f"Added listener for signal: {signal_name}")
+
+    def remove_signal_listener(self, signal_name: str, callback: Callable):
+        """Remove a signal callback."""
+        if signal_name in self._signal_listeners:
+            try:
+                self._signal_listeners[signal_name].remove(callback)
+            except ValueError:
+                pass
+
+    def emit_signal(self, signal_name: str, data: Dict[str, Any]):
+        """
+        Emit a signal to all listeners.
+
+        If D-Bus is running, also emits over D-Bus.
+        """
+        event = DBusSignalEvent(signal_name=signal_name, data=data)
+        self._signal_history.append(event)
+
+        # Keep last 500 signals
+        if len(self._signal_history) > 500:
+            self._signal_history = self._signal_history[-500:]
+
+        # Call local listeners
+        for callback in self._signal_listeners.get(signal_name, []):
+            try:
+                callback(data)
+            except Exception as e:
+                logger.error(f"Signal listener error: {e}")
+
+        # Emit over D-Bus if available
+        if self._dbus_object and DBUS_AVAILABLE:
+            try:
+                if signal_name == "PADChanged":
+                    self._dbus_object.PADChanged(json.dumps(data))
+                elif signal_name == "ModeChanged":
+                    self._dbus_object.ModeChanged(data.get("mode", "default"))
+                elif signal_name == "ModulationChanged":
+                    self._dbus_object.ModulationChanged(json.dumps(data))
+            except Exception as e:
+                logger.warning(f"D-Bus signal emit failed: {e}")
+
+        logger.debug(f"Signal emitted: {signal_name}")
+
+    def set_workspace_mode(self, mode: str) -> Dict[str, Any]:
+        """Set workspace mode with signal emission."""
+        try:
+            ws_mode = WorkspaceMode(mode.lower())
+        except ValueError:
+            ws_mode = WorkspaceMode.DEFAULT
+
+        modulation = self.service.set_workspace_mode(ws_mode)
+
+        # Emit signals
+        self.emit_signal("ModeChanged", {"mode": ws_mode.value})
+        self.emit_signal("ModulationChanged", modulation.to_dict())
+
+        return modulation.to_dict()
+
+    def compute_pad_gating(
+        self,
+        valence: float,
+        arousal: float,
+        dominance: float = 0.5,
+        confidence: float = 1.0,
+    ) -> Dict[str, Any]:
+        """Compute PAD gating with signal emission."""
+        pad_state = PADState(
+            valence=valence,
+            arousal=arousal,
+            dominance=dominance,
+            confidence=confidence,
+        )
+        modulation = self.service.compute_modulation(pad_state)
+
+        # Emit signals
+        self.emit_signal("PADChanged", {
+            "valence": valence,
+            "arousal": arousal,
+            "dominance": dominance,
+            "confidence": confidence,
+        })
+        self.emit_signal("ModulationChanged", modulation.to_dict())
+
+        return modulation.to_dict()
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get service status."""
+        status = self.service.get_status()
+        status["dbus_available"] = DBUS_AVAILABLE
+        status["dbus_running"] = self._running
+        status["signal_history_count"] = len(self._signal_history)
+        return status
+
+    def get_signal_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get recent signal history."""
+        return [
+            {"signal": e.signal_name, "data": e.data, "timestamp": e.timestamp}
+            for e in self._signal_history[-limit:]
+        ]
+
+    def start_dbus_service(self) -> bool:
+        """
+        Start the D-Bus service in a background thread.
+
+        Returns:
+            True if started successfully, False otherwise
+        """
+        if not DBUS_AVAILABLE:
+            logger.warning("D-Bus not available, using local signals only")
+            return False
+
+        if self._running:
+            logger.warning("D-Bus service already running")
+            return True
+
+        try:
+            self._thread = threading.Thread(target=self._run_dbus_loop, daemon=True)
+            self._thread.start()
+
+            # Wait for service to start
+            for _ in range(10):
+                if self._running:
+                    return True
+                time.sleep(0.1)
+
+            logger.error("D-Bus service failed to start in time")
+            return False
+
+        except Exception as e:
+            logger.error(f"Failed to start D-Bus service: {e}")
+            return False
+
+    def _run_dbus_loop(self):
+        """Run the D-Bus main loop (in background thread)."""
+        try:
+            dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+
+            self._bus = dbus.SessionBus()
+            bus_name = dbus.service.BusName(DBUS_BUS_NAME, self._bus)
+
+            # Create D-Bus object
+            self._dbus_object = L3DBusObject(bus_name, self)
+            self._running = True
+
+            logger.info(f"D-Bus service started: {DBUS_BUS_NAME}")
+
+            # Run main loop
+            self._loop = GLib.MainLoop()
+            self._loop.run()
+
+        except Exception as e:
+            logger.error(f"D-Bus loop error: {e}")
+            self._running = False
+
+    def stop_dbus_service(self):
+        """Stop the D-Bus service."""
+        self._running = False
+        if self._loop:
+            try:
+                self._loop.quit()
+            except Exception:
+                pass
+        self._loop = None
+        self._dbus_object = None
+        logger.info("D-Bus service stopped")
+
+
+if DBUS_AVAILABLE:
+    class L3DBusObject(dbus.service.Object):
+        """
+        D-Bus object exposing L3 Metacontrol interface.
+
+        Interface: org.ara.metacontrol.L3Interface
+        Path: /org/ara/metacontrol/L3
+
+        Signals:
+            PADChanged(json_data): Emitted when PAD state changes
+            ModeChanged(mode_name): Emitted when workspace mode changes
+            ModulationChanged(json_data): Emitted when modulation changes
+
+        Methods:
+            SetWorkspaceMode(mode) -> json: Set workspace mode
+            ComputePADGating(v, a, d, c) -> json: Compute gating from PAD
+            GetStatus() -> json: Get current status
+        """
+
+        def __init__(self, bus_name, service_wrapper: L3MetacontrolDBusService):
+            dbus.service.Object.__init__(self, bus_name, DBUS_OBJECT_PATH)
+            self._wrapper = service_wrapper
+
+        # Signals
+        @dbus.service.signal(DBUS_INTERFACE, signature='s')
+        def PADChanged(self, json_data: str):
+            """Signal emitted when PAD state changes."""
+            pass
+
+        @dbus.service.signal(DBUS_INTERFACE, signature='s')
+        def ModeChanged(self, mode_name: str):
+            """Signal emitted when workspace mode changes."""
+            pass
+
+        @dbus.service.signal(DBUS_INTERFACE, signature='s')
+        def ModulationChanged(self, json_data: str):
+            """Signal emitted when modulation changes."""
+            pass
+
+        # Methods
+        @dbus.service.method(DBUS_INTERFACE, in_signature='s', out_signature='s')
+        def SetWorkspaceMode(self, mode: str) -> str:
+            """Set workspace mode and return modulation."""
+            result = self._wrapper.set_workspace_mode(mode)
+            return json.dumps(result)
+
+        @dbus.service.method(DBUS_INTERFACE, in_signature='dddd', out_signature='s')
+        def ComputePADGating(self, valence: float, arousal: float, dominance: float, confidence: float) -> str:
+            """Compute PAD gating and return modulation."""
+            result = self._wrapper.compute_pad_gating(valence, arousal, dominance, confidence)
+            return json.dumps(result)
+
+        @dbus.service.method(DBUS_INTERFACE, in_signature='', out_signature='s')
+        def GetStatus(self) -> str:
+            """Get current L3 metacontrol status."""
+            result = self._wrapper.get_status()
+            return json.dumps(result)
+
+        @dbus.service.method(DBUS_INTERFACE, in_signature='i', out_signature='s')
+        def GetSignalHistory(self, limit: int) -> str:
+            """Get recent signal history."""
+            result = self._wrapper.get_signal_history(limit)
+            return json.dumps(result)
+
+else:
+    # Stub when D-Bus not available
+    L3DBusObject = None
+
+
+# Global D-Bus service wrapper
+_dbus_service: Optional[L3MetacontrolDBusService] = None
+
+
+def get_dbus_service() -> L3MetacontrolDBusService:
+    """Get or create the D-Bus service wrapper."""
+    global _dbus_service
+    if _dbus_service is None:
+        service = get_metacontrol_service()
+        _dbus_service = L3MetacontrolDBusService(service)
+    return _dbus_service
+
+
+def start_dbus_service() -> bool:
+    """Start the D-Bus service."""
+    service = get_dbus_service()
+    return service.start_dbus_service()
+
+
+def emit_pad_signal(valence: float, arousal: float, dominance: float = 0.5):
+    """Emit a PAD changed signal (convenience function)."""
+    service = get_dbus_service()
+    service.compute_pad_gating(valence, arousal, dominance)
+
+
 __all__ = [
     "WorkspaceMode",
     "PADState",
@@ -385,4 +725,14 @@ __all__ = [
     "set_workspace_mode",
     "compute_pad_gating",
     "get_metacontrol_status",
+    # Phase 5.3 D-Bus exports
+    "DBusSignalEvent",
+    "L3MetacontrolDBusService",
+    "get_dbus_service",
+    "start_dbus_service",
+    "emit_pad_signal",
+    "DBUS_BUS_NAME",
+    "DBUS_OBJECT_PATH",
+    "DBUS_INTERFACE",
+    "DBUS_AVAILABLE",
 ]
