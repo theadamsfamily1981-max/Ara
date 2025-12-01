@@ -262,3 +262,301 @@ def get_default_config(overrides: Optional[Dict[str, Any]] = None) -> ModelConfi
     """
     selector = ModelSelector(overrides=overrides)
     return selector.get_config()
+
+
+# =============================================================================
+# Autonomous Model Selector with Semantic Optimization
+# =============================================================================
+
+try:
+    from tfan.system.semantic_optimizer import (
+        SemanticSystemOptimizer,
+        PADState,
+        ResourceFeatures,
+        RoutingDecision,
+        Backend,
+    )
+    SEMANTIC_OPTIMIZER_AVAILABLE = True
+except ImportError:
+    SEMANTIC_OPTIMIZER_AVAILABLE = False
+
+
+class AutonomousModelSelector(ModelSelector):
+    """
+    Context-aware model selector with semantic optimization.
+
+    Extends ModelSelector with:
+    1. PAD-based backend routing (valence → safety preference)
+    2. Resource-aware scheduling (FPGA/GPU utilization)
+    3. PGU verification integration
+    4. Persistent routing score learning
+
+    Usage:
+        selector = AutonomousModelSelector()
+
+        # Get config with context-aware backend
+        config, routing = selector.get_config_with_routing(
+            valence=-0.3,
+            arousal=0.8,
+            stability_gap=0.1,
+        )
+
+        # Execute on recommended backend
+        result = execute_on_backend(config, routing.backend)
+
+        # Provide feedback for learning
+        selector.record_outcome(routing.backend, success=True, latency_ms=5.2)
+    """
+
+    def __init__(
+        self,
+        config_path: Optional[Path] = None,
+        overrides: Optional[Dict[str, Any]] = None,
+        strict: bool = False,
+        scores_path: Optional[Path] = None,
+    ):
+        """
+        Initialize autonomous selector.
+
+        Args:
+            config_path: Path to model config YAML
+            overrides: Parameter overrides
+            strict: If True, raise error if config not found
+            scores_path: Path to routing scores persistence
+        """
+        super().__init__(config_path, overrides, strict)
+
+        # Initialize semantic optimizer if available
+        self.semantic_optimizer = None
+        if SEMANTIC_OPTIMIZER_AVAILABLE:
+            self.semantic_optimizer = SemanticSystemOptimizer(
+                scores_path=scores_path,
+                auto_persist=True,
+                safety_first=True,
+            )
+            logger.info("AutonomousModelSelector initialized with semantic optimizer")
+        else:
+            logger.warning("Semantic optimizer not available, using basic selection")
+
+        # Cache for resource features
+        self._cached_resources: Optional[ResourceFeatures] = None
+        self._resource_cache_time: float = 0.0
+        self._resource_cache_ttl: float = 5.0  # seconds
+
+    def get_config_with_routing(
+        self,
+        valence: float = 0.0,
+        arousal: float = 0.5,
+        dominance: float = 0.5,
+        stability_gap: float = 0.0,
+        workload_hint: Optional[str] = None,
+        resource_features: Optional[Dict[str, Any]] = None,
+    ) -> tuple:
+        """
+        Get model config with context-aware routing decision.
+
+        This is the main entry point for autonomous backend selection.
+
+        Args:
+            valence: PAD valence [-1, 1]
+            arousal: PAD arousal [0, 1]
+            dominance: PAD dominance [0, 1]
+            stability_gap: Topological stability metric
+            workload_hint: Optional hint ("latency_critical", "throughput", "safe")
+            resource_features: Optional resource state override
+
+        Returns:
+            (ModelConfig, RoutingDecision) tuple
+        """
+        # Get base config
+        config = self.get_config()
+
+        # If no optimizer, return default routing
+        if self.semantic_optimizer is None:
+            return config, self._default_routing()
+
+        # Build PAD state
+        pad = PADState(
+            valence=valence,
+            arousal=arousal,
+            dominance=dominance,
+            stability_gap=stability_gap,
+        )
+
+        # Get resource features
+        resources = self._get_resource_features(resource_features)
+
+        # Get routing decision
+        routing = self.semantic_optimizer.recommend_route(
+            pad_state=pad,
+            resource_features=resources,
+            workload_hint=workload_hint,
+        )
+
+        # Apply routing-specific config adjustments
+        config = self._apply_routing_config(config, routing)
+
+        logger.info(
+            f"Autonomous selection: {routing.backend.value} "
+            f"(v={valence:.2f}, a={arousal:.2f}, conf={routing.confidence:.2f})"
+        )
+
+        return config, routing
+
+    def record_outcome(
+        self,
+        backend: str,
+        success: bool,
+        latency_ms: float,
+        valence: Optional[float] = None,
+        arousal: Optional[float] = None,
+    ):
+        """
+        Record execution outcome for online learning.
+
+        Args:
+            backend: Backend that was used (string or Backend enum)
+            success: Whether execution succeeded
+            latency_ms: Actual execution latency
+            valence: PAD valence when decision was made
+            arousal: PAD arousal when decision was made
+        """
+        if self.semantic_optimizer is None:
+            return
+
+        # Convert string to Backend enum if needed
+        if isinstance(backend, str):
+            try:
+                backend = Backend(backend)
+            except ValueError:
+                logger.warning(f"Unknown backend: {backend}")
+                return
+
+        # Build PAD state if provided
+        pad = None
+        if valence is not None:
+            pad = PADState(
+                valence=valence,
+                arousal=arousal or 0.5,
+            )
+
+        self.semantic_optimizer.update_from_feedback(
+            backend=backend,
+            success=success,
+            latency_ms=latency_ms,
+            pad_state=pad,
+        )
+
+    def _get_resource_features(
+        self,
+        override: Optional[Dict[str, Any]] = None,
+    ) -> "ResourceFeatures":
+        """Get current resource features (with caching)."""
+        import time
+
+        # Use override if provided
+        if override:
+            return ResourceFeatures.from_dict(override)
+
+        # Check cache
+        now = time.time()
+        if (
+            self._cached_resources is not None
+            and now - self._resource_cache_time < self._resource_cache_ttl
+        ):
+            return self._cached_resources
+
+        # Probe actual resources
+        resources = self._probe_resources()
+        self._cached_resources = resources
+        self._resource_cache_time = now
+
+        return resources
+
+    def _probe_resources(self) -> "ResourceFeatures":
+        """Probe actual hardware resource state."""
+        features = ResourceFeatures()
+
+        # Try to get GPU info
+        try:
+            import torch
+            if torch.cuda.is_available():
+                features.gpu_available = True
+                features.gpu_memory_free_gb = (
+                    torch.cuda.get_device_properties(0).total_memory
+                    - torch.cuda.memory_allocated(0)
+                ) / (1024 ** 3)
+        except Exception:
+            pass
+
+        # Try to get FPGA info from synergy
+        try:
+            from synergy.fpga_device import MCP_AVAILABLE
+            features.fpga_available = MCP_AVAILABLE
+        except Exception:
+            pass
+
+        return features
+
+    def _apply_routing_config(
+        self,
+        config: ModelConfig,
+        routing: "RoutingDecision",
+    ) -> ModelConfig:
+        """Apply routing-specific configuration adjustments."""
+        # Sparse backend → enable SSA
+        if routing.backend == Backend.GPU_SPARSE:
+            if config.keep_ratio == 1.0:
+                config.keep_ratio = 0.5  # Enable sparse if not set
+
+        # FPGA backend → adjust for hardware constraints
+        if routing.backend == Backend.FPGA_SNN:
+            config.dph_enabled = True
+            config.dph_low_precision = "int8"
+
+        # PGU verified → ensure constraints respected
+        if routing.backend == Backend.PGU_VERIFIED:
+            # Could adjust parameters to ensure PGU verification passes
+            pass
+
+        return config
+
+    def _default_routing(self) -> "RoutingDecision":
+        """Return default routing when optimizer unavailable."""
+        return RoutingDecision(
+            backend=Backend.GPU_DENSE,
+            confidence=0.5,
+            scores={},
+            reasoning=["Default routing (optimizer unavailable)"],
+            pgu_required=False,
+            fallback_backend=Backend.CPU_FALLBACK,
+        )
+
+    def get_optimizer_status(self) -> Dict[str, Any]:
+        """Get semantic optimizer status."""
+        if self.semantic_optimizer is None:
+            return {"available": False}
+
+        status = self.semantic_optimizer.get_status()
+        status["available"] = True
+        return status
+
+
+def create_autonomous_selector(
+    config_path: Optional[Path] = None,
+    scores_path: Optional[Path] = None,
+) -> AutonomousModelSelector:
+    """
+    Factory function to create AutonomousModelSelector.
+
+    Args:
+        config_path: Path to model config
+        scores_path: Path to routing scores
+
+    Returns:
+        Configured AutonomousModelSelector
+    """
+    return AutonomousModelSelector(
+        config_path=config_path,
+        scores_path=scores_path,
+    )
