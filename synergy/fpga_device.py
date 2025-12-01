@@ -2,6 +2,17 @@
 
 Provides the hardware twin of SNNFabric with the same step() API
 but backed by FPGA execution.
+
+Integration with MCP FPGA Tools:
+- a10ped.py: Direct register access for real-time v_th control
+- snn_inference.py: High-level SNN accelerator interface
+- neuron_core.v: Hardware LIF implementation (256 neurons/core)
+
+Usage with MCP tools:
+    from synergy.fpga_device import create_mcp_fpga_fabric
+
+    fabric = create_mcp_fpga_fabric(export_dir="./exported_model")
+    fabric.set_threshold(1.0)  # L1 Homeostatic control
 """
 
 from __future__ import annotations
@@ -16,6 +27,22 @@ from typing import Dict, Any, Optional, Tuple, List
 # Import SNN types (these are shared between software and hardware)
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "models" / "tfan" / "snn"))
+
+# Try importing MCP tools
+MCP_AVAILABLE = False
+try:
+    # Add MCP tools to path
+    mcp_base = Path(__file__).parent.parent / "tfan" / "hw"
+    if mcp_base.exists():
+        sys.path.insert(0, str(mcp_base / "a10ped" / "sw" / "python"))
+        sys.path.insert(0, str(mcp_base / "snn_accelerator" / "software"))
+
+        from a10ped import AITile, CSROffset, TileStatus
+        from snn_inference import SNNAccelerator, FPGAConfig as MCPFPGAConfig
+        MCP_AVAILABLE = True
+except ImportError:
+    pass
+
 from types import PopulationState, SpikeBatch
 
 
@@ -520,10 +547,234 @@ def create_fpga_fabric(
     return FpgaFabric(hw_handle, hw_config)
 
 
+# =============================================================================
+# MCP FPGA Tools Integration
+# =============================================================================
+
+class MCPFpgaHandle:
+    """FPGA handle using MCP tools (a10ped.py).
+
+    Provides real hardware access when MCP tools are available.
+    Falls back to simulation when hardware not present.
+    """
+
+    def __init__(self, config: Optional[FpgaConfig] = None, tile_id: int = 0):
+        self.config = config or FpgaConfig()
+        self.tile_id = tile_id
+        self._connected = False
+        self._tile: Optional[Any] = None
+        self._accelerator: Optional[Any] = None
+
+        # L1 Homeostatic state
+        self._current_threshold = 1.0
+        self._current_leak = 0.01
+
+    def connect(self) -> bool:
+        """Connect to FPGA using MCP tools."""
+        if not MCP_AVAILABLE:
+            print("[MCPFpgaHandle] MCP tools not available, using simulation")
+            self._connected = True
+            return True
+
+        try:
+            self._tile = AITile(tile_id=self.tile_id)
+            self._accelerator = SNNAccelerator(
+                device_id=self.config.device_id,
+                interface="pcie"
+            )
+            self._connected = True
+            print(f"[MCPFpgaHandle] Connected to A10PED tile {self.tile_id}")
+            print(f"[MCPFpgaHandle] {self._tile}")
+            return True
+        except FileNotFoundError:
+            print("[MCPFpgaHandle] Hardware not found, using simulation")
+            self._connected = True
+            return True
+        except Exception as e:
+            print(f"[MCPFpgaHandle] Connection error: {e}")
+            self._connected = True
+            return True
+
+    def disconnect(self):
+        """Disconnect from FPGA."""
+        self._tile = None
+        self._accelerator = None
+        self._connected = False
+
+    def set_threshold(self, vth: float):
+        """Set LIF spike threshold (L1 Homeostatic control).
+
+        Args:
+            vth: Threshold voltage (16.16 fixed-point internally)
+        """
+        self._current_threshold = vth
+
+        if self._tile is not None:
+            try:
+                # Convert to 16.16 fixed-point
+                vth_fp = int(vth * 65536) & 0xFFFFFFFF
+                self._tile._write_csr32(CSROffset.SNN_THRESHOLD, vth_fp)
+            except Exception as e:
+                print(f"[MCPFpgaHandle] Threshold write failed: {e}")
+
+    def set_leak_rate(self, leak: float):
+        """Set membrane leak rate.
+
+        Args:
+            leak: Leak rate (16.16 fixed-point internally)
+        """
+        self._current_leak = leak
+
+        if self._tile is not None:
+            try:
+                leak_fp = int(leak * 65536) & 0xFFFFFFFF
+                self._tile._write_csr32(CSROffset.SNN_LEAK, leak_fp)
+            except Exception as e:
+                print(f"[MCPFpgaHandle] Leak write failed: {e}")
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get hardware status."""
+        if self._tile is not None:
+            try:
+                status = self._tile.get_status()
+                temp = self._tile.get_temperature()
+                return {
+                    "connected": True,
+                    "hardware": True,
+                    "busy": status.busy,
+                    "error": status.error,
+                    "ddr_ready": status.ddr_ready,
+                    "temperature_c": temp,
+                    "threshold": self._current_threshold,
+                    "leak_rate": self._current_leak,
+                }
+            except Exception:
+                pass
+
+        return {
+            "connected": self._connected,
+            "hardware": False,
+            "simulation": True,
+            "threshold": self._current_threshold,
+            "leak_rate": self._current_leak,
+        }
+
+    def load_weights(self, weights: np.ndarray):
+        """Load synaptic weights to FPGA.
+
+        Args:
+            weights: Weight matrix (INT8 quantized)
+        """
+        if self._accelerator is not None:
+            try:
+                self._accelerator.load_weights(weights.astype(np.int8))
+            except Exception as e:
+                print(f"[MCPFpgaHandle] Weight load failed: {e}")
+
+    def infer(self, spike_input: np.ndarray) -> np.ndarray:
+        """Run SNN inference on FPGA.
+
+        Args:
+            spike_input: Spike train [timesteps, neurons]
+
+        Returns:
+            Output spike counts [neurons]
+        """
+        if self._accelerator is not None:
+            try:
+                return self._accelerator.infer(spike_input)
+            except Exception as e:
+                print(f"[MCPFpgaHandle] Inference failed: {e}")
+
+        # Simulation fallback
+        return np.sum(spike_input, axis=0)
+
+
+class MCPFpgaFabric(FpgaFabric):
+    """FpgaFabric with MCP tools integration.
+
+    Extends FpgaFabric with:
+    - Real-time v_th control via AXI-Lite registers
+    - Hardware SNN inference via SNNAccelerator
+    - Temperature monitoring
+    """
+
+    def __init__(self, hw_handle: MCPFpgaHandle, hw_config: Dict[str, Any]):
+        self.mcp_hw = hw_handle
+        super().__init__(hw_handle, hw_config)
+
+    def set_threshold(self, vth: float):
+        """Set LIF threshold for L1 Homeostatic control.
+
+        This enables real-time DAU corrections by modulating v_th.
+        """
+        self.mcp_hw.set_threshold(vth)
+
+    def set_leak_rate(self, leak: float):
+        """Set membrane leak rate."""
+        self.mcp_hw.set_leak_rate(leak)
+
+    def get_temperature(self) -> float:
+        """Get FPGA junction temperature."""
+        status = self.mcp_hw.get_status()
+        return status.get("temperature_c", 0.0)
+
+    def apply_dau_correction(self, delta_vth: float):
+        """Apply DAU correction by modulating threshold.
+
+        Args:
+            delta_vth: Threshold adjustment from DAU
+        """
+        # Get current threshold and apply delta
+        status = self.mcp_hw.get_status()
+        current = status.get("threshold", 1.0)
+        new_threshold = max(0.1, min(2.0, current + delta_vth))
+        self.set_threshold(new_threshold)
+
+
+def create_mcp_fpga_fabric(
+    export_dir: str | Path,
+    device_id: int = 0,
+    tile_id: int = 0,
+) -> MCPFpgaFabric:
+    """Create MCPFpgaFabric with MCP tools integration.
+
+    Args:
+        export_dir: Directory containing exported fabric
+        device_id: FPGA device ID
+        tile_id: A10PED tile ID (0 or 1)
+
+    Returns:
+        Configured MCPFpgaFabric
+    """
+    import json
+
+    export_dir = Path(export_dir)
+    config_path = export_dir / "config.json"
+
+    if config_path.exists():
+        with open(config_path, "r") as f:
+            hw_config = json.load(f)
+    else:
+        hw_config = {"populations": [], "projections": []}
+
+    # Create MCP hardware handle
+    fpga_config = FpgaConfig(device_id=device_id)
+    hw_handle = MCPFpgaHandle(fpga_config, tile_id=tile_id)
+    hw_handle.connect()
+
+    return MCPFpgaFabric(hw_handle, hw_config)
+
+
 __all__ = [
     "FpgaConfig",
     "FpgaHandle",
     "FpgaFabric",
     "FpgaFabricModel",
     "create_fpga_fabric",
+    # MCP integration
+    "MCP_AVAILABLE",
+    "MCPFpgaHandle",
+    "MCPFpgaFabric",
+    "create_mcp_fpga_fabric",
 ]

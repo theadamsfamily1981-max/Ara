@@ -74,3 +74,7 @@ configs/structural_training_results.json
 pgu_benchmark_results.json
 certification/
 production/
+
+# MCP tools archive
+mcp-claude-restart.zip
+mcp-tools/
