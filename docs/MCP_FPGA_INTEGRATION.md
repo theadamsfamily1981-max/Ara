@@ -204,6 +204,65 @@ services:
 | Throughput | ≥ 250k events/s | neuron_core.v @ 250MHz |
 | Topology verification | < 10ms | snn_csr_graph.c |
 
+## Semantic AI Kernel for System Optimization
+
+The MCP tools include a comprehensive **Semantic AI Kernel** for autonomous system optimization.
+
+### Components
+
+| File | Purpose |
+|------|---------|
+| `snn_ai_engine_v2.c` | Production RL engine (Q24.8, INT8 Q-table, <100μs decisions) |
+| `snn_gnn.c/h` | Graph Neural Network for topology-aware embedding |
+| `snn_knowledge_graph.c` | Domain knowledge encoding (GPU↔FPGA routing) |
+| `snn_cold_start.c/h` | Safe exploration during initialization |
+| `snn_quantization.h` | INT8 quantized inference |
+| `snn_fixed_point.h` | Q24.8 arithmetic for kernel-space |
+
+### Workload Routing (GPU ↔ FPGA)
+
+```c
+// Query knowledge graph for device recommendation
+float gpu_score, fpga_score;
+snn_kg_recommend_device(kg, SNN_WORKLOAD_SPARSE, &gpu_score, &fpga_score);
+// Result: gpu_score=0.40, fpga_score=0.85 → Route to FPGA
+```
+
+### Adaptive Learning from Feedback
+
+```c
+// Update knowledge graph based on actual performance
+snn_kg_update_from_feedback(kg, SNN_DEVICE_FPGA, SNN_WORKLOAD_SPARSE,
+                            success=true, performance=0.92);
+```
+
+### GNN State Embedding for Topology-Aware Decisions
+
+```c
+// Compute graph-level embedding
+snn_gnn_forward(model, graph_embedding);
+
+// Get node-level embedding
+snn_gnn_get_node_embedding(model, node_id, embedding);
+```
+
+### Integration with TF-A-N Model Selector
+
+The semantic AI can drive the Model Selector's routing decisions:
+
+```python
+# In tfan/model_selector.py
+class ModelSelector:
+    def route_workload(self, features):
+        # Get recommendation from semantic AI kernel
+        gpu_score, fpga_score = self.semantic_ai.recommend_device(features)
+
+        if fpga_score > gpu_score and features.sparsity > 0.9:
+            return "fpga"
+        else:
+            return "gpu"
+```
+
 ## Files to Copy/Adapt
 
 1. **Essential for L0-L1**:
@@ -213,8 +272,15 @@ services:
 
 2. **Essential for L2-L3**:
    - `kernel/semantic_ai/snn_csr_graph.c` → For PGU kernel-space verification
+   - `kernel/semantic_ai/snn_gnn.c` → GNN for topology-aware routing
+   - `kernel/semantic_ai/snn_knowledge_graph.c` → Domain knowledge encoding
    - `snn_accelerator/software/snn_inference.py` → High-level API
 
-3. **Reference**:
+3. **Essential for System Optimization**:
+   - `kernel/semantic_ai/snn_ai_engine_v2.c` → Production RL engine
+   - `kernel/semantic_ai/snn_cold_start.c` → Safe exploration
+   - `include/snn_kernel/semantic_ai.h` → Type definitions
+
+4. **Reference**:
    - `docs/ARCHITECTURE.md` → System design patterns
    - `projects/a10ped_neuromorphic/abi/ai_tile_registers.yaml` → Register spec
