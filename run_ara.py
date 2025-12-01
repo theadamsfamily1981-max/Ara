@@ -1,7 +1,21 @@
 #!/usr/bin/env python3
 """
 Ara Avatar System - Main Runner
-Integrates all components and makes everything actually work.
+Integrates all components: TF-A-N brain, L3 Metacontrol, Pulse, NIB, AEPO.
+
+Modes:
+  --mode api         Start full API server
+  --mode test        Run end-to-end test
+  --mode interactive Menu-driven interaction
+
+Endpoints (when running API):
+  /ara/pulse/estimate_affect  - Affect estimation from text
+  /ara/nib/state              - Neural Identity Buffer state
+  /ara/aepo/route             - Multi-agent routing
+  /ara/control/pad_gating     - L3 Metacontrol from PAD values
+  /ara/control/mode           - Set workspace mode (work/relax/creative)
+  /ara/process                - Full turn pipeline
+  /ara/metrics                - Prometheus telemetry
 """
 
 import asyncio
@@ -21,7 +35,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ara")
 
+# Check if unified ara package is available
+ARA_UNIFIED = False
+try:
+    from ara.integration import AraOrchestrator, WorkspaceMode
+    from ara.metacontrol import set_workspace_mode, compute_pad_gating
+    from ara.api import create_app
+    ARA_UNIFIED = True
+    logger.info("✅ Unified ara package available")
+except ImportError as e:
+    logger.warning(f"⚠️  Unified ara package not available: {e}")
+
 # Check if enhanced modules are available
+ENHANCED_MODE = False
 try:
     from src.config.avatar_settings import get_config
     from src.utils.device_utils import get_optimal_device, get_device_info
@@ -29,7 +55,6 @@ try:
     ENHANCED_MODE = True
     logger.info("✅ Enhanced features available")
 except ImportError as e:
-    ENHANCED_MODE = False
     logger.warning(f"⚠️  Enhanced features not available: {e}")
     logger.warning("Running in basic mode")
 
@@ -114,24 +139,74 @@ async def check_system():
 
 
 async def run_api_server(host="0.0.0.0", port=8000, enhanced=True):
-    """Run the avatar API server."""
+    """Run the unified Ara API server with all endpoints."""
     logger.info(f"Starting API server on {host}:{port}")
 
     try:
         import uvicorn
-
-        # Choose routes
-        if enhanced and ENHANCED_MODE:
-            from src.api.routes_enhanced import router
-            logger.info("Using enhanced API routes")
-        else:
-            from src.api.routes import router
-            logger.info("Using standard API routes")
-
-        # Create FastAPI app
         from fastapi import FastAPI
-        app = FastAPI(title="Ara Avatar API")
-        app.include_router(router)
+        from fastapi.middleware.cors import CORSMiddleware
+
+        # Use unified ara app if available
+        if ARA_UNIFIED:
+            app = create_app(
+                title="Ara - Unified Brain-Body API",
+                enable_tfan=True,
+                enable_avatar=True,
+                enable_integration=True,
+            )
+            logger.info("Using unified ara API (Pulse, NIB, AEPO, Metacontrol)")
+        else:
+            # Fallback to old routes
+            app = FastAPI(title="Ara Avatar API")
+            if enhanced and ENHANCED_MODE:
+                from src.api.routes_enhanced import router
+                logger.info("Using enhanced API routes")
+            else:
+                from src.api.routes import router
+                logger.info("Using standard API routes")
+            app.include_router(router)
+
+        # Add CORS
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
+        # Add root info endpoint
+        @app.get("/")
+        async def root():
+            return {
+                "name": "Ara",
+                "unified": ARA_UNIFIED,
+                "enhanced": ENHANCED_MODE,
+                "endpoints": {
+                    "docs": "/docs",
+                    "pulse": "/ara/pulse/estimate_affect",
+                    "nib": "/ara/nib/state",
+                    "aepo": "/ara/aepo/route",
+                    "metacontrol": "/ara/control/pad_gating",
+                    "mode": "/ara/control/mode",
+                    "pipeline": "/ara/process",
+                },
+            }
+
+        # Print endpoints
+        logger.info("=" * 60)
+        logger.info("Ara API Server Starting")
+        logger.info("=" * 60)
+        logger.info(f"Root:           http://{host}:{port}/")
+        logger.info(f"API Docs:       http://{host}:{port}/docs")
+        logger.info(f"Pulse:          http://{host}:{port}/ara/pulse/estimate_affect")
+        logger.info(f"NIB:            http://{host}:{port}/ara/nib/state")
+        logger.info(f"AEPO:           http://{host}:{port}/ara/aepo/route")
+        logger.info(f"Metacontrol:    http://{host}:{port}/ara/control/pad_gating")
+        logger.info(f"Mode:           http://{host}:{port}/ara/control/mode")
+        logger.info(f"Full Pipeline:  http://{host}:{port}/ara/process")
+        logger.info("=" * 60)
 
         # Run server
         config = uvicorn.Config(
@@ -185,6 +260,70 @@ async def run_oobabooga_integration():
 
     except Exception as e:
         logger.warning(f"Oobabooga integration not available: {e}")
+
+
+async def test_brain_body_integration():
+    """Test the full brain-body integration pipeline."""
+    logger.info("=" * 60)
+    logger.info("Testing Brain-Body Integration (L3 Metacontrol)")
+    logger.info("=" * 60)
+
+    if not ARA_UNIFIED:
+        logger.error("Unified ara package not available!")
+        return False
+
+    try:
+        # Create orchestrator
+        orchestrator = AraOrchestrator(default_workspace_mode=WorkspaceMode.WORK)
+        logger.info("✅ AraOrchestrator initialized")
+
+        # Test workspace modes
+        modes_to_test = [
+            ("work", "Help me debug this function"),
+            ("creative", "Let's brainstorm some ideas"),
+            ("support", "I'm feeling overwhelmed today"),
+            ("relax", "Just want to chat casually"),
+        ]
+
+        results = []
+        for mode, text in modes_to_test:
+            # Set mode
+            ws_mode = WorkspaceMode(mode)
+            orchestrator.metacontrol.set_workspace_mode(ws_mode)
+
+            # Process turn
+            result = orchestrator.process_turn(
+                user_text=text,
+                session_id=f"test-{mode}",
+            )
+
+            logger.info(f"\n--- Mode: {mode.upper()} ---")
+            logger.info(f"  Input: \"{text}\"")
+            logger.info(f"  Affect: V={result.affect.pad.pleasure:.2f}, A={result.affect.pad.arousal:.2f}")
+            logger.info(f"  NIB Mode: {result.nib_state.identity_mode.value}")
+            logger.info(f"  Temp Mult: {result.metacontrol.temperature_multiplier:.3f}")
+            logger.info(f"  Memory Mult: {result.metacontrol.memory_write_multiplier:.3f}")
+            logger.info(f"  Effective Temp: {result.effective_temperature:.3f}")
+            logger.info(f"  Backend: {result.selected_backend}")
+
+            results.append({
+                "mode": mode,
+                "temp": result.effective_temperature,
+                "mem_p": result.effective_memory_p,
+            })
+
+        # Show summary
+        logger.info("\n" + "=" * 60)
+        logger.info("Summary:")
+        for r in results:
+            logger.info(f"  {r['mode']:12} temp={r['temp']:.3f}  mem_p={r['mem_p']:.3f}")
+
+        logger.info("\n✅ Brain-body integration working!")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Integration test failed: {e}", exc_info=True)
+        return False
 
 
 async def test_avatar_generation():
@@ -319,15 +458,17 @@ async def interactive_menu():
     """Interactive menu for testing components."""
     while True:
         print("\n" + "=" * 60)
-        print("Ara Avatar System - Interactive Menu")
+        print("Ara - Unified Brain-Body System")
         print("=" * 60)
         print("1. Check system status")
-        print("2. Test avatar generation")
-        print("3. Check oobabooga integration")
-        print("4. Load personality system")
-        print("5. Start API server")
-        print("6. View configuration")
-        print("7. Clear cache")
+        print("2. Test brain-body integration (L3 Metacontrol)")
+        print("3. Test avatar generation")
+        print("4. Check oobabooga integration")
+        print("5. Load personality system")
+        print("6. Start API server")
+        print("7. View configuration")
+        print("8. Clear cache")
+        print("9. Run validation tests")
         print("0. Exit")
         print("=" * 60)
 
@@ -339,14 +480,16 @@ async def interactive_menu():
         elif choice == "1":
             await show_status()
         elif choice == "2":
-            await test_avatar_generation()
+            await test_brain_body_integration()
         elif choice == "3":
-            await run_oobabooga_integration()
+            await test_avatar_generation()
         elif choice == "4":
-            await load_personality_system()
+            await run_oobabooga_integration()
         elif choice == "5":
-            await run_api_server()
+            await load_personality_system()
         elif choice == "6":
+            await run_api_server()
+        elif choice == "7":
             if ENHANCED_MODE:
                 config = get_config()
                 print(f"\nDevice: {config.performance.device}")
@@ -354,7 +497,7 @@ async def interactive_menu():
                 print(f"Cache: {config.cache.enabled}")
             else:
                 print("Enhanced mode not available")
-        elif choice == "7":
+        elif choice == "8":
             if ENHANCED_MODE:
                 config = get_config()
                 cache = AvatarCache(cache_dir=config.cache.cache_dir)
@@ -362,36 +505,43 @@ async def interactive_menu():
                 logger.info("✅ Cache cleared")
             else:
                 print("Enhanced mode not available")
+        elif choice == "9":
+            # Run validation tests
+            import subprocess
+            subprocess.run([sys.executable, "ara/tests/test_l3_metacontrol.py"])
         else:
             print("Invalid option")
 
 
 async def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Ara Avatar System")
-    parser.add_argument("--mode", choices=["api", "test", "interactive"],
+    parser = argparse.ArgumentParser(description="Ara - Unified Brain-Body System")
+    parser.add_argument("--mode", choices=["api", "test", "brain", "interactive"],
                        default="interactive",
-                       help="Run mode (default: interactive)")
+                       help="Run mode: api=server, test=full test, brain=L3 test (default: interactive)")
     parser.add_argument("--host", default="0.0.0.0",
                        help="API server host (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=8000,
                        help="API server port (default: 8000)")
     parser.add_argument("--no-enhanced", action="store_true",
                        help="Disable enhanced features")
+    parser.add_argument("--quick", action="store_true",
+                       help="Skip system checks for quick start")
 
     args = parser.parse_args()
 
-    # Check system
-    if not await check_system():
-        logger.error("System checks failed. Please fix issues and try again.")
-        sys.exit(1)
+    # Check system (unless quick mode)
+    if not args.quick:
+        if not await check_system():
+            logger.error("System checks failed. Please fix issues and try again.")
+            sys.exit(1)
 
-    # Load personality
-    await load_personality_system()
+        # Load personality
+        await load_personality_system()
 
-    # Check oobabooga
-    if ENHANCED_MODE:
-        await run_oobabooga_integration()
+        # Check oobabooga
+        if ENHANCED_MODE:
+            await run_oobabooga_integration()
 
     # Run selected mode
     if args.mode == "api":
@@ -400,7 +550,11 @@ async def main():
             port=args.port,
             enhanced=not args.no_enhanced
         )
+    elif args.mode == "brain":
+        # Quick brain-body test
+        await test_brain_body_integration()
     elif args.mode == "test":
+        await test_brain_body_integration()
         await test_avatar_generation()
         await show_status()
     else:

@@ -35,6 +35,7 @@ def create_app(
     version: str = "0.1.0",
     enable_avatar: bool = True,
     enable_tfan: bool = True,
+    enable_integration: bool = True,
     enable_cors: bool = True,
 ) -> Optional["FastAPI"]:
     """
@@ -45,6 +46,7 @@ def create_app(
         version: API version
         enable_avatar: Include avatar generation endpoints
         enable_tfan: Include TFAN training/metrics endpoints
+        enable_integration: Include Pulse/NIB/AEPO integration endpoints
         enable_cors: Enable CORS middleware
 
     Returns:
@@ -56,7 +58,7 @@ def create_app(
     app = FastAPI(
         title=title,
         version=version,
-        description="Unified ARA API for avatar generation and TFAN model operations",
+        description="Unified ARA API for avatar generation, TFAN model operations, and brain-body integration",
     )
 
     # Add CORS middleware
@@ -77,7 +79,27 @@ def create_app(
             "version": version,
             "avatar_enabled": enable_avatar,
             "tfan_enabled": enable_tfan,
+            "integration_enabled": enable_integration,
         }
+
+    # Include integration router (Pulse, NIB, AEPO, Metacontrol)
+    if enable_integration:
+        try:
+            from ara.integration import create_integration_router
+            integration_router = create_integration_router()
+            if integration_router:
+                app.include_router(integration_router, prefix="/ara", tags=["integration"])
+        except ImportError:
+            pass
+
+        # Include telemetry router (Prometheus metrics)
+        try:
+            from ara.telemetry import create_telemetry_router
+            telemetry_router = create_telemetry_router()
+            if telemetry_router:
+                app.include_router(telemetry_router, prefix="/ara", tags=["telemetry"])
+        except ImportError:
+            pass
 
     # Include avatar router
     if enable_avatar:
