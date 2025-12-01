@@ -1,0 +1,158 @@
+version: '3.8'
+
+# Production Triton Deployment for Ara
+# Includes all autonomous control models: interoception, metacontrol, CXL control, SSA
+#
+# Deploy with:
+#   docker compose -f docker-compose.production.yml up -d
+#
+# Scale Triton for load:
+#   docker compose -f docker-compose.production.yml up -d --scale triton-server=3
+
+services:
+  triton-server:
+    image: nvcr.io/nvidia/tritonserver:24.01-py3
+    container_name: ara_triton_server
+    hostname: triton
+    ports:
+      - "8000:8000"  # HTTP REST API
+      - "8001:8001"  # gRPC API
+      - "8002:8002"  # Metrics (Prometheus)
+    volumes:
+      - ./model_repository:/models
+      - ../../tfan:/workspace/tfan:ro
+      - ../../ara:/workspace/ara:ro
+      - ../../data:/workspace/data:ro
+    environment:
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+      - PYTHONPATH=/workspace
+      - ARA_LOG_LEVEL=${ARA_LOG_LEVEL:-INFO}
+    command: >
+      tritonserver
+      --model-repository=/models
+      --strict-model-config=false
+      --log-verbose=${TRITON_LOG_VERBOSE:-1}
+      --exit-on-error=false
+      --rate-limiter=execution_count
+      --rate-limiter-resource=R1:10:0
+      --model-control-mode=explicit
+      --load-model=tfan_ssa
+      --load-model=ara_interoception
+      --load-model=ara_metacontrol
+      --load-model=ara_cxl_control
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${GPU_COUNT:-1}
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    shm_size: '4gb'
+    networks:
+      - ara-network
+
+  # Load balancer for Triton scaling
+  triton-lb:
+    image: nginx:alpine
+    container_name: ara_triton_lb
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      triton-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ara-network
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ara_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.production.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - ara-network
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ara_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    networks:
+      - ara-network
+
+  # Redis for caching (PGU TurboCache backend)
+  redis:
+    image: redis:7-alpine
+    container_name: ara_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - ara-network
+
+  # D-Bus message broker (for cockpit integration)
+  dbus-broker:
+    image: docker.io/library/busybox:latest
+    container_name: ara_dbus_broker
+    command: sh -c "mkdir -p /run/dbus && exec sleep infinity"
+    volumes:
+      - dbus-socket:/run/dbus
+    restart: unless-stopped
+    networks:
+      - ara-network
+
+networks:
+  ara-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  redis-data:
+  dbus-socket:

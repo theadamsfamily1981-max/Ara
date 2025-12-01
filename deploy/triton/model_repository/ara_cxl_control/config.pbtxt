@@ -1,0 +1,90 @@
+name: "ara_cxl_control"
+backend: "python"
+max_batch_size: 64
+
+# CXL Control Plane: Real-time control loop with ultra-low latency
+# Target: p95 < 200us for control cycle
+
+input [
+  {
+    name: "valence"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "arousal"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "dominance"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "input_current"
+    data_type: TYPE_FP32
+    dims: [1]
+    optional: true
+  }
+]
+
+output [
+  {
+    name: "temperature_mult"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "memory_mult"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "attention_gain"
+    data_type: TYPE_FP32
+    dims: [1]
+  },
+  {
+    name: "cache_hit"
+    data_type: TYPE_BOOL
+    dims: [1]
+  },
+  {
+    name: "latency_us"
+    data_type: TYPE_FP32
+    dims: [1]
+  }
+]
+
+instance_group [
+  {
+    count: 4
+    kind: KIND_CPU
+  }
+]
+
+parameters [
+  {
+    key: "target_latency_us"
+    value: { string_value: "200.0" }
+  },
+  {
+    key: "enable_pgu_cache"
+    value: { string_value: "true" }
+  },
+  {
+    key: "lif_neurons"
+    value: { string_value: "64" }
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [1, 16, 32, 64]
+  max_queue_delay_microseconds: 10
+}
+
+# Optimization for ultra-low latency
+optimization {
+  priority: PRIORITY_MAX
+}
