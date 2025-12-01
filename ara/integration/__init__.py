@@ -56,6 +56,31 @@ from ara.aepo import (
     TaskType,
     route_request,
 )
+from ara.metacontrol import (
+    L3MetacontrolService,
+    WorkspaceMode,
+    PADState as MetacontrolPADState,
+    ControlModulation,
+    WORKSPACE_PAD_MAPPINGS,
+    get_metacontrol_service,
+    set_workspace_mode,
+    compute_pad_gating,
+    get_metacontrol_status,
+)
+
+# Import telemetry (optional)
+try:
+    from ara.telemetry import (
+        PulseTelemetry,
+        get_telemetry,
+        record_turn_metrics,
+        create_telemetry_router,
+    )
+    TELEMETRY_AVAILABLE = True
+except ImportError:
+    TELEMETRY_AVAILABLE = False
+    get_telemetry = None
+    record_turn_metrics = None
 
 logger = logging.getLogger("ara.integration")
 
@@ -86,8 +111,13 @@ class ProcessedTurn:
     # AEPO (routing)
     routing: RoutingDecision = None
 
+    # L3 Metacontrol
+    metacontrol: Optional[ControlModulation] = None
+    workspace_mode: str = "default"
+
     # Derived
     effective_temperature: float = 1.0
+    effective_memory_p: float = 1.0
     effective_system_prompt: str = ""
     selected_backend: str = "claude"
 
@@ -103,7 +133,10 @@ class ProcessedTurn:
             "affect": self.affect.to_dict() if self.affect else None,
             "nib_state": self.nib_state.to_dict() if self.nib_state else None,
             "routing": self.routing.to_dict() if self.routing else None,
+            "metacontrol": self.metacontrol.to_dict() if self.metacontrol else None,
+            "workspace_mode": self.workspace_mode,
             "effective_temperature": self.effective_temperature,
+            "effective_memory_p": self.effective_memory_p,
             "selected_backend": self.selected_backend,
             "processing_time_ms": self.processing_time_ms,
             "timestamp": self.timestamp,
@@ -127,11 +160,16 @@ class AraOrchestrator:
         default_backend: Backend = Backend.CLAUDE,
         prefer_local: bool = False,
         auto_mode_switch: bool = True,
+        default_workspace_mode: WorkspaceMode = WorkspaceMode.DEFAULT,
     ):
         self.pulse = PulseEstimator()
         self.nib = NIBManager()
         self.aepo = AEPORouter(default_backend=default_backend, prefer_local=prefer_local)
+        self.metacontrol = get_metacontrol_service()
         self.auto_mode_switch = auto_mode_switch
+
+        # Set initial workspace mode
+        self.metacontrol.set_workspace_mode(default_workspace_mode)
 
         # Session tracking
         self._sessions: Dict[str, TurnContext] = {}
@@ -195,8 +233,19 @@ class AraOrchestrator:
             session_id=session_id,
         )
 
-        # 4. Compute effective parameters
-        effective_temp = self._compute_temperature(affect, routing)
+        # 4. Compute L3 Metacontrol modulation from affect PAD
+        # Convert Pulse PADState to Metacontrol PADState
+        metacontrol_pad = MetacontrolPADState(
+            valence=affect.pad.pleasure,
+            arousal=max(0.0, min(1.0, (affect.pad.arousal + 1.0) / 2.0)),  # Convert [-1,1] to [0,1]
+            dominance=max(0.0, min(1.0, (affect.pad.dominance + 1.0) / 2.0)),
+            confidence=affect.confidence,
+        )
+        metacontrol_modulation = self.metacontrol.compute_modulation(metacontrol_pad)
+
+        # 5. Compute effective parameters (with metacontrol)
+        effective_temp = self._compute_temperature(affect, routing, metacontrol_modulation)
+        effective_mem_p = metacontrol_modulation.memory_write_multiplier
         effective_prompt = self._build_system_prompt(nib_state, routing)
 
         # Build result
@@ -206,7 +255,10 @@ class AraOrchestrator:
             affect=affect,
             nib_state=nib_state,
             routing=routing,
+            metacontrol=metacontrol_modulation,
+            workspace_mode=self.metacontrol.get_current_mode().value,
             effective_temperature=effective_temp,
+            effective_memory_p=effective_mem_p,
             effective_system_prompt=effective_prompt,
             selected_backend=routing.selected_backend.value,
             processing_time_ms=(time.time() - start_time) * 1000,
@@ -235,23 +287,33 @@ class AraOrchestrator:
         self,
         affect: AffectEstimate,
         routing: RoutingDecision,
+        metacontrol: Optional[ControlModulation] = None,
     ) -> float:
         """
-        Compute effective temperature from affect and routing.
+        Compute effective temperature from affect, routing, and L3 metacontrol.
 
-        Temperature is influenced by:
-        - Affect-derived temp_scale from Pulse
-        - Task-specific override from AEPO
+        Temperature is influenced by (in order of priority):
+        1. L3 Metacontrol temperature_multiplier (from workspace mode/PAD)
+        2. Task-specific override from AEPO
+        3. Affect-derived temp_scale from Pulse (fallback)
+
+        Control law: final_temp = base × metacontrol_mult × routing_blend
         """
         base_temp = 0.7
 
-        # Apply affect scaling
+        # Start with affect scaling
         temp = base_temp * affect.gates.temp_scale
 
-        # Apply routing override if specified
+        # Apply L3 metacontrol if available (highest priority)
+        if metacontrol is not None:
+            # Metacontrol provides a multiplier based on PAD/workspace mode
+            # Blend: 60% metacontrol, 40% affect-based
+            temp = base_temp * (0.6 * metacontrol.temperature_multiplier + 0.4 * affect.gates.temp_scale)
+
+        # Apply routing override if specified (task-specific)
         if routing.temperature_override is not None:
-            # Blend: 70% routing, 30% affect
-            temp = 0.7 * routing.temperature_override + 0.3 * temp
+            # Blend: 50% routing, 50% current (metacontrol+affect)
+            temp = 0.5 * routing.temperature_override + 0.5 * temp
 
         return max(0.1, min(2.0, temp))
 
@@ -288,7 +350,7 @@ class AraOrchestrator:
         return " ".join(parts)
 
     def _log_event(self, turn: ProcessedTurn):
-        """Log turn as Pulse event."""
+        """Log turn as Pulse event with L3 metacontrol telemetry."""
         event = {
             "event_type": "affect.events.v1",
             "timestamp": turn.timestamp,
@@ -300,9 +362,23 @@ class AraOrchestrator:
             "identity_mode": turn.nib_state.identity_mode.value if turn.nib_state else None,
             "selected_backend": turn.selected_backend,
             "processing_time_ms": turn.processing_time_ms,
+            # L3 Metacontrol telemetry
+            "metacontrol": {
+                "workspace_mode": turn.workspace_mode,
+                "temperature_multiplier": turn.metacontrol.temperature_multiplier if turn.metacontrol else 1.0,
+                "memory_write_multiplier": turn.metacontrol.memory_write_multiplier if turn.metacontrol else 1.0,
+                "attention_gain": turn.metacontrol.attention_gain if turn.metacontrol else 1.0,
+                "effective_weight": turn.metacontrol.effective_weight if turn.metacontrol else 1.0,
+            },
+            "effective_temperature": turn.effective_temperature,
+            "effective_memory_p": turn.effective_memory_p,
         }
         self._event_log.append(event)
         logger.info(f"Pulse event: {json.dumps(event)}")
+
+        # Record to Prometheus telemetry if available
+        if TELEMETRY_AVAILABLE and record_turn_metrics is not None:
+            record_turn_metrics(turn.to_dict())
 
     def get_event_log(self) -> List[Dict]:
         """Get all logged events."""
@@ -314,10 +390,17 @@ def create_integration_router():
     Create FastAPI router with integration endpoints.
 
     Returns router with:
-    - POST /pulse/estimate_affect
-    - GET /nib/state
-    - POST /aepo/route
-    - POST /process (full pipeline)
+    - POST /pulse/estimate_affect - Estimate affect from text
+    - GET /nib/state - Get NIB identity state
+    - POST /aepo/route - Route request to backend
+    - POST /process - Full pipeline (Pulse→NIB→AEPO→Metacontrol)
+    - GET /events - Get Pulse event log
+
+    L3 Metacontrol endpoints:
+    - POST /control/pad_gating - Compute modulation from raw PAD
+    - POST /control/mode - Set workspace mode (work/relax/creative/support)
+    - GET /control/status - Get current metacontrol status
+    - GET /control/modes - Get available modes with PAD mappings
     """
     try:
         from fastapi import APIRouter, HTTPException
@@ -349,6 +432,16 @@ def create_integration_router():
         session_id: Optional[str] = None
         user_id: Optional[str] = None
         prosody: Optional[Dict] = None
+
+    # L3 Metacontrol models
+    class PADGatingRequest(BaseModel):
+        valence: float  # [-1, 1] pleasure/displeasure
+        arousal: float  # [0, 1] activation level
+        dominance: float = 0.5  # [0, 1] control/agency
+        confidence: float = 1.0  # [0, 1] confidence in estimate
+
+    class WorkspaceModeRequest(BaseModel):
+        mode: str  # work, relax, creative, support, default
 
     # Shared orchestrator
     orchestrator = AraOrchestrator()
@@ -395,12 +488,88 @@ def create_integration_router():
         """Get Pulse event log."""
         return orchestrator.get_event_log()
 
+    # L3 Metacontrol endpoints
+    @router.post("/control/pad_gating")
+    async def pad_gating(request: PADGatingRequest):
+        """
+        Compute L3 metacontrol modulation from raw PAD values.
+
+        Returns temperature and memory multipliers based on the control law:
+        - Arousal → Temperature (0.8-1.3): Higher arousal = more exploratory
+        - Valence → Memory P (0.7-1.2): Lower valence = more conservative writes
+        """
+        result = compute_pad_gating(
+            valence=request.valence,
+            arousal=request.arousal,
+            dominance=request.dominance,
+            confidence=request.confidence,
+        )
+        return result
+
+    @router.post("/control/mode")
+    async def set_mode(request: WorkspaceModeRequest):
+        """
+        Set workspace mode for L3 metacontrol.
+
+        Modes map to PAD states:
+        - work: High valence (0.8), high arousal (0.7) → focused, energetic
+        - relax: Low valence (-0.2), low arousal (0.3) → calm, conservative
+        - creative: High arousal (0.8), neutral valence (0.3) → exploratory
+        - support: High valence (0.6), low arousal (0.4) → warm, stable
+        - default: Neutral baseline
+        """
+        result = set_workspace_mode(request.mode)
+        # Also update orchestrator's metacontrol
+        try:
+            ws_mode = WorkspaceMode(request.mode.lower())
+            orchestrator.metacontrol.set_workspace_mode(ws_mode)
+        except ValueError:
+            pass
+        return result
+
+    @router.get("/control/status")
+    async def control_status():
+        """Get current L3 metacontrol status."""
+        return get_metacontrol_status()
+
+    @router.get("/control/modes")
+    async def available_modes():
+        """Get available workspace modes with their PAD mappings."""
+        return {
+            mode.value: {
+                "valence": pad.valence,
+                "arousal": pad.arousal,
+                "dominance": pad.dominance,
+                "confidence": pad.confidence,
+            }
+            for mode, pad in WORKSPACE_PAD_MAPPINGS.items()
+        }
+
     return router
 
 
 __all__ = [
+    # Core classes
     "TurnContext",
     "ProcessedTurn",
     "AraOrchestrator",
     "create_integration_router",
+    # Re-exported from submodules
+    "PADState",
+    "GatingSignals",
+    "AffectEstimate",
+    "estimate_affect",
+    "NIBState",
+    "IdentityMode",
+    "get_nib_state",
+    "RoutingDecision",
+    "Backend",
+    "route_request",
+    # L3 Metacontrol
+    "WorkspaceMode",
+    "ControlModulation",
+    "WORKSPACE_PAD_MAPPINGS",
+    "set_workspace_mode",
+    "compute_pad_gating",
+    "get_metacontrol_status",
 ]

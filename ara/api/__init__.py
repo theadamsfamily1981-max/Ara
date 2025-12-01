@@ -82,13 +82,22 @@ def create_app(
             "integration_enabled": enable_integration,
         }
 
-    # Include integration router (Pulse, NIB, AEPO)
+    # Include integration router (Pulse, NIB, AEPO, Metacontrol)
     if enable_integration:
         try:
             from ara.integration import create_integration_router
             integration_router = create_integration_router()
             if integration_router:
                 app.include_router(integration_router, prefix="/ara", tags=["integration"])
+        except ImportError:
+            pass
+
+        # Include telemetry router (Prometheus metrics)
+        try:
+            from ara.telemetry import create_telemetry_router
+            telemetry_router = create_telemetry_router()
+            if telemetry_router:
+                app.include_router(telemetry_router, prefix="/ara", tags=["telemetry"])
         except ImportError:
             pass
 
