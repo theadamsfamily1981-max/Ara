@@ -82,6 +82,44 @@ except ImportError:
     get_telemetry = None
     record_turn_metrics = None
 
+# Import TP-RL (Topological Meta-Plasticity)
+try:
+    from ara.tprl import (
+        TPRLAgent,
+        MaskEnvironment,
+        evolve_mask,
+        get_tprl_agent,
+    )
+    TPRL_AVAILABLE = True
+except ImportError:
+    TPRL_AVAILABLE = False
+    evolve_mask = None
+
+# Import Interoception Core
+try:
+    from ara.interoception import (
+        InteroceptionCore,
+        InteroceptivePAD,
+        get_interoception_core,
+        process_sensory_input,
+    )
+    INTEROCEPTION_AVAILABLE = True
+except ImportError:
+    INTEROCEPTION_AVAILABLE = False
+    get_interoception_core = None
+
+# Import CXL Control Plane
+try:
+    from ara.cxl_control import (
+        ControlPlane,
+        get_control_plane,
+        fast_control,
+    )
+    CXL_AVAILABLE = True
+except ImportError:
+    CXL_AVAILABLE = False
+    get_control_plane = None
+
 logger = logging.getLogger("ara.integration")
 
 
@@ -145,14 +183,21 @@ class ProcessedTurn:
 
 class AraOrchestrator:
     """
-    Main orchestrator that coordinates Pulse, NIB, and AEPO.
+    Main orchestrator that coordinates the full brain-body stack.
 
     This is the central integration point that:
-    1. Receives user input
-    2. Estimates affect (Pulse)
+    1. Receives user input + sensory data
+    2. Estimates affect (Pulse) OR generates from Interoception
     3. Gets/updates identity state (NIB)
     4. Routes to appropriate backend (AEPO)
-    5. Returns processed turn with all signals
+    5. Applies L3 Metacontrol (with CXL fast path)
+    6. Evolves topology (TP-RL) periodically
+    7. Returns processed turn with all signals
+
+    Revolutionary features:
+    - TP-RL: Topological Meta-Plasticity via RL
+    - Interoception: True internal PAD from SNN membrane dynamics
+    - CXL Control: Sub-200us latency control plane
     """
 
     def __init__(
@@ -161,7 +206,12 @@ class AraOrchestrator:
         prefer_local: bool = False,
         auto_mode_switch: bool = True,
         default_workspace_mode: WorkspaceMode = WorkspaceMode.DEFAULT,
+        enable_interoception: bool = True,
+        enable_cxl_control: bool = True,
+        enable_tprl: bool = True,
+        tprl_evolve_interval: int = 50,  # Evolve mask every N turns
     ):
+        # Core components
         self.pulse = PulseEstimator()
         self.nib = NIBManager()
         self.aepo = AEPORouter(default_backend=default_backend, prefer_local=prefer_local)
@@ -171,9 +221,29 @@ class AraOrchestrator:
         # Set initial workspace mode
         self.metacontrol.set_workspace_mode(default_workspace_mode)
 
+        # Revolutionary components
+        self.enable_interoception = enable_interoception and INTEROCEPTION_AVAILABLE
+        self.enable_cxl_control = enable_cxl_control and CXL_AVAILABLE
+        self.enable_tprl = enable_tprl and TPRL_AVAILABLE
+        self.tprl_evolve_interval = tprl_evolve_interval
+
+        # Initialize revolutionary components
+        if self.enable_interoception:
+            self.interoception = get_interoception_core()
+            logger.info("✅ Interoception Core enabled")
+
+        if self.enable_cxl_control:
+            self.cxl_plane = get_control_plane()
+            logger.info("✅ CXL Control Plane enabled")
+
+        if self.enable_tprl:
+            self.tprl_agent = get_tprl_agent()
+            logger.info("✅ TP-RL Agent enabled")
+
         # Session tracking
         self._sessions: Dict[str, TurnContext] = {}
         self._event_log: List[Dict] = []
+        self._turn_count = 0
 
     def process_turn(
         self,
@@ -181,33 +251,57 @@ class AraOrchestrator:
         session_id: Optional[str] = None,
         user_id: Optional[str] = None,
         prosody: Optional[Dict] = None,
+        audio_features: Optional[Dict] = None,
+        text_embedding: Optional[List[float]] = None,
     ) -> ProcessedTurn:
         """
-        Process a user turn through the full pipeline.
+        Process a user turn through the full brain-body pipeline.
 
         Args:
             user_text: User input text
             session_id: Session identifier
             user_id: User identifier
-            prosody: Optional prosody features from audio
+            prosody: Optional prosody features from audio (legacy)
+            audio_features: Prosody features for interoception
+            text_embedding: Text embedding for interoception
 
         Returns:
             ProcessedTurn with all signals and routing decision
         """
         import time
         start_time = time.time()
+        self._turn_count += 1
 
         # Get/create context
         context = self._get_context(session_id, user_id)
         context.turn_number += 1
         context.conversation_history.append(user_text)
 
-        # 1. Estimate affect (Pulse)
-        affect = self.pulse.estimate(
-            text=user_text,
-            session_id=session_id,
-            context=context.conversation_history[-5:],  # Last 5 turns
-        )
+        # 1. Estimate affect - use Interoception if available, else Pulse
+        if self.enable_interoception and (audio_features or text_embedding):
+            # Revolutionary: True internal PAD from SNN membrane dynamics
+            intero_pad = self.interoception.process_sensory(
+                audio_features=audio_features or prosody,
+                text_embedding=text_embedding,
+            )
+            # Convert InteroceptivePAD to standard AffectEstimate format
+            affect = self.pulse.estimate(
+                text=user_text,
+                session_id=session_id,
+                context=context.conversation_history[-5:],
+            )
+            # Override PAD with interoceptive values
+            affect.pad.pleasure = intero_pad.valence
+            affect.pad.arousal = intero_pad.arousal * 2 - 1  # [0,1] → [-1,1]
+            affect.pad.dominance = intero_pad.dominance * 2 - 1
+            affect.confidence = intero_pad.confidence
+        else:
+            # Standard Pulse estimation
+            affect = self.pulse.estimate(
+                text=user_text,
+                session_id=session_id,
+                context=context.conversation_history[-5:],
+            )
 
         # 2. Get/update NIB state
         nib_state = self.nib.get_state(session_id, user_id)
@@ -233,17 +327,42 @@ class AraOrchestrator:
             session_id=session_id,
         )
 
-        # 4. Compute L3 Metacontrol modulation from affect PAD
-        # Convert Pulse PADState to Metacontrol PADState
+        # 4. Compute L3 Metacontrol - use CXL fast path if available
         metacontrol_pad = MetacontrolPADState(
             valence=affect.pad.pleasure,
-            arousal=max(0.0, min(1.0, (affect.pad.arousal + 1.0) / 2.0)),  # Convert [-1,1] to [0,1]
+            arousal=max(0.0, min(1.0, (affect.pad.arousal + 1.0) / 2.0)),
             dominance=max(0.0, min(1.0, (affect.pad.dominance + 1.0) / 2.0)),
             confidence=affect.confidence,
         )
-        metacontrol_modulation = self.metacontrol.compute_modulation(metacontrol_pad)
 
-        # 5. Compute effective parameters (with metacontrol)
+        if self.enable_cxl_control:
+            # Revolutionary: Sub-200us latency control via CXL plane
+            cxl_result = self.cxl_plane.fast_control_step(
+                valence=metacontrol_pad.valence,
+                arousal=metacontrol_pad.arousal,
+                dominance=metacontrol_pad.dominance,
+            )
+            # Use CXL results
+            metacontrol_modulation = self.metacontrol.compute_modulation(metacontrol_pad)
+            # Override with CXL fast path values
+            metacontrol_modulation.temperature_multiplier = cxl_result["temperature_mult"]
+            metacontrol_modulation.memory_write_multiplier = cxl_result["memory_mult"]
+            metacontrol_modulation.attention_gain = cxl_result["attention_gain"]
+        else:
+            # Standard metacontrol
+            metacontrol_modulation = self.metacontrol.compute_modulation(metacontrol_pad)
+
+        # 5. TP-RL: Evolve mask periodically
+        if self.enable_tprl and self._turn_count % self.tprl_evolve_interval == 0:
+            # Get jerk from metacontrol history
+            jerk = getattr(metacontrol_modulation, 'effective_weight', 0.1)
+            tprl_result = evolve_mask(
+                jerk_signal=jerk,
+                confidence=affect.confidence,
+            )
+            logger.info(f"TP-RL evolved mask: density={tprl_result['config']['density']:.4f}")
+
+        # 6. Compute effective parameters (with metacontrol)
         effective_temp = self._compute_temperature(affect, routing, metacontrol_modulation)
         effective_mem_p = metacontrol_modulation.memory_write_multiplier
         effective_prompt = self._build_system_prompt(nib_state, routing)
