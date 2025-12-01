@@ -186,6 +186,7 @@ See `docs/ANTIFRAGILITY_CERTIFICATION.md` for detailed metric definitions.
 | L5 Meta-Learning | Done | `tfan/l5/__init__.py` |
 | L6 Reasoning Orchestrator | Done | `tfan/l6/__init__.py` |
 | Adaptive Geometry | Done | `tfan/geometry/__init__.py` |
+| Adaptive Entropy (CLV-modulated) | Done | `tfan/agent/adaptive_entropy.py` |
 | Certification Script | Done | `scripts/certify_cognitive_autonomy.py` |
 
 ### L5 Meta-Learning: AEPO Learns L3 Control Laws
@@ -244,6 +245,23 @@ The system selects optimal manifold curvature for different task types:
 | Sequential reasoning | 0.7 - 1.3 | Standard |
 | Clustering | 0.6 - 1.0 | Adaptive |
 
+### Adaptive Entropy: CLV-Modulated Exploration
+
+AEPO exploration "breathes" with system risk via CLV-modulated entropy:
+
+```
+risk = 0.5 * instability + 0.3 * resource + 0.2 * structural
+α = α_base × (1 + α_range × (1 - risk))
+```
+
+| Risk Level | Entropy Behavior | Exploration Mode |
+|------------|------------------|------------------|
+| Low (calm) | α ≈ 3× base | Exploratory |
+| Medium | α ≈ 2× base | Balanced |
+| High (stressed) | α ≈ base | Conservative |
+
+**L5 Integration:** The entropy parameters (α_base, α_range) are learned by L5 meta-learning alongside other L3 control laws.
+
 ### Certification Results
 
 ```
@@ -264,6 +282,13 @@ Adaptive Geometry:
   ✅ Hyperbolic math: d(x,y)=0.479
   ✅ Curvature update: 1.500 → 1.550 from reward
   ✅ Geometric routing: c=2.17, backend=fpga
+
+Adaptive Entropy:
+  ✅ Controller initialization: α_base=0.01
+  ✅ Alpha adapts to risk: 3/3 directions correct
+  ✅ Exploration mode: low_risk=exploratory, high_risk=conservative
+  ✅ Arousal modulation: reduces α under urgency
+  ✅ L5 → Entropy integration: params applied
 ```
 
 ---

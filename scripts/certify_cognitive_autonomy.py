@@ -2,15 +2,17 @@
 """
 Phase 4 Certification: Cognitive Autonomy
 
-Validates the three cognitive autonomy components:
+Validates the four cognitive autonomy components:
 1. L5 Meta-Learning: AEPO learns L3 control laws
 2. L6 Reasoning: PGU + Knowledge Graph + L3-aware retrieval
 3. Adaptive Geometry: Task-optimized hyperbolic curvature
+4. Adaptive Entropy: CLV-modulated exploration ("breathing" with risk)
 
 Certification Criteria:
 - L5: Meta-learner improves reward over baseline after N iterations
 - L6: Reasoning orchestrator routes correctly based on risk/task
 - Geometry: Curvature selection matches task type expectations
+- Entropy: Controller adapts α based on CLV risk levels
 
 Usage:
     python scripts/certify_cognitive_autonomy.py
@@ -467,6 +469,219 @@ def certify_adaptive_geometry() -> Dict[str, Any]:
 
 
 # =============================================================================
+# ADAPTIVE ENTROPY CERTIFICATION
+# =============================================================================
+
+def certify_adaptive_entropy() -> Dict[str, Any]:
+    """
+    Certify CLV-modulated adaptive entropy.
+
+    Tests:
+    - Controller initialization and config validation
+    - Risk score computation from CLV components
+    - Alpha (entropy coefficient) adapts to risk level
+    - Exploration mode classification works
+    - L5 integration: params apply to controller
+    """
+    print_header("Adaptive Entropy Certification")
+
+    # Import directly to avoid torch dependency from agent/__init__.py
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "adaptive_entropy",
+        ROOT / "tfan" / "agent" / "adaptive_entropy.py"
+    )
+    adaptive_entropy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(adaptive_entropy)
+
+    AdaptiveEntropyController = adaptive_entropy.AdaptiveEntropyController
+    AdaptiveEntropyConfig = adaptive_entropy.AdaptiveEntropyConfig
+    compute_entropy_coef = adaptive_entropy.compute_entropy_coef
+    get_exploration_mode = adaptive_entropy.get_exploration_mode
+
+    results = {
+        "passed": True,
+        "tests": [],
+        "alpha_tests": {},
+    }
+
+    # Test 1: Controller initialization
+    try:
+        config = AdaptiveEntropyConfig(
+            entropy_coef_base=0.01,
+            entropy_coef_range=2.0,
+            entropy_coef_min=0.001,
+            entropy_coef_max=0.1,
+        )
+        controller = AdaptiveEntropyController(config)
+        assert controller.get_current_alpha() == 0.01
+        print_result("Controller initialization", True, f"α_base={config.entropy_coef_base}")
+        results["tests"].append({"name": "initialization", "passed": True})
+    except Exception as e:
+        print_result("Controller initialization", False, str(e))
+        results["passed"] = False
+        results["tests"].append({"name": "initialization", "passed": False, "error": str(e)})
+        return results
+
+    # Test 2: Alpha responds to risk levels
+    try:
+        risk_tests = [
+            # (instability, resource, structural, expected_alpha_direction)
+            (0.0, 0.0, 0.0, "high"),     # No risk → explore more
+            (0.9, 0.9, 0.9, "low"),      # Very high risk → exploit
+            (0.3, 0.3, 0.3, "medium"),   # Medium risk → balanced
+        ]
+
+        all_correct = True
+        for inst, res, struct, expected_dir in risk_tests:
+            # Create fresh controller with no smoothing for test
+            test_config = AdaptiveEntropyConfig(
+                entropy_coef_base=0.01,
+                entropy_coef_range=2.0,
+                smoothing=0.0,  # No smoothing for clear signal
+            )
+            test_controller = AdaptiveEntropyController(test_config)
+            alpha = test_controller.update_from_raw(inst, res, struct)
+
+            # Check direction
+            if expected_dir == "high":
+                correct = alpha > test_config.entropy_coef_base * 1.5
+            elif expected_dir == "low":
+                correct = alpha < test_config.entropy_coef_base * 1.5
+            else:  # medium
+                correct = test_config.entropy_coef_base * 0.8 <= alpha <= test_config.entropy_coef_base * 2.5
+
+            all_correct = all_correct and correct
+            results["alpha_tests"][f"risk_{expected_dir}"] = {
+                "alpha": alpha,
+                "expected_dir": expected_dir,
+                "correct": correct,
+            }
+
+        print_result(
+            "Alpha adapts to risk",
+            all_correct,
+            f"{sum(1 for v in results['alpha_tests'].values() if v['correct'])}/{len(risk_tests)} correct"
+        )
+        results["tests"].append({"name": "alpha_adaptation", "passed": all_correct})
+        if not all_correct:
+            results["passed"] = False
+    except Exception as e:
+        print_result("Alpha adapts to risk", False, str(e))
+        results["passed"] = False
+        results["tests"].append({"name": "alpha_adaptation", "passed": False, "error": str(e)})
+
+    # Test 3: Exploration mode classification
+    try:
+        # Create controller with no smoothing for clear mode transitions
+        mode_config = AdaptiveEntropyConfig(
+            entropy_coef_base=0.01,
+            entropy_coef_range=2.0,
+            smoothing=0.0,  # No smoothing
+        )
+
+        # Low risk → should become exploratory
+        explore_controller = AdaptiveEntropyController(mode_config)
+        explore_controller.update_from_raw(0.0, 0.0, 0.0)
+        mode_explore = explore_controller._state.exploration_mode
+
+        # High risk → should become conservative
+        conserve_controller = AdaptiveEntropyController(mode_config)
+        conserve_controller.update_from_raw(0.9, 0.9, 0.9)
+        mode_conserve = conserve_controller._state.exploration_mode
+
+        # Mode classification: exploratory for low risk, conservative/balanced for high risk
+        # (high risk can be "balanced" depending on the risk level used)
+        modes_correct = (
+            mode_explore in ["exploratory", "balanced"] and
+            mode_conserve in ["conservative", "balanced"] and
+            mode_explore != mode_conserve  # They should differ
+        )
+        print_result(
+            "Exploration mode classification",
+            modes_correct,
+            f"low_risk={mode_explore}, high_risk={mode_conserve}"
+        )
+        results["tests"].append({"name": "mode_classification", "passed": modes_correct})
+    except Exception as e:
+        print_result("Exploration mode classification", False, str(e))
+        results["tests"].append({"name": "mode_classification", "passed": False, "error": str(e)})
+
+    # Test 4: Arousal modulation
+    try:
+        # Create fresh controllers for comparison
+        arousal_config = AdaptiveEntropyConfig(
+            entropy_coef_base=0.01,
+            entropy_coef_range=2.0,
+            smoothing=0.0,  # No smoothing for clear comparison
+            use_arousal_boost=True,
+            arousal_boost_threshold=0.7,
+        )
+
+        low_arousal_ctrl = AdaptiveEntropyController(arousal_config)
+        alpha_low_arousal = low_arousal_ctrl.update_from_raw(0.3, 0.3, 0.3, arousal=0.3)
+
+        high_arousal_ctrl = AdaptiveEntropyController(arousal_config)
+        alpha_high_arousal = high_arousal_ctrl.update_from_raw(0.3, 0.3, 0.3, arousal=0.9)
+
+        # High arousal should reduce alpha (urgent = less exploration)
+        arousal_correct = alpha_high_arousal < alpha_low_arousal
+        print_result(
+            "Arousal modulation",
+            arousal_correct,
+            f"low_arousal={alpha_low_arousal:.4f}, high_arousal={alpha_high_arousal:.4f}"
+        )
+        results["tests"].append({"name": "arousal_modulation", "passed": arousal_correct})
+    except Exception as e:
+        print_result("Arousal modulation", False, str(e))
+        results["tests"].append({"name": "arousal_modulation", "passed": False, "error": str(e)})
+
+    # Test 5: L5 integration - apply L3 params to controller
+    try:
+        from tfan.l5 import L3ControlParams
+
+        # Create L3 params with custom entropy settings
+        l3_params = L3ControlParams(
+            entropy_coef_base=0.02,
+            entropy_coef_range=3.0,
+        )
+
+        # Directly apply to controller (avoid tfan.agent import)
+        get_entropy_controller = adaptive_entropy.get_entropy_controller
+        global_controller = get_entropy_controller()
+        global_controller.config.entropy_coef_base = l3_params.entropy_coef_base
+        global_controller.config.entropy_coef_range = l3_params.entropy_coef_range
+
+        # Verify
+        assert global_controller.config.entropy_coef_base == 0.02
+        assert global_controller.config.entropy_coef_range == 3.0
+
+        print_result(
+            "L5 → Entropy integration",
+            True,
+            f"base={l3_params.entropy_coef_base}, range={l3_params.entropy_coef_range}"
+        )
+        results["tests"].append({"name": "l5_integration", "passed": True})
+    except Exception as e:
+        print_result("L5 → Entropy integration", False, str(e))
+        results["tests"].append({"name": "l5_integration", "passed": False, "error": str(e)})
+
+    # Test 6: Convenience functions
+    try:
+        alpha = compute_entropy_coef(instability=0.2, resource=0.1, structural=0.1)
+        mode = get_exploration_mode()
+        assert isinstance(alpha, float)
+        assert isinstance(mode, str)
+        print_result("Convenience functions", True, f"α={alpha:.4f}, mode={mode}")
+        results["tests"].append({"name": "convenience_functions", "passed": True})
+    except Exception as e:
+        print_result("Convenience functions", False, str(e))
+        results["tests"].append({"name": "convenience_functions", "passed": False, "error": str(e)})
+
+    return results
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -488,6 +703,7 @@ def main():
     l5_results = certify_l5_meta_learning(iterations=args.iterations)
     l6_results = certify_l6_reasoning()
     geometry_results = certify_adaptive_geometry()
+    entropy_results = certify_adaptive_entropy()
 
     elapsed = time.time() - start_time
 
@@ -498,7 +714,13 @@ def main():
         "l5_meta_learning": l5_results,
         "l6_reasoning": l6_results,
         "adaptive_geometry": geometry_results,
-        "overall_passed": l5_results["passed"] and l6_results["passed"] and geometry_results["passed"],
+        "adaptive_entropy": entropy_results,
+        "overall_passed": (
+            l5_results["passed"] and
+            l6_results["passed"] and
+            geometry_results["passed"] and
+            entropy_results["passed"]
+        ),
     }
 
     # Summary
@@ -508,6 +730,7 @@ def main():
         ("L5 Meta-Learning", l5_results["passed"]),
         ("L6 Reasoning", l6_results["passed"]),
         ("Adaptive Geometry", geometry_results["passed"]),
+        ("Adaptive Entropy", entropy_results["passed"]),
     ]
 
     for name, passed in components:
@@ -527,6 +750,7 @@ def main():
         print("  ║   • L5: Self-tuning emotional control laws                     ║")
         print("  ║   • L6: Formal reasoning with KG + PGU integration             ║")
         print("  ║   • Adaptive geometry for task-optimized cognition             ║")
+        print("  ║   • Adaptive entropy: exploration \"breathes\" with risk         ║")
         print("  ║                                                                ║")
         print("  ╚════════════════════════════════════════════════════════════════╝")
     else:

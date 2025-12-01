@@ -17,6 +17,8 @@ Key L3 Parameters (Action Space):
 - arousal_temp_scale: [0.3, 0.7] - Arousal → Temperature coupling
 - valence_mem_scale: [0.3, 0.7] - Valence → Memory coupling
 - curvature_c: [0.5, 2.0] - Hyperbolic curvature (geometry)
+- entropy_coef_base: [0.005, 0.05] - Base entropy coefficient
+- entropy_coef_range: [0.5, 4.0] - CLV modulation range for entropy
 
 Reward Signal:
 - antifragility_score (weight: 0.4)
@@ -79,6 +81,10 @@ class L3ControlParams:
     # Hyperbolic curvature (geometry)
     curvature_c: float = 1.0  # [0.5, 2.0]
 
+    # Entropy modulation (CLV-adaptive exploration)
+    entropy_coef_base: float = 0.01   # [0.005, 0.05]
+    entropy_coef_range: float = 2.0   # [0.5, 4.0] - how much CLV modulates
+
     # Profile metadata
     profile_name: str = "default"
     profile_version: int = 1
@@ -96,11 +102,16 @@ class L3ControlParams:
             (self.valence_mem_scale - 0.3) / 0.4,     # [0.3, 0.7] → [0, 1]
             (self.confidence_threshold - 0.3) / 0.5,  # [0.3, 0.8] → [0, 1]
             (self.curvature_c - 0.5) / 1.5,           # [0.5, 2.0] → [0, 1]
+            (self.entropy_coef_base - 0.005) / 0.045, # [0.005, 0.05] → [0, 1]
+            (self.entropy_coef_range - 0.5) / 3.5,    # [0.5, 4.0] → [0, 1]
         ]
 
     @classmethod
     def from_action_vector(cls, action: List[float], name: str = "learned") -> "L3ControlParams":
         """Create from normalized action vector [0, 1]."""
+        # Handle backward compatibility with 6-element vectors
+        entropy_base = 0.005 + action[6] * 0.045 if len(action) > 6 else 0.01
+        entropy_range = 0.5 + action[7] * 3.5 if len(action) > 7 else 2.0
         return cls(
             jerk_threshold=0.05 + action[0] * 0.25,
             controller_weight=0.1 + action[1] * 0.4,
@@ -108,6 +119,8 @@ class L3ControlParams:
             valence_mem_scale=0.3 + action[3] * 0.4,
             confidence_threshold=0.3 + action[4] * 0.5,
             curvature_c=0.5 + action[5] * 1.5,
+            entropy_coef_base=entropy_base,
+            entropy_coef_range=entropy_range,
             profile_name=name,
         )
 
@@ -505,6 +518,59 @@ def get_current_personality() -> Dict[str, Any]:
     return create_cockpit_display(ml.params, ml).to_dict()
 
 
+def apply_l3_to_entropy_controller(params: L3ControlParams) -> bool:
+    """
+    Apply L3 entropy parameters to the adaptive entropy controller.
+
+    This synchronizes the learned entropy settings with the runtime controller.
+
+    Args:
+        params: L3ControlParams with entropy_coef_base and entropy_coef_range
+
+    Returns:
+        True if controller was updated, False if not available
+    """
+    try:
+        from tfan.agent.adaptive_entropy import (
+            get_entropy_controller,
+            AdaptiveEntropyConfig,
+        )
+
+        controller = get_entropy_controller()
+
+        # Update config from L3 params
+        controller.config.entropy_coef_base = params.entropy_coef_base
+        controller.config.entropy_coef_range = params.entropy_coef_range
+
+        logger.info(
+            f"Applied L3 entropy params: base={params.entropy_coef_base:.4f}, "
+            f"range={params.entropy_coef_range:.1f}"
+        )
+        return True
+    except ImportError:
+        logger.warning("Adaptive entropy controller not available")
+        return False
+
+
+def get_entropy_stats() -> Dict[str, Any]:
+    """
+    Get current entropy controller statistics for cockpit display.
+
+    Returns:
+        Dict with entropy state and history stats
+    """
+    try:
+        from tfan.agent.adaptive_entropy import get_entropy_controller
+
+        controller = get_entropy_controller()
+        return {
+            "state": controller.get_state(),
+            "history": controller.get_history_stats(),
+        }
+    except ImportError:
+        return {"available": False}
+
+
 __all__ = [
     "L3ControlParams",
     "L5RewardSignal",
@@ -517,4 +583,6 @@ __all__ = [
     "propose_l3_candidates",
     "update_l3_from_rewards",
     "get_current_personality",
+    "apply_l3_to_entropy_controller",
+    "get_entropy_stats",
 ]
