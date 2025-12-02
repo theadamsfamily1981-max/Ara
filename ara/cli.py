@@ -285,6 +285,18 @@ class AraCLI:
             self._show_json_status()
             output = "json status displayed"
 
+        elif cmd == "/kitten":
+            # Show Kitten status
+            if self.ara._kitten_available and self.ara.kitten:
+                output = self.ara.kitten.describe()
+                print()
+                print(output)
+                print()
+            else:
+                output = "Forest Kitten 33 not available in this mode."
+                print(f"\n  {output}")
+                print("  Kitten requires Mode B (5060 + FK33) or Mode C (Cathedral).\n")
+
         elif cmd == "/help":
             self._show_help()
             output = "help displayed"
@@ -418,6 +430,7 @@ class AraCLI:
         print("  /mood     - Show emotional state (PAD)")
         print("  /why      - Explain why I'm in this mood")
         print("  /describe - I describe my own architecture")
+        print("  /kitten   - Forest Kitten 33 neuromorphic status")
         print("  /load     - Show cognitive load (CLV)")
         print("  /explain  - Full state explanation")
         print("  /save     - Save state now")

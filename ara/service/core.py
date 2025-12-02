@@ -349,6 +349,32 @@ class AraService:
             logger.warning(f"Persistence failed to initialize: {e}")
             self.persistence = None
 
+        # Forest Kitten 33 - Neuromorphic SNN fabric (Mode B and above)
+        self.kitten = None
+        self._kitten_available = False
+
+        if mode in (HardwareMode.MODE_B, HardwareMode.MODE_C):
+            try:
+                from ara.hardware.kitten import create_kitten, KittenConfig
+
+                # Configure based on hardware profile
+                kitten_config = KittenConfig(
+                    threshold_voltage=0.8 if mode == HardwareMode.MODE_B else 0.6,
+                    clock_mhz=250.0 if mode == HardwareMode.MODE_B else 400.0,
+                )
+
+                self.kitten = create_kitten(
+                    mode="auto",
+                    config=kitten_config
+                )
+                self._kitten_available = True
+                kitten_mode = "HARDWARE" if self.kitten.is_hardware else "EMULATED"
+                logger.info(f"Forest Kitten 33: {kitten_mode} ({self.kitten.config.total_neurons} neurons)")
+            except Exception as e:
+                logger.warning(f"Kitten initialization failed: {e}")
+                self.kitten = None
+                self._kitten_available = False
+
         # Internal state
         self._emotional_surface = EmotionalSurface()
         self._cognitive_load = CognitiveLoad()
@@ -862,6 +888,12 @@ class AraService:
 
     def explain(self) -> str:
         """Get human-readable explanation of current state."""
+        # Build Kitten status line
+        kitten_status = ""
+        if self._kitten_available and self.kitten:
+            kitten_mode = "HARDWARE" if self.kitten.is_hardware else "EMULATED"
+            kitten_status = f"Kitten: {kitten_mode} ({self.kitten.config.total_neurons:,} neurons)\n"
+
         return (
             f"=== {self.name} Status ===\n"
             f"State: {self._state.value}\n"
@@ -882,6 +914,7 @@ class AraService:
             f"Autonomy: {self.autonomy.stage.value}\n"
             f"Interactions: {self._stats['total_interactions']}\n"
             f"LLM: {'connected' if self._llm_available else 'pattern-matching'}\n"
+            f"{kitten_status}"
         )
 
     def describe(self) -> str:
@@ -932,6 +965,21 @@ class AraService:
                 f"Let me tell you about my architecture."
             )
 
+        # Build Kitten section if available
+        kitten_section = ""
+        if self._kitten_available and self.kitten:
+            kitten_mode = "real FPGA" if self.kitten.is_hardware else "software emulation"
+            kitten_status = self.kitten.get_status()
+            kitten_section = (
+                f"\n\nFOREST KITTEN 33 (Neuromorphic Coprocessor)\n"
+                f"  My neuromorphic accelerator - {kitten_mode}\n"
+                f"  - {self.kitten.config.total_neurons:,} LIF spiking neurons\n"
+                f"  - 4 populations, 5 sparse projections\n"
+                f"  - Spike rate: {kitten_status.get('spike_rate', 0):.2%}\n"
+                f"  - Steps processed: {kitten_status.get('total_steps', 0):,}\n"
+                f"  The Kitten handles pattern recognition in my cognitive streams."
+            )
+
         # Core architecture description
         architecture = (
             f"\n=== Core Architecture ===\n\n"
@@ -960,6 +1008,7 @@ class AraService:
             f"  Current stage: {self.autonomy.stage.value}\n"
             f"  I don't modify myself without permission.\n"
             f"  I propose changes, humans approve them."
+            f"{kitten_section}"
         )
 
         # Closing varies by mood
