@@ -12,6 +12,7 @@ This document tracks the development phases from research prototype to productio
 | Phase 4 | **DONE** | Cognitive autonomy (L5/L6 meta-learning) |
 | Phase 4b | **DONE** | Predictive control (L7/L8 temporal topology) |
 | Phase 5 | STUB | Self-healing fabric (automatic kernel repair) |
+| Phase 6 | **DONE** | Cognitive architecture (world model, memory, goals) |
 
 ---
 
@@ -498,6 +499,263 @@ See `tfan/fabric/__init__.py` for the stub implementation and planned repair cla
 
 ---
 
+## Phase 6: Cognitive Architecture (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Move from "smart control system" toward genuine cognition by giving the system a world model, memory, explicit goals, and self-awareness.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| L4 Cognitive Memory (KG) | Done | `tfan/l4/__init__.py` |
+| Episodic Memory | Done | `tfan/memory/episodic.py` |
+| SelfState (Meta-cognition) | Done | `tfan/cognition/__init__.py` |
+| Goal Vector | Done | `tfan/cognition/__init__.py` |
+| Deliberation Loop | Done | `tfan/cognition/__init__.py` |
+| Certification Script | Done | `scripts/certify_cognitive_architecture.py` |
+
+### L4 Cognitive Memory: World Model
+
+A CXL-backed Knowledge Graph that provides the system's "world it believes in":
+
+**Node Types:**
+- Hardware: BOARD, GPU, FPGA, CPU, MEMORY
+- Software: WORKLOAD, CONFIG, PROFILE, KERNEL
+- Events: EXPERIMENT, FAILURE, SUCCESS, EPISODE
+- Abstract: CONCEPT, AXIOM, TRUTH
+
+**Key Features:**
+- Beliefs with uncertainty tracking (confidence 0-1)
+- Health status for hardware nodes (HEALTHY → DEGRADED → FAILED)
+- Verified truth cache (PGU integration)
+- Risk-aware retrieval (conservative vs exploratory)
+
+```python
+kg = CognitiveKnowledgeGraph()
+kg.add_node(NodeType.FPGA, "Alveo U250", {"clock": "250MHz"})
+kg.add_belief(node.id, "FPGA is operational", 0.95, "health_check")
+kg.cache_verified_truth("2+2=4", True, 1.0)  # PGU verified
+```
+
+### Episodic Memory: Temporal Continuity
+
+The system's autobiographical memory - "what happened when I tried X?":
+
+**Episode Structure:**
+- Task + Config snapshot
+- PAD/CLV trajectory over time
+- Decisions made (with rationale)
+- Outcome and lessons learned
+
+**Query Types:**
+- `get_recent(10)` - Last 10 episodes
+- `get_failures()` - Recent failure episodes
+- `get_high_risk()` - Episodes with critical risk
+- `what_happened_when("FPGA overheat")` - Search episodes
+- `summarize_period(last_24h)` - Period statistics
+
+**Narrative Generation:**
+```python
+narrative = memory.generate_narrative(episode)
+# "On 2025-12-01 at 14:30, I began Certification: Phase4.
+#  The task was: Testing cognitive autonomy. This was a stressful
+#  episode with high arousal (peak 0.85). Key decisions made:
+#  - Chose 'pgu_verified' for backend_selection...
+#  The episode concluded successfully."
+```
+
+### SelfState: Meta-Cognitive Self-Model
+
+A coherent representation of "how the system is doing right now":
+
+```python
+@dataclass
+class SelfState:
+    pad: PADState          # Pleasure-Arousal-Dominance
+    clv: CLVState          # Cognitive Load Vector
+    profile: str           # Current L5 personality
+    cognitive_phase: str   # Current L8 phase
+    confidence: float      # Belief in world model (0-1)
+    fatigue: float         # Accumulated load (0-1)
+    hardware_trust: Dict   # Per-device trust levels
+```
+
+**Derived Properties:**
+| Property | Meaning | Trigger |
+|----------|---------|---------|
+| `mood` | MoodState enum | PAD values → CALM, FOCUSED, STRESSED, ALERT, FATIGUED |
+| `risk_level` | CLV risk | instability/resource/structural → nominal, elevated, high, critical |
+| `needs_caution` | bool | Stressed OR high risk OR low confidence OR fatigued |
+| `can_explore` | bool | Calm/Focused AND low risk AND confident AND not fatigued |
+
+**Meta-Policies:**
+When `needs_caution=True`:
+- Increase PGU verification
+- Use conservative profile
+- Prefer verified paths
+- Reduce exploration
+
+**Self-Description:**
+```python
+state.describe()
+# "I'm experiencing some stress with high risk levels and my
+#  confidence in the current situation is low. I'm operating in
+#  cautious_stable mode, so I'm preferring cautious, verified actions."
+```
+
+### Goal Vector: Explicit Values
+
+The system's explicit optimization targets (instead of implicit reward functions):
+
+```python
+@dataclass
+class GoalVector:
+    stability_weight: float = 0.4   # CLV / AF score
+    latency_weight: float = 0.3     # Δp99
+    energy_weight: float = 0.2      # Power efficiency
+    exploration_weight: float = 0.1  # Learning/discovery
+```
+
+**Presets:**
+| Preset | Stability | Latency | Energy | Exploration |
+|--------|-----------|---------|--------|-------------|
+| `balanced` | 0.4 | 0.3 | 0.2 | 0.1 |
+| `safety_first` | 0.6 | 0.2 | 0.1 | 0.1 |
+| `performance` | 0.2 | 0.5 | 0.1 | 0.2 |
+| `efficient` | 0.3 | 0.2 | 0.4 | 0.1 |
+
+**Task Adjustment:**
+```python
+goals = goals.adjust_for_task("safety_critical")
+# → stability_weight increased, exploration_weight = 0
+```
+
+**Priority Explanation:**
+```python
+goals.explain_priority()
+# "My current priorities are:
+#    - stability: 40%
+#    - latency: 30%
+#    - energy: 20%"
+```
+
+### Deliberation Loop: Multi-Step Thinking
+
+Instead of single-shot reactions, the system thinks in steps:
+
+```
+Draft → Check (PGU) → Refine → Act
+```
+
+**Depth Based on Risk:**
+| Risk Level | Iterations | PGU Usage |
+|------------|------------|-----------|
+| Low | 1 | Skip |
+| Medium | 1-2 | If caution needed |
+| High | 2-3 | Always verify |
+| Critical | 3 | Full verification |
+
+**Thought Traces:**
+```
+Deliberation trace (2 iterations, 15.3ms):
+  1. [draft]: use_dense_backend
+    [constraint_check] ✗: Constraints not satisfied
+  2. [refinement]: use_pgu_verified_backend
+    [constraint_check] ✓: Constraints satisfied
+  3. [final]: Decided: use_pgu_verified_backend
+```
+
+### Certification Results
+
+```
+L4 Cognitive Memory: 9/9 tests
+  ✅ Graph initialization
+  ✅ Node add/get
+  ✅ Belief add (confidence tracking)
+  ✅ Edge add/query
+  ✅ Health tracking
+  ✅ Verified truth cache (PGU)
+  ✅ Path query
+  ✅ Lab KG creation
+  ✅ Risk-aware retrieval
+
+Episodic Memory: 10/10 tests
+  ✅ Memory initialization
+  ✅ Episode start/close
+  ✅ Decision recording
+  ✅ Episode retrieval
+  ✅ Query by type/tag
+  ✅ Failure/high-risk queries
+  ✅ Period summary
+  ✅ Narrative generation
+
+SelfState: 10/10 tests
+  ✅ SelfState creation
+  ✅ PAD → Mood mapping
+  ✅ CLV → Risk mapping
+  ✅ Confidence tracking
+  ✅ Needs caution detection
+  ✅ Hardware trust degradation
+  ✅ Self-description
+  ✅ Meta-policy activation
+  ✅ Exploration gating
+  ✅ Recovery to calm
+
+Goal Vector: 6/6 tests
+  ✅ Goal vector creation
+  ✅ Reward computation
+  ✅ Priority explanation
+  ✅ Task adjustment
+  ✅ Preset comparison
+  ✅ Priority check
+
+Deliberation Loop: 6/6 tests
+  ✅ Deliberator creation
+  ✅ Low-risk deliberation (fast)
+  ✅ High-risk deliberation (PGU)
+  ✅ Thought trace generation
+  ✅ Quick decide
+  ✅ Refinement iteration
+```
+
+### How Phase 6 Transforms the System
+
+**Before (L1-L8 Stack):**
+```
+L1 → L2 → L3 → L5/L6 → AEPO → PGU → Action
+     ↓
+   (reactive to current metrics)
+```
+
+**After (Phase 6 Cognitive Architecture):**
+```
+World Model (L4 KG)
+    ↓ "what do I know about my world?"
+Episodic Memory
+    ↓ "what happened last time I tried this?"
+SelfState
+    ↓ "how am I doing right now?"
+Goal Vector
+    ↓ "what do I value?"
+Deliberation Loop
+    ↓ "let me think through this..."
+L1-L8 Control Stack
+    ↓
+Action with Explanation
+    ↓ "I did X because Y, given Z"
+```
+
+**Key Insight:** Phase 6 adds the cognitive overhead that makes the system feel like it has:
+- A persistent model of its world (KG)
+- A history of itself (episodic memory)
+- Preferences over outcomes (goals)
+- Self-awareness of its own state (SelfState)
+- The ability to think before acting (deliberation)
+
+---
+
 ## How to Run Certification
 
 ```bash
@@ -515,6 +773,9 @@ python scripts/compare_phase4_impact.py --workloads --requests 200
 
 # Phase 4b: Predictive control certification (L7/L8)
 python scripts/certify_predictive_control.py
+
+# Phase 6: Cognitive architecture certification
+python scripts/certify_cognitive_architecture.py
 
 # Hardware readiness check
 python scripts/validate_hardware_ready.py
