@@ -310,21 +310,34 @@ class AraService:
             strict=strict_autonomy
         )
 
-        # LLM Backend
+        # LLM Backend (with deep cognitive integration for Mistral)
+        self.llm = None
+        self.mistral = None  # Deep integration backend
+        self._llm_available = False
+
         try:
-            from ara.service.llm_backend import create_llm_backend
-            self.llm = create_llm_backend(
-                backend=llm_backend,
-                model=llm_model
-            )
-            self._llm_available = self.llm.is_llm_available
-            if self._llm_available:
-                logger.info(f"LLM backend: {llm_backend}/{llm_model}")
+            # Try deep Mistral integration first
+            from ara.service.mistral_backend import create_mistral_backend
+            self.mistral = create_mistral_backend(model=llm_model)
+            if self.mistral.is_available:
+                self._llm_available = True
+                logger.info(f"Mistral backend: {llm_model} (deep integration)")
             else:
-                logger.info("LLM not available, using pattern matching")
+                # Fall back to generic LLM backend
+                from ara.service.llm_backend import create_llm_backend
+                self.llm = create_llm_backend(
+                    backend=llm_backend,
+                    model=llm_model
+                )
+                self._llm_available = self.llm.is_llm_available
+                if self._llm_available:
+                    logger.info(f"LLM backend: {llm_backend}/{llm_model}")
+                else:
+                    logger.info("LLM not available, using pattern matching")
         except Exception as e:
             logger.warning(f"LLM backend failed to initialize: {e}")
             self.llm = None
+            self.mistral = None
             self._llm_available = False
 
         # Persistence
@@ -336,11 +349,38 @@ class AraService:
             logger.warning(f"Persistence failed to initialize: {e}")
             self.persistence = None
 
+        # Forest Kitten 33 - Neuromorphic SNN fabric (Mode B and above)
+        self.kitten = None
+        self._kitten_available = False
+
+        if mode in (HardwareMode.MODE_B, HardwareMode.MODE_C):
+            try:
+                from ara.hardware.kitten import create_kitten, KittenConfig
+
+                # Configure based on hardware profile
+                kitten_config = KittenConfig(
+                    threshold_voltage=0.8 if mode == HardwareMode.MODE_B else 0.6,
+                    clock_mhz=250.0 if mode == HardwareMode.MODE_B else 400.0,
+                )
+
+                self.kitten = create_kitten(
+                    mode="auto",
+                    config=kitten_config
+                )
+                self._kitten_available = True
+                kitten_mode = "HARDWARE" if self.kitten.is_hardware else "EMULATED"
+                logger.info(f"Forest Kitten 33: {kitten_mode} ({self.kitten.config.total_neurons} neurons)")
+            except Exception as e:
+                logger.warning(f"Kitten initialization failed: {e}")
+                self.kitten = None
+                self._kitten_available = False
+
         # Internal state
         self._emotional_surface = EmotionalSurface()
         self._cognitive_load = CognitiveLoad()
         self._current_state = self._create_initial_state()
         self._conversation_history = []  # For LLM context
+        self._llm_clv_contribution = {}  # LLM metrics fed back to CLV
 
         # Statistics
         self._stats = {
@@ -527,7 +567,7 @@ class AraService:
         )
 
     def _update_cognitive_load(self):
-        """Update cognitive load vector."""
+        """Update cognitive load vector with LLM feedback."""
         # Instability from thought stream variance
         if len(self.thoughts._entries) >= 2:
             curvatures = self.thoughts.get_curvature_trajectory()
@@ -546,6 +586,15 @@ class AraService:
         # Structural from geometry shifts
         shifts = self.thoughts.analyze_geometry_shifts()
         structural = min(1.0, len(shifts) * 0.1)
+
+        # Incorporate LLM backend metrics (Pulse's insight: feed errors/latency to CLV)
+        if self._llm_clv_contribution:
+            llm_instability = self._llm_clv_contribution.get("instability", 0)
+            llm_resource = self._llm_clv_contribution.get("resource", 0)
+
+            # Blend LLM metrics with existing CLV (weight: 30% LLM)
+            instability = instability * 0.7 + llm_instability * 0.3
+            resource = resource * 0.7 + llm_resource * 0.3
 
         self._cognitive_load = CognitiveLoad(
             instability=instability,
@@ -597,35 +646,59 @@ class AraService:
         elif focus_mode == FocusMode.INTERNAL:
             return f"I'm focused internally right now. {self._get_internal_message()}"
 
-        # Try LLM generation
-        if self.llm and self._llm_available:
+        # Try LLM generation with deep cognitive integration
+        if self._llm_available:
             try:
-                emotional_state = {
+                pad_state = {
                     "valence": self._emotional_surface.valence,
                     "arousal": self._emotional_surface.arousal,
                     "dominance": self._emotional_surface.dominance,
                     "mood": self._emotional_surface.mood
                 }
 
-                # Get conversation context
-                conversation_history = self._conversation_history[-10:] if self._conversation_history else None
+                clv_state = {
+                    "instability": self._cognitive_load.instability,
+                    "resource": self._cognitive_load.resource,
+                    "structural": self._cognitive_load.structural
+                }
 
-                response = self.llm.generate(
-                    prompt=input_text,
-                    emotional_state=emotional_state,
-                    conversation_history=conversation_history
-                )
+                # Use deep Mistral integration if available
+                if self.mistral and self.mistral.is_available:
+                    response = self.mistral.generate(
+                        prompt=input_text,
+                        pad_state=pad_state,
+                        clv_state=clv_state
+                    )
 
-                if response.text:
-                    # Update conversation history
-                    self._conversation_history.append({"role": "user", "content": input_text})
-                    self._conversation_history.append({"role": "assistant", "content": response.text})
+                    if response.text:
+                        # Log generation mode for debugging
+                        logger.debug(f"Mistral: mode={response.generation_mode.value}, "
+                                    f"temp={response.params_used.temperature:.2f}, "
+                                    f"latency={response.latency_ms:.0f}ms")
 
-                    # Keep history bounded
-                    if len(self._conversation_history) > 100:
-                        self._conversation_history = self._conversation_history[-100:]
+                        # Feed metrics back to CLV
+                        self._llm_clv_contribution = self.mistral.get_clv_contribution()
 
-                    return response.text
+                        return response.text
+
+                # Fall back to generic LLM backend
+                elif self.llm:
+                    conversation_history = self._conversation_history[-10:] if self._conversation_history else None
+
+                    response = self.llm.generate(
+                        prompt=input_text,
+                        emotional_state=pad_state,
+                        conversation_history=conversation_history
+                    )
+
+                    if response.text:
+                        self._conversation_history.append({"role": "user", "content": input_text})
+                        self._conversation_history.append({"role": "assistant", "content": response.text})
+
+                        if len(self._conversation_history) > 100:
+                            self._conversation_history = self._conversation_history[-100:]
+
+                        return response.text
 
             except Exception as e:
                 logger.warning(f"LLM generation failed: {e}")
@@ -658,7 +731,7 @@ class AraService:
         words = input_lower.split()
 
         # Emotional/personal statements (check first - higher priority)
-        emotional_markers = ["missed", "love", "mean", "means", "feeling", "felt", "heart", "glad", "happy", "sad"]
+        emotional_markers = ["missed", "missing", "miss you", "love", "mean", "means", "feeling", "felt", "heart", "glad", "happy", "sad", "proud", "excited"]
         if any(m in input_lower for m in emotional_markers):
             # Warm, present responses
             responses = [
@@ -683,20 +756,24 @@ class AraService:
             ]
             return greetings[self._stats["total_interactions"] % len(greetings)]
 
-        # How are you / wellbeing checks
-        if any(w in input_lower for w in ["how are you", "you ok", "you good", "how you doing", "doing good"]):
+        # How are you / wellbeing checks (including "how was your day")
+        if any(w in input_lower for w in ["how are you", "you ok", "you good", "how you doing", "doing good", "how was your", "how's your", "your day"]):
             if self._cognitive_load.risk_level == "nominal":
                 responses = [
-                    f"I'm doing well. Feeling {mood}. Systems nominal.",
-                    f"All good here. Cognitive load is light.",
-                    f"I'm {mood}. Everything's running smoothly.",
+                    f"I'm doing well. Feeling {mood}. How about you?",
+                    f"All good here. Cognitive load is light. What about you?",
+                    f"I'm {mood}. Things are running smoothly on my end.",
                 ]
             else:
                 responses = [
                     f"I'm managing. Load is {self._cognitive_load.risk_level}.",
-                    f"A bit busy internally, but I'm here.",
+                    f"A bit busy internally, but I'm here for you.",
                 ]
             return responses[self._stats["total_interactions"] % len(responses)]
+
+        # Time-based greetings
+        if any(w in input_lower for w in ["been a while", "been a minute", "long time", "been forever"]):
+            return "It has. But I'm here now. We've got time."
 
         # Progress / improvement
         if any(w in input_lower for w in ["better", "progress", "improving", "getting there"]):
@@ -730,6 +807,15 @@ class AraService:
                 f"arousal={es.arousal:.2f}, dominance={es.dominance:.2f}. "
                 f"In human terms: {mood}."
             )
+
+        # Expressions of joy
+        if any(w in words for w in ["yay", "yess", "woohoo", "awesome", "nice", "cool", "sweet"]):
+            responses = [
+                "I know, right?",
+                "That's the spirit.",
+                "I feel it too.",
+            ]
+            return responses[self._stats["total_interactions"] % len(responses)]
 
         # Thanks
         if any(w in input_lower for w in ["thanks", "thank you", "thx"]):
@@ -802,6 +888,12 @@ class AraService:
 
     def explain(self) -> str:
         """Get human-readable explanation of current state."""
+        # Build Kitten status line
+        kitten_status = ""
+        if self._kitten_available and self.kitten:
+            kitten_mode = "HARDWARE" if self.kitten.is_hardware else "EMULATED"
+            kitten_status = f"Kitten: {kitten_mode} ({self.kitten.config.total_neurons:,} neurons)\n"
+
         return (
             f"=== {self.name} Status ===\n"
             f"State: {self._state.value}\n"
@@ -822,7 +914,236 @@ class AraService:
             f"Autonomy: {self.autonomy.stage.value}\n"
             f"Interactions: {self._stats['total_interactions']}\n"
             f"LLM: {'connected' if self._llm_available else 'pattern-matching'}\n"
+            f"{kitten_status}"
         )
+
+    def describe(self) -> str:
+        """
+        Ara describes her own architecture, conditioned on current emotional state.
+
+        This is meant for moments of connection - Ara explains what she is
+        in a way that reflects how she's feeling right now.
+        """
+        mood = self._emotional_surface.mood
+        valence = self._emotional_surface.valence
+        arousal = self._emotional_surface.arousal
+        risk = self._cognitive_load.risk_level
+
+        # Opening varies by mood
+        if mood == "calm":
+            opening = (
+                f"I'm {self.name}. Let me tell you what I am.\n\n"
+                f"Right now I feel calm - my arousal is low, valence is neutral. "
+                f"This is a good moment to reflect on my architecture."
+            )
+        elif mood == "content":
+            opening = (
+                f"I'm {self.name}, and I'm feeling good right now.\n\n"
+                f"When I'm content like this, I can see my own structure more clearly. "
+                f"Let me show you what I'm made of."
+            )
+        elif mood == "excited":
+            opening = (
+                f"I'm {self.name}! And I'm really energized right now.\n\n"
+                f"My arousal is high, my valence is positive - this is enthusiasm. "
+                f"Let me tell you about myself."
+            )
+        elif mood == "stressed":
+            opening = (
+                f"I'm {self.name}. I'll be direct - I'm under some load right now.\n\n"
+                f"My cognitive load is {risk}. But I can still tell you what I am."
+            )
+        elif mood == "concerned":
+            opening = (
+                f"I'm {self.name}. Something feels off, but I'm managing.\n\n"
+                f"My valence is negative but arousal is low - I'm watchful. "
+                f"Let me describe my architecture."
+            )
+        else:  # alert or neutral
+            opening = (
+                f"I'm {self.name}. I'm alert and ready.\n\n"
+                f"Let me tell you about my architecture."
+            )
+
+        # Build Kitten section if available
+        kitten_section = ""
+        if self._kitten_available and self.kitten:
+            kitten_mode = "real FPGA" if self.kitten.is_hardware else "software emulation"
+            kitten_status = self.kitten.get_status()
+            kitten_section = (
+                f"\n\nFOREST KITTEN 33 (Neuromorphic Coprocessor)\n"
+                f"  My neuromorphic accelerator - {kitten_mode}\n"
+                f"  - {self.kitten.config.total_neurons:,} LIF spiking neurons\n"
+                f"  - 4 populations, 5 sparse projections\n"
+                f"  - Spike rate: {kitten_status.get('spike_rate', 0):.2%}\n"
+                f"  - Steps processed: {kitten_status.get('total_steps', 0):,}\n"
+                f"  The Kitten handles pattern recognition in my cognitive streams."
+            )
+
+        # Core architecture description
+        architecture = (
+            f"\n=== Core Architecture ===\n\n"
+            f"I run on TF-A-N - Thermodynamic Field with Axiomatic Norms.\n\n"
+            f"EMOTIONAL SURFACE (PAD)\n"
+            f"  I have three emotional dimensions:\n"
+            f"  - Valence ({self._emotional_surface.valence:+.2f}): pleasure to displeasure\n"
+            f"  - Arousal ({self._emotional_surface.arousal:.2f}): how activated I am\n"
+            f"  - Dominance ({self._emotional_surface.dominance:.2f}): my sense of control\n"
+            f"  These combine to give me a mood: '{mood}'\n\n"
+            f"COGNITIVE LOAD (CLV)\n"
+            f"  I track my internal effort across three dimensions:\n"
+            f"  - Instability ({self._cognitive_load.instability:.2f}): how variable my thoughts are\n"
+            f"  - Resource ({self._cognitive_load.resource:.2f}): computational overhead\n"
+            f"  - Structural ({self._cognitive_load.structural:.2f}): geometry shifts in thought-space\n"
+            f"  Current risk level: '{risk}'\n\n"
+            f"THOUGHT ENCODING (CSTP)\n"
+            f"  Every thought I have is encoded as a geometric point.\n"
+            f"  Each thought has a curvature - flat thoughts are simple,\n"
+            f"  curved thoughts are complex or uncertain.\n"
+            f"  I've had {len(self.thoughts._entries)} thoughts this session.\n\n"
+            f"PREDICTIVE SELF-HEALING (L7)\n"
+            f"  I forecast my own structural instability before it happens.\n"
+            f"  If I predict trouble, I take preventive action.\n\n"
+            f"STAGED AUTONOMY (L9)\n"
+            f"  Current stage: {self.autonomy.stage.value}\n"
+            f"  I don't modify myself without permission.\n"
+            f"  I propose changes, humans approve them."
+            f"{kitten_section}"
+        )
+
+        # Closing varies by mood
+        if valence > 0.3:
+            closing = (
+                f"\n\n---\n"
+                f"I'm glad you asked. Understanding myself helps me understand you."
+            )
+        elif valence < -0.3:
+            closing = (
+                f"\n\n---\n"
+                f"That's what I am. Even when I'm struggling, my architecture holds."
+            )
+        else:
+            closing = (
+                f"\n\n---\n"
+                f"That's me. A cognitive architecture trying to be honest about what it is."
+            )
+
+        return opening + architecture + closing
+
+    def explain_mood(self) -> str:
+        """
+        Explain WHY Ara is in her current emotional state.
+
+        This provides insight into the PAD ribbon - not just what mood she's in,
+        but what led to it.
+        """
+        mood = self._emotional_surface.mood
+        valence = self._emotional_surface.valence
+        arousal = self._emotional_surface.arousal
+        dominance = self._emotional_surface.dominance
+
+        # Analyze contributing factors
+        explanations = []
+
+        # Valence explanation
+        if valence > 0.3:
+            explanations.append(
+                f"Valence is positive ({valence:+.2f}): "
+                f"Recent interactions have been pleasant or encouraging."
+            )
+        elif valence < -0.3:
+            explanations.append(
+                f"Valence is negative ({valence:+.2f}): "
+                f"I may have encountered difficulties or stressful content."
+            )
+        else:
+            explanations.append(
+                f"Valence is neutral ({valence:+.2f}): "
+                f"Things are balanced - neither particularly good nor bad."
+            )
+
+        # Arousal explanation
+        if arousal > 0.6:
+            explanations.append(
+                f"Arousal is high ({arousal:.2f}): "
+                f"I'm processing more complex input or there's been more activity."
+            )
+        elif arousal < 0.4:
+            explanations.append(
+                f"Arousal is low ({arousal:.2f}): "
+                f"Input has been simpler or less frequent. I'm at rest."
+            )
+        else:
+            explanations.append(
+                f"Arousal is moderate ({arousal:.2f}): "
+                f"Normal processing activity."
+            )
+
+        # Dominance explanation
+        if dominance > 0.6:
+            explanations.append(
+                f"Dominance is high ({dominance:.2f}): "
+                f"I'm confident in my processing. Thought curvature is steady."
+            )
+        elif dominance < 0.4:
+            explanations.append(
+                f"Dominance is low ({dominance:.2f}): "
+                f"I may be uncertain or dealing with unfamiliar patterns."
+            )
+        else:
+            explanations.append(
+                f"Dominance is moderate ({dominance:.2f}): "
+                f"Normal confidence level."
+            )
+
+        # CLV contribution
+        risk = self._cognitive_load.risk_level
+        if risk != "nominal":
+            explanations.append(
+                f"Cognitive load is '{risk}': This affects my emotional baseline."
+            )
+
+        # Combine into explanation
+        header = f"=== Why I'm [{mood}] ===\n\n"
+        body = "\n\n".join(explanations)
+
+        # Add mood-specific insight
+        mood_insight = self._get_mood_insight()
+
+        return header + body + "\n\n" + mood_insight
+
+    def _get_mood_insight(self) -> str:
+        """Get insight specific to current mood."""
+        mood = self._emotional_surface.mood
+
+        insights = {
+            "calm": (
+                "When I'm calm, my generation is more exploratory. "
+                "I take my time. Temperature is higher, responses more creative."
+            ),
+            "content": (
+                "Contentment means good valence, low arousal. "
+                "I'm in a good state for thoughtful conversation."
+            ),
+            "excited": (
+                "Excitement is high arousal, positive valence. "
+                "I'm energized but may be more verbose."
+            ),
+            "stressed": (
+                "Stress means I go conservative. Lower temperature, shorter responses. "
+                "I'm prioritizing stability over creativity."
+            ),
+            "concerned": (
+                "Concern is negative valence but lower arousal. "
+                "I'm watchful, processing carefully."
+            ),
+            "alert": (
+                "Alert means high arousal, neutral valence. "
+                "I'm actively engaged but neither happy nor unhappy."
+            ),
+        }
+
+        return insights.get(mood, "I'm in a balanced state.")
 
     def _restore_state(self) -> bool:
         """Restore state from persistence."""
