@@ -13,6 +13,7 @@ This document tracks the development phases from research prototype to productio
 | Phase 4b | **DONE** | Predictive control (L7/L8 temporal topology) |
 | Phase 5 | STUB | Self-healing fabric (automatic kernel repair) |
 | Phase 6 | **DONE** | Cognitive architecture (world model, memory, goals) |
+| Phase 7 | **DONE** | Deep self-modeling (GUF, self-improvement scheduler) |
 
 ---
 
@@ -756,6 +757,216 @@ Action with Explanation
 
 ---
 
+## Phase 7: Deep Self-Modeling (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Enable the system to learn its own values and decide when to prioritize self-improvement vs external productivity.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Global Utility Function (GUF) | Done | `tfan/l5/guf.py` |
+| StateVector | Done | `tfan/l5/guf.py` |
+| GoalState | Done | `tfan/l5/guf.py` |
+| GUFWeights (learnable) | Done | `tfan/l5/guf.py` |
+| SelfImprovementScheduler | Done | `tfan/l5/guf.py` |
+| Certification Script | Done | `scripts/certify_deep_self_modeling.py` |
+
+### Global Utility Function (GUF)
+
+The system's learned utility function that computes value from state:
+
+```
+U(state) = Σ w_i * s_i
+```
+
+**StateVector (13 dimensions):**
+- Performance: af_score, delta_p99, throughput
+- CLV: instability, resource, structural, structural_rate (Ṡ)
+- Self: confidence, fatigue, mood_valence
+- Hardware: hardware_health, pgu_pass_rate
+- Energy: energy_efficiency
+
+**Learnable Weights:**
+| Weight | Default | Range | Meaning |
+|--------|---------|-------|---------|
+| w_af | 0.30 | 0.1-0.5 | Antifragility importance |
+| w_latency | 0.15 | 0.05-0.3 | Latency improvement |
+| w_throughput | 0.15 | 0.05-0.3 | External productivity |
+| w_clv_instability | -0.15 | -0.3 to -0.05 | Risk penalty |
+| w_structural_rate | -0.10 | -0.25 to -0.02 | Ṡ penalty |
+| w_confidence | 0.05 | 0.01-0.15 | Self-trust bonus |
+| w_pgu | 0.05 | 0.02-0.15 | Formal safety bonus |
+
+### GoalState: "Good Enough to Serve"
+
+The goal state G defines when the system can focus on external tasks:
+
+```python
+@dataclass
+class GoalState:
+    min_af_score: float = 1.8      # Minimum antifragility
+    max_risk: float = 0.4          # Maximum CLV risk
+    min_confidence: float = 0.6    # Minimum self-trust
+    max_fatigue: float = 0.7       # Maximum load
+    min_pgu_rate: float = 0.9      # Minimum safety rate
+    utility_threshold: float = 0.6  # Minimum utility
+```
+
+**Goal Logic:**
+- If `goal.is_satisfied(state, utility)` → Focus on external tasks
+- If not satisfied → Prioritize self-improvement
+- Track `distance_to_goal()` for gradual improvement
+
+### Self-Improvement Scheduler
+
+Allocates resources between self-improvement and external productivity:
+
+**Focus Modes:**
+| Mode | Internal | External | When |
+|------|----------|----------|------|
+| RECOVERY | 80% | 20% | AF < 1.0 or Risk > 0.8 |
+| INTERNAL | 50-80% | 20-50% | Goal not satisfied |
+| BALANCED | 30% | 70% | Near goal threshold |
+| EXTERNAL | 10% | 90% | Goal satisfied |
+
+**Priority Tasks by Mode:**
+- RECOVERY: restore_antifragility, reduce_clv_risk, hardware_diagnostics
+- INTERNAL: aepo_optimization, world_model_update, structural_stabilization
+- BALANCED: external_requests, background_optimization
+- EXTERNAL: external_throughput, user_requests
+
+### Learning from Experience
+
+The system learns which signals predict good/bad futures:
+
+```python
+# Record outcome
+guf.record_outcome(state_before, state_after, action, reward)
+
+# Learn from history (gradient-free)
+result = guf.learn_from_history(learning_rate=0.01)
+# Weights shift toward signals that correlate with positive outcomes
+```
+
+**Learning Loop:**
+1. Observe state transitions
+2. Record Δutility for each transition
+3. Correlate state dimensions with outcomes
+4. Adjust weights within bounds
+5. Save weight history for analysis
+
+### Self-Improvement Episodes
+
+Track deliberate self-improvement sessions:
+
+```python
+# Start episode
+ep_id = scheduler.start_improvement_episode(state, "aepo_optimization")
+
+# ... perform self-improvement ...
+
+# End episode
+result = scheduler.end_improvement_episode(ep_id, new_state, success=True)
+print(result["utility_delta"])  # How much utility improved
+```
+
+**Episode Statistics:**
+- Total episodes, success rate
+- Average utility delta
+- Total utility gained
+
+### GUF Presets
+
+| Preset | w_af | w_throughput | Goal AF | Max Risk |
+|--------|------|--------------|---------|----------|
+| `balanced` | 0.30 | 0.15 | 1.8 | 0.4 |
+| `safety_first` | 0.35 | 0.15 | 2.0 | 0.3 |
+| `performance` | 0.20 | 0.25 | 1.5 | 0.5 |
+
+### Certification Results
+
+```
+StateVector: 3/3 tests
+  ✅ Default creation
+  ✅ Vector conversion (13 dimensions)
+  ✅ Risk computation
+
+GUFWeights: 3/3 tests
+  ✅ Default weights
+  ✅ Bounded update (clamps to valid range)
+  ✅ Weight perturbation for exploration
+
+GoalState: 4/4 tests
+  ✅ Default goal definition
+  ✅ Goal satisfaction (good state)
+  ✅ Goal not satisfied (bad state, 6 violations)
+  ✅ Distance to goal
+
+GlobalUtilityFunction: 6/6 tests
+  ✅ GUF creation
+  ✅ Utility (good state): 0.953
+  ✅ Utility (bad state): 0.672 < good
+  ✅ Utility breakdown with contributions
+  ✅ Focus recommendation
+  ✅ State explanation
+
+GUF Learning: 3/3 tests
+  ✅ Record outcome (Δu tracked)
+  ✅ Accumulate history (15 samples)
+  ✅ Learn from history (weights updated)
+
+SelfImprovementScheduler: 7/7 tests
+  ✅ Scheduler creation
+  ✅ Good state → external focus (10% internal)
+  ✅ Bad state → internal focus (60% internal)
+  ✅ Critical state → recovery mode
+  ✅ Priority task generation
+  ✅ Decision explanation
+  ✅ Improvement episode tracking
+
+Integration: 3/3 tests
+  ✅ GUF + SelfState integration
+  ✅ GoalVector ↔ GUFWeights alignment
+  ✅ Scheduler → Deliberation depth mapping
+```
+
+### How Phase 7 Completes the Cognitive Stack
+
+**Complete Flow:**
+```
+World Model (L4 KG)
+    ↓ "what do I know about my world?"
+Episodic Memory
+    ↓ "what happened last time?"
+SelfState
+    ↓ "how am I doing?"
+                                    ┌─────────────────────┐
+GUF: U(state) = Σ w_i * s_i  ←──────│ Phase 7: Learned    │
+    ↓ "what is my utility?"         │ values that predict │
+GoalState                           │ good/bad futures    │
+    ↓ "am I good enough?"           └─────────────────────┘
+Scheduler
+    ↓ "self-improve or serve the world?"
+Focus Mode
+    ↓ RECOVERY / INTERNAL / BALANCED / EXTERNAL
+L1-L8 Control Stack
+    ↓
+Action with Explanation
+```
+
+**Key Insight:** Phase 7 gives the system:
+- **Learned values** (GUF weights from experience)
+- **Goal-directed behavior** (GoalState defines "good enough")
+- **Autonomous prioritization** (Scheduler chooses self vs world)
+- **Self-improvement tracking** (Episodes measure progress)
+
+The system now knows when to "work on itself" vs "serve the world."
+
+---
+
 ## How to Run Certification
 
 ```bash
@@ -776,6 +987,9 @@ python scripts/certify_predictive_control.py
 
 # Phase 6: Cognitive architecture certification
 python scripts/certify_cognitive_architecture.py
+
+# Phase 7: Deep self-modeling certification
+python scripts/certify_deep_self_modeling.py
 
 # Hardware readiness check
 python scripts/validate_hardware_ready.py
