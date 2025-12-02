@@ -462,6 +462,10 @@ class AraService:
             # 2. Update emotional surface based on input analysis
             self._update_emotional_surface(input_text, input_thought)
 
+            # 2.5. Step Forest Kitten 33 SNN (Mode B/C)
+            # PAD + thought geometry drives 14,336 spiking neurons
+            kitten_result = self._step_kitten(input_thought)
+
             # 3. Update cognitive load
             self._update_cognitive_load()
 
@@ -606,6 +610,62 @@ class AraService:
         """Compute rate of structural change."""
         shifts = self.thoughts.analyze_geometry_shifts()
         return len(shifts) * 0.02
+
+    def _step_kitten(self, thought) -> Optional[Dict[str, Any]]:
+        """
+        Step the Forest Kitten 33 SNN fabric.
+
+        Converts the current emotional state (PAD) and thought geometry
+        into input currents for the neuromorphic coprocessor.
+
+        Args:
+            thought: The encoded thought to process
+
+        Returns:
+            Kitten step result with spike data, or None if unavailable
+        """
+        if not self._kitten_available or not self.kitten:
+            return None
+
+        try:
+            import numpy as np
+
+            # Convert PAD + thought geometry to input currents
+            # The input population is 4096 neurons
+            n_input = self.kitten.config.n_input
+
+            # Create input pattern from emotional state and thought
+            pad = self._emotional_surface
+            base_current = np.zeros(n_input, dtype=np.float32)
+
+            # PAD modulation (first 3 chunks of neurons)
+            chunk_size = n_input // 4
+
+            # Valence drives first chunk (pleasure/displeasure)
+            base_current[:chunk_size] = pad.valence * 0.5
+
+            # Arousal drives second chunk (activation level)
+            base_current[chunk_size:chunk_size*2] = pad.arousal * 0.5
+
+            # Dominance drives third chunk (confidence/control)
+            base_current[chunk_size*2:chunk_size*3] = pad.dominance * 0.5
+
+            # Thought curvature drives fourth chunk (geometric signature)
+            base_current[chunk_size*3:] = thought.c * 0.3
+
+            # Add noise for stochastic firing
+            noise = np.random.randn(n_input).astype(np.float32) * 0.1
+            input_currents = base_current + noise
+
+            # Step the Kitten
+            result = self.kitten.step(input_currents)
+
+            return result
+
+        except Exception as e:
+            logger.debug(f"Kitten step failed: {e}")
+            return None
+
 
     def _compute_fatigue(self) -> float:
         """Compute fatigue from interaction count."""
