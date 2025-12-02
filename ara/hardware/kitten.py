@@ -432,7 +432,7 @@ class ForestKitten33:
     Forest Kitten 33 FPGA Interface.
 
     Abstracts over real hardware and emulation:
-    - Auto-detects hardware presence (A10PED at /dev/a10ped0)
+    - Auto-detects hardware presence (/dev/fk33 for native FK33, /dev/a10ped0 for A10PED)
     - Falls back to KittenEmulator when no FPGA
     - Provides unified interface for Mode B operation
 
@@ -441,13 +441,13 @@ class ForestKitten33:
     - Instability prediction (L7 forecasting)
     - Pattern recognition in cognitive streams
 
-    Hardware: BittWare A10PED with Intel Arria 10 GX1150
+    Hardware: Squirrels Research Labs ForestKitten 33 (PCIe 1e24:1533)
     """
 
     def __init__(
         self,
         config: Optional[KittenConfig] = None,
-        device_path: str = "/dev/a10ped0",  # A10PED default
+        device_path: str = "/dev/fk33",  # FK33 native device
         force_emulation: bool = False
     ):
         self.config = config or KittenConfig()
@@ -471,15 +471,22 @@ class ForestKitten33:
         self._is_ready = True
         self._last_step_time = 0.0
 
-        logger.info(
-            f"ForestKitten33 initialized: "
-            f"{'HARDWARE (A10PED)' if self._hardware_present else 'EMULATED'}"
-        )
+        if self._hardware_present:
+            hw_type = "FK33" if self.device_path == "/dev/fk33" else "A10PED"
+            logger.info(f"ForestKitten33 initialized: HARDWARE ({hw_type}) at {self.device_path}")
+        else:
+            logger.info("ForestKitten33 initialized: EMULATED")
 
     def _detect_hardware(self) -> bool:
-        """Check if A10PED hardware is present."""
-        # Check for A10PED device
-        a10ped_paths = ["/dev/a10ped0", "/dev/a10ped1", self.device_path]
+        """Check if FK33 or compatible hardware is present."""
+        # Check for native FK33 device first (Squirrels Research Labs 1e24:1533)
+        if Path("/dev/fk33").exists():
+            logger.info("ForestKitten 33 hardware detected at /dev/fk33")
+            self.device_path = "/dev/fk33"
+            return True
+
+        # Check for A10PED device (FK33 on BittWare A10PED)
+        a10ped_paths = ["/dev/a10ped0", "/dev/a10ped1"]
         for path in a10ped_paths:
             if Path(path).exists():
                 logger.info(f"A10PED hardware detected at {path}")
@@ -706,7 +713,10 @@ class ForestKitten33:
         status = self.get_status()
 
         if self._hardware_present:
-            mode_str = "HARDWARE - BittWare A10PED (Intel Arria 10 GX1150)"
+            if self.device_path == "/dev/fk33":
+                mode_str = "HARDWARE - Squirrels Research Labs ForestKitten 33 (PCIe 1e24:1533)"
+            else:
+                mode_str = "HARDWARE - BittWare A10PED (Intel Arria 10 GX1150)"
             hw_section = (
                 f"\nHARDWARE STATUS:\n"
                 f"  Device: {self.device_path}\n"
