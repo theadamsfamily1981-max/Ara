@@ -524,6 +524,36 @@ class ForestKitten33:
         return False
 
     def _init_hardware(self):
+        """Initialize hardware backend."""
+        # Check if this is native FK33 or A10PED
+        if self.device_path == "/dev/fk33":
+            self._init_fk33_native()
+        else:
+            self._init_a10ped()
+
+    def _init_fk33_native(self):
+        """Initialize native ForestKitten 33 hardware."""
+        try:
+            # Open the FK33 device file
+            self._fk33_fd = open(self.device_path, "r+b", buffering=0)
+            logger.info(f"FK33 native device opened: {self.device_path}")
+
+            # Also initialize emulator for hybrid mode (software weights, hardware neurons)
+            self._init_emulator()
+
+        except PermissionError:
+            logger.warning(
+                f"Permission denied for {self.device_path}. "
+                "Try: sudo chmod 666 /dev/fk33"
+            )
+            self._hardware_present = False
+            self._init_emulator()
+        except Exception as e:
+            logger.warning(f"FK33 initialization failed: {e}")
+            self._hardware_present = False
+            self._init_emulator()
+
+    def _init_a10ped(self):
         """Initialize A10PED hardware."""
         if not A10PED_AVAILABLE:
             logger.warning("A10PED API not available, using emulation")
