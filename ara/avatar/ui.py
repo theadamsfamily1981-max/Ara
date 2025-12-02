@@ -20,6 +20,12 @@ logger = logging.getLogger("ara.avatar.ui")
 
 # Try to import GTK
 GTK_AVAILABLE = False
+Gtk = None
+Adw = None
+GLib = None
+Gdk = None
+Pango = None
+
 try:
     import gi
     gi.require_version('Gtk', '4.0')
@@ -28,7 +34,7 @@ try:
     GTK_AVAILABLE = True
     logger.info("GTK4 + libadwaita available")
 except (ImportError, ValueError) as e:
-    logger.warning(f"GTK not available: {e}")
+    logger.warning(f"GTK not available: {e}. Using terminal UI.")
 
 
 @dataclass
@@ -156,7 +162,7 @@ class AvatarWindow:
         # Start update timer
         GLib.timeout_add(100, self._update_ui)
 
-    def _create_pad_bar(self, letter: str, tooltip: str) -> Gtk.Box:
+    def _create_pad_bar(self, letter: str, tooltip: str):
         """Create a PAD indicator bar."""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
 
