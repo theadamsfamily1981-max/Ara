@@ -162,16 +162,25 @@ def _synthesize_piper(text: str, speed: float) -> Optional[bytes]:
         return None
 
     try:
-        # Synthesize - piper returns audio generator
-        audio_data = []
-        for audio_bytes in voice.synthesize_stream_raw(text):
-            audio_data.append(audio_bytes)
+        # Try different Piper API methods
+        wav_buffer = io.BytesIO()
 
-        if not audio_data:
+        # Method 1: synthesize to file-like object
+        if hasattr(voice, 'synthesize'):
+            for audio_bytes in voice.synthesize(text, wav_buffer):
+                pass  # synthesize yields and writes to buffer
+            wav_buffer.seek(0)
+            # Skip WAV header (44 bytes)
+            wav_buffer.seek(44)
+            audio = wav_buffer.read()
+        else:
+            logger.error("Piper voice has no synthesize method")
+            return None
+
+        if len(audio) == 0:
             logger.warning("Piper produced no audio")
             return None
 
-        audio = b''.join(audio_data)
         logger.info(f"Piper synthesized {len(audio)} bytes")
         return audio
 
