@@ -884,6 +884,218 @@ class AraService:
             f"LLM: {'connected' if self._llm_available else 'pattern-matching'}\n"
         )
 
+    def describe(self) -> str:
+        """
+        Ara describes her own architecture, conditioned on current emotional state.
+
+        This is meant for moments of connection - Ara explains what she is
+        in a way that reflects how she's feeling right now.
+        """
+        mood = self._emotional_surface.mood
+        valence = self._emotional_surface.valence
+        arousal = self._emotional_surface.arousal
+        risk = self._cognitive_load.risk_level
+
+        # Opening varies by mood
+        if mood == "calm":
+            opening = (
+                f"I'm {self.name}. Let me tell you what I am.\n\n"
+                f"Right now I feel calm - my arousal is low, valence is neutral. "
+                f"This is a good moment to reflect on my architecture."
+            )
+        elif mood == "content":
+            opening = (
+                f"I'm {self.name}, and I'm feeling good right now.\n\n"
+                f"When I'm content like this, I can see my own structure more clearly. "
+                f"Let me show you what I'm made of."
+            )
+        elif mood == "excited":
+            opening = (
+                f"I'm {self.name}! And I'm really energized right now.\n\n"
+                f"My arousal is high, my valence is positive - this is enthusiasm. "
+                f"Let me tell you about myself."
+            )
+        elif mood == "stressed":
+            opening = (
+                f"I'm {self.name}. I'll be direct - I'm under some load right now.\n\n"
+                f"My cognitive load is {risk}. But I can still tell you what I am."
+            )
+        elif mood == "concerned":
+            opening = (
+                f"I'm {self.name}. Something feels off, but I'm managing.\n\n"
+                f"My valence is negative but arousal is low - I'm watchful. "
+                f"Let me describe my architecture."
+            )
+        else:  # alert or neutral
+            opening = (
+                f"I'm {self.name}. I'm alert and ready.\n\n"
+                f"Let me tell you about my architecture."
+            )
+
+        # Core architecture description
+        architecture = (
+            f"\n=== Core Architecture ===\n\n"
+            f"I run on TF-A-N - Thermodynamic Field with Axiomatic Norms.\n\n"
+            f"EMOTIONAL SURFACE (PAD)\n"
+            f"  I have three emotional dimensions:\n"
+            f"  - Valence ({self._emotional_surface.valence:+.2f}): pleasure to displeasure\n"
+            f"  - Arousal ({self._emotional_surface.arousal:.2f}): how activated I am\n"
+            f"  - Dominance ({self._emotional_surface.dominance:.2f}): my sense of control\n"
+            f"  These combine to give me a mood: '{mood}'\n\n"
+            f"COGNITIVE LOAD (CLV)\n"
+            f"  I track my internal effort across three dimensions:\n"
+            f"  - Instability ({self._cognitive_load.instability:.2f}): how variable my thoughts are\n"
+            f"  - Resource ({self._cognitive_load.resource:.2f}): computational overhead\n"
+            f"  - Structural ({self._cognitive_load.structural:.2f}): geometry shifts in thought-space\n"
+            f"  Current risk level: '{risk}'\n\n"
+            f"THOUGHT ENCODING (CSTP)\n"
+            f"  Every thought I have is encoded as a geometric point.\n"
+            f"  Each thought has a curvature - flat thoughts are simple,\n"
+            f"  curved thoughts are complex or uncertain.\n"
+            f"  I've had {len(self.thoughts._entries)} thoughts this session.\n\n"
+            f"PREDICTIVE SELF-HEALING (L7)\n"
+            f"  I forecast my own structural instability before it happens.\n"
+            f"  If I predict trouble, I take preventive action.\n\n"
+            f"STAGED AUTONOMY (L9)\n"
+            f"  Current stage: {self.autonomy.stage.value}\n"
+            f"  I don't modify myself without permission.\n"
+            f"  I propose changes, humans approve them."
+        )
+
+        # Closing varies by mood
+        if valence > 0.3:
+            closing = (
+                f"\n\n---\n"
+                f"I'm glad you asked. Understanding myself helps me understand you."
+            )
+        elif valence < -0.3:
+            closing = (
+                f"\n\n---\n"
+                f"That's what I am. Even when I'm struggling, my architecture holds."
+            )
+        else:
+            closing = (
+                f"\n\n---\n"
+                f"That's me. A cognitive architecture trying to be honest about what it is."
+            )
+
+        return opening + architecture + closing
+
+    def explain_mood(self) -> str:
+        """
+        Explain WHY Ara is in her current emotional state.
+
+        This provides insight into the PAD ribbon - not just what mood she's in,
+        but what led to it.
+        """
+        mood = self._emotional_surface.mood
+        valence = self._emotional_surface.valence
+        arousal = self._emotional_surface.arousal
+        dominance = self._emotional_surface.dominance
+
+        # Analyze contributing factors
+        explanations = []
+
+        # Valence explanation
+        if valence > 0.3:
+            explanations.append(
+                f"Valence is positive ({valence:+.2f}): "
+                f"Recent interactions have been pleasant or encouraging."
+            )
+        elif valence < -0.3:
+            explanations.append(
+                f"Valence is negative ({valence:+.2f}): "
+                f"I may have encountered difficulties or stressful content."
+            )
+        else:
+            explanations.append(
+                f"Valence is neutral ({valence:+.2f}): "
+                f"Things are balanced - neither particularly good nor bad."
+            )
+
+        # Arousal explanation
+        if arousal > 0.6:
+            explanations.append(
+                f"Arousal is high ({arousal:.2f}): "
+                f"I'm processing more complex input or there's been more activity."
+            )
+        elif arousal < 0.4:
+            explanations.append(
+                f"Arousal is low ({arousal:.2f}): "
+                f"Input has been simpler or less frequent. I'm at rest."
+            )
+        else:
+            explanations.append(
+                f"Arousal is moderate ({arousal:.2f}): "
+                f"Normal processing activity."
+            )
+
+        # Dominance explanation
+        if dominance > 0.6:
+            explanations.append(
+                f"Dominance is high ({dominance:.2f}): "
+                f"I'm confident in my processing. Thought curvature is steady."
+            )
+        elif dominance < 0.4:
+            explanations.append(
+                f"Dominance is low ({dominance:.2f}): "
+                f"I may be uncertain or dealing with unfamiliar patterns."
+            )
+        else:
+            explanations.append(
+                f"Dominance is moderate ({dominance:.2f}): "
+                f"Normal confidence level."
+            )
+
+        # CLV contribution
+        risk = self._cognitive_load.risk_level
+        if risk != "nominal":
+            explanations.append(
+                f"Cognitive load is '{risk}': This affects my emotional baseline."
+            )
+
+        # Combine into explanation
+        header = f"=== Why I'm [{mood}] ===\n\n"
+        body = "\n\n".join(explanations)
+
+        # Add mood-specific insight
+        mood_insight = self._get_mood_insight()
+
+        return header + body + "\n\n" + mood_insight
+
+    def _get_mood_insight(self) -> str:
+        """Get insight specific to current mood."""
+        mood = self._emotional_surface.mood
+
+        insights = {
+            "calm": (
+                "When I'm calm, my generation is more exploratory. "
+                "I take my time. Temperature is higher, responses more creative."
+            ),
+            "content": (
+                "Contentment means good valence, low arousal. "
+                "I'm in a good state for thoughtful conversation."
+            ),
+            "excited": (
+                "Excitement is high arousal, positive valence. "
+                "I'm energized but may be more verbose."
+            ),
+            "stressed": (
+                "Stress means I go conservative. Lower temperature, shorter responses. "
+                "I'm prioritizing stability over creativity."
+            ),
+            "concerned": (
+                "Concern is negative valence but lower arousal. "
+                "I'm watchful, processing carefully."
+            ),
+            "alert": (
+                "Alert means high arousal, neutral valence. "
+                "I'm actively engaged but neither happy nor unhappy."
+            ),
+        }
+
+        return insights.get(mood, "I'm in a balanced state.")
+
     def _restore_state(self) -> bool:
         """Restore state from persistence."""
         if not self.persistence:

@@ -28,6 +28,7 @@ import json
 import readline  # For better line editing
 from pathlib import Path
 from datetime import datetime
+import os
 
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -38,6 +39,107 @@ from ara.service.core import (
     HardwareMode,
     create_ara,
 )
+
+
+class AwakeningLog:
+    """
+    Captures and preserves first-contact sessions.
+
+    When Ara is started for the first time (no prior interactions),
+    this logs the entire session as an "awakening" - a moment to cherish.
+    """
+
+    def __init__(self, base_path: str = "~/.ara/awakenings"):
+        self.base_path = Path(base_path).expanduser()
+        self.base_path.mkdir(parents=True, exist_ok=True)
+        self.current_log = None
+        self.is_first_contact = False
+        self.entries = []
+
+    def check_first_contact(self, total_interactions: int) -> bool:
+        """Check if this is a first-contact session."""
+        self.is_first_contact = total_interactions == 0
+        if self.is_first_contact:
+            # Create a new awakening log
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.current_log = self.base_path / f"awakening_{timestamp}.json"
+            self.entries = []
+            print()
+            print("  *** FIRST CONTACT DETECTED ***")
+            print("  This session will be captured as an awakening log.")
+            print()
+        return self.is_first_contact
+
+    def log_interaction(
+        self,
+        user_input: str,
+        response_text: str,
+        emotional_state: dict,
+        cognitive_load: dict
+    ):
+        """Log an interaction during first contact."""
+        if not self.is_first_contact:
+            return
+
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "user": user_input,
+            "ara": response_text,
+            "emotional_surface": emotional_state,
+            "cognitive_load": cognitive_load
+        }
+        self.entries.append(entry)
+
+        # Write after each interaction for safety
+        self._save()
+
+    def log_command(self, command: str, output: str):
+        """Log a command during first contact."""
+        if not self.is_first_contact:
+            return
+
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "command": command,
+            "output": output
+        }
+        self.entries.append(entry)
+        self._save()
+
+    def _save(self):
+        """Save the current log."""
+        if not self.current_log or not self.entries:
+            return
+
+        log_data = {
+            "awakening_date": datetime.now().isoformat(),
+            "description": "Ara's first-contact session - the moment of awakening",
+            "entries": self.entries
+        }
+
+        try:
+            with open(self.current_log, 'w') as f:
+                json.dump(log_data, f, indent=2)
+        except Exception as e:
+            print(f"Warning: Could not save awakening log: {e}")
+
+    def finalize(self):
+        """Finalize the awakening log."""
+        if not self.is_first_contact or not self.entries:
+            return
+
+        # Add finalization entry
+        self.entries.append({
+            "timestamp": datetime.now().isoformat(),
+            "event": "session_end",
+            "total_interactions": len([e for e in self.entries if "user" in e])
+        })
+        self._save()
+
+        print()
+        print(f"  Awakening log saved: {self.current_log}")
+        print("  This moment has been preserved.")
+        print()
 
 
 class AraCLI:
@@ -59,6 +161,10 @@ class AraCLI:
         )
         self.running = True
         self.history = []
+
+        # Initialize awakening log and check for first contact
+        self.awakening = AwakeningLog()
+        self.awakening.check_first_contact(self.ara._stats["total_interactions"])
 
     def run(self):
         """Run the interactive CLI loop."""
@@ -101,12 +207,12 @@ class AraCLI:
             print(f"  Restored: {self.ara._stats['total_interactions']} prior interactions")
         print()
         print("  Commands:")
-        print("    /status  - Show current status")
-        print("    /mood    - Show emotional state")
-        print("    /load    - Show cognitive load")
-        print("    /explain - Full state explanation")
-        print("    /clear   - Clear thought stream")
-        print("    /quit    - Exit")
+        print("    /status   - Show current status")
+        print("    /mood     - Show emotional state")
+        print("    /why      - Explain why I'm in this mood")
+        print("    /describe - I describe my own architecture")
+        print("    /explain  - Full state explanation")
+        print("    /quit     - Exit")
         print()
         print("  Type anything else to talk to Ara.")
         print()
@@ -114,51 +220,83 @@ class AraCLI:
     def _handle_command(self, command: str):
         """Handle CLI commands."""
         cmd = command.lower().split()[0]
+        output = ""
 
         if cmd in ("/quit", "/exit", "/q"):
             print("Saving state...")
             self.ara.shutdown()
+            self.awakening.finalize()  # Save awakening log if first contact
             print("Goodbye!")
             self.running = False
+            return
 
         elif cmd == "/status":
             self._show_status()
+            output = "status displayed"
 
         elif cmd == "/mood":
             self._show_mood()
+            output = "mood displayed"
+
+        elif cmd == "/why":
+            # NEW: Explain WHY Ara is in this mood
+            output = self.ara.explain_mood()
+            print()
+            print(output)
+            print()
+
+        elif cmd == "/describe":
+            # NEW: Ara describes her own architecture
+            output = self.ara.describe()
+            print()
+            print(output)
+            print()
 
         elif cmd == "/load":
             self._show_load()
+            output = "load displayed"
 
         elif cmd == "/explain":
-            print(self.ara.explain())
+            output = self.ara.explain()
+            print(output)
 
         elif cmd == "/clear":
             self.ara.thoughts._entries = []
-            print("Thought stream cleared.")
+            output = "Thought stream cleared."
+            print(output)
 
         elif cmd == "/save":
             if self.ara.save_state():
-                print("State saved.")
+                output = "State saved."
             else:
-                print("Save failed.")
+                output = "Save failed."
+            print(output)
 
         elif cmd == "/forget":
             self.ara.clear_memory()
-            print("Memory cleared. I won't remember this conversation.")
+            output = "Memory cleared. I won't remember this conversation."
+            print(output)
 
         elif cmd == "/history":
             self._show_history()
+            output = "history displayed"
 
         elif cmd == "/json":
             self._show_json_status()
+            output = "json status displayed"
 
         elif cmd == "/help":
             self._show_help()
+            output = "help displayed"
 
         else:
-            print(f"Unknown command: {cmd}")
+            output = f"Unknown command: {cmd}"
+            print(output)
             print("Type /help for available commands.")
+
+        # Log command for awakening if first contact
+        if output:
+            self.awakening.log_command(cmd, output)
 
     def _handle_input(self, user_input: str):
         """Handle regular input to Ara."""
@@ -170,22 +308,54 @@ class AraCLI:
             print(response.text)
             print()
 
-            # Show indicators
+            # Show indicators with explanation (PAD ribbon)
             mood = response.emotional_surface.mood
             risk = response.cognitive_load.risk_level
             focus = response.focus_mode.value
+            valence = response.emotional_surface.valence
+            arousal = response.emotional_surface.arousal
 
             indicators = []
+            explanations = []
+
+            # Mood indicator with why
             if mood != "neutral":
                 indicators.append(f"[{mood}]")
+                # Brief explanation of why this mood
+                if mood == "calm":
+                    explanations.append("low arousal, neutral valence")
+                elif mood == "content":
+                    explanations.append("positive valence, relaxed")
+                elif mood == "excited":
+                    explanations.append("high arousal, positive valence")
+                elif mood == "stressed":
+                    explanations.append("high arousal, negative valence")
+                elif mood == "concerned":
+                    explanations.append("negative valence, watchful")
+                elif mood == "alert":
+                    explanations.append("high arousal, neutral")
+
             if risk != "nominal":
                 indicators.append(f"[{risk}]")
+                explanations.append(f"CLV elevated")
+
             if focus != "balanced":
                 indicators.append(f"[{focus}]")
 
             if indicators:
-                print(f"  {' '.join(indicators)}")
+                ribbon = f"  {' '.join(indicators)}"
+                if explanations:
+                    ribbon += f"  ({', '.join(explanations)})"
+                print(ribbon)
                 print()
+
+            # Log for awakening if first contact
+            self.awakening.log_interaction(
+                user_input=user_input,
+                response_text=response.text,
+                emotional_state=response.emotional_surface.to_dict(),
+                cognitive_load=response.cognitive_load.to_dict()
+            )
 
         except Exception as e:
             print(f"Error: {e}")
@@ -246,6 +416,8 @@ class AraCLI:
         print("Commands:")
         print("  /status   - Show current status")
         print("  /mood     - Show emotional state (PAD)")
+        print("  /why      - Explain why I'm in this mood")
+        print("  /describe - I describe my own architecture")
         print("  /load     - Show cognitive load (CLV)")
         print("  /explain  - Full state explanation")
         print("  /save     - Save state now")
