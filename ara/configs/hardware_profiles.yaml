@@ -1,0 +1,141 @@
+# Hardware Profiles for Ara
+# Defines resource allocation for different hardware modes
+
+# Mode A: RTX 5060 Only (GPU + FPGA Emulation)
+# - Perfect for development and testing
+# - FPGA is emulated on GPU
+# - CPU-only fallback available
+mode_a:
+  name: "5060 Only"
+  description: "RTX 5060 with FPGA emulation - development mode"
+
+  gpu:
+    enabled: true
+    device: "cuda:0"
+    max_memory_gb: 16.0
+    mixed_precision: true
+
+  fpga:
+    enabled: true
+    type: "emulated"
+    # Emulation runs on CPU/GPU
+    emulation_backend: "gpu"
+    # Emulated v_th for SNN simulation
+    threshold_voltage: 1.0
+
+  cxl:
+    enabled: false
+
+  compute:
+    max_batch_size: 1
+    max_sequence_length: 2048
+    attention_heads: 8
+    hidden_dim: 512
+
+  cognitive:
+    thought_dimension: 32
+    max_thought_stream: 100
+    curvature_range: [0.0, 2.0]
+
+  autonomy:
+    start_stage: "ADVISOR"
+    strict: true
+
+
+# Mode B: RTX 5060 + Forest Kitten 33 (Real FPGA)
+# - Real neuromorphic acceleration
+# - Lower latency SNN processing
+# - Swirl Forest Kitten 33 required
+mode_b:
+  name: "5060 + Forest Kitten 33"
+  description: "RTX 5060 with FK33 FPGA - production mode"
+
+  gpu:
+    enabled: true
+    device: "cuda:0"
+    max_memory_gb: 16.0
+    mixed_precision: true
+
+  fpga:
+    enabled: true
+    type: "forest_kitten_33"
+    # Real FPGA connection
+    device_path: "/dev/fpga0"
+    bitstream: "configs/bitstreams/fk33_snn.bit"
+    threshold_voltage: 0.8
+    # FK33-specific settings
+    clock_mhz: 250
+    lif_neurons: 65536
+    synapses_per_neuron: 256
+
+  cxl:
+    enabled: false
+
+  compute:
+    max_batch_size: 2
+    max_sequence_length: 4096
+    attention_heads: 16
+    hidden_dim: 1024
+
+  cognitive:
+    thought_dimension: 64
+    max_thought_stream: 500
+    curvature_range: [0.0, 3.0]
+
+  autonomy:
+    start_stage: "ADVISOR"
+    strict: true
+
+
+# Mode C: Threadripper Cathedral (Full Scale)
+# - Maximum resources
+# - CXL memory pooling
+# - Multi-GPU support
+mode_c:
+  name: "Threadripper Cathedral"
+  description: "Full-scale deployment with CXL and multi-GPU"
+
+  gpu:
+    enabled: true
+    devices: ["cuda:0", "cuda:1", "cuda:2", "cuda:3"]
+    max_memory_gb: 256.0
+    mixed_precision: true
+    tensor_parallel: true
+
+  fpga:
+    enabled: true
+    type: "cathedral"
+    devices:
+      - {path: "/dev/fpga0", role: "primary"}
+      - {path: "/dev/fpga1", role: "secondary"}
+    threshold_voltage: 0.6
+    clock_mhz: 400
+    lif_neurons: 1048576
+    synapses_per_neuron: 1024
+
+  cxl:
+    enabled: true
+    pools:
+      - {path: "/dev/cxl0", size_gb: 128}
+      - {path: "/dev/cxl1", size_gb: 128}
+    latency_target_ns: 150
+    bandwidth_gbps: 64
+
+  compute:
+    max_batch_size: 16
+    max_sequence_length: 32768
+    attention_heads: 64
+    hidden_dim: 4096
+
+  cognitive:
+    thought_dimension: 256
+    max_thought_stream: 10000
+    curvature_range: [0.0, 5.0]
+
+  autonomy:
+    start_stage: "SANDBOX"
+    strict: false
+
+
+# Default profile selection
+default: mode_a

@@ -55,6 +55,16 @@ def __getattr__(name):
         except (ImportError, AttributeError):
             return None
 
+    # Service (Unified cognitive layer)
+    if name in ("AraService", "AraState", "AraResponse", "HardwareMode",
+                "HardwareProfile", "EmotionalSurface", "CognitiveLoad", "create_ara"):
+        try:
+            from ara.service import core
+            _lazy_imports[name] = getattr(core, name)
+            return _lazy_imports[name]
+        except (ImportError, AttributeError):
+            return None
+
     raise AttributeError(f"module 'ara' has no attribute '{name}'")
 
 
@@ -78,4 +88,14 @@ __all__ = [
     # Utils
     "get_device",
     "set_seed",
+
+    # Service (Unified cognitive layer)
+    "AraService",
+    "AraState",
+    "AraResponse",
+    "HardwareMode",
+    "HardwareProfile",
+    "EmotionalSurface",
+    "CognitiveLoad",
+    "create_ara",
 ]
