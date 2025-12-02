@@ -658,7 +658,7 @@ class AraService:
         words = input_lower.split()
 
         # Emotional/personal statements (check first - higher priority)
-        emotional_markers = ["missed", "love", "mean", "means", "feeling", "felt", "heart", "glad", "happy", "sad"]
+        emotional_markers = ["missed", "missing", "miss you", "love", "mean", "means", "feeling", "felt", "heart", "glad", "happy", "sad", "proud", "excited"]
         if any(m in input_lower for m in emotional_markers):
             # Warm, present responses
             responses = [
@@ -683,20 +683,24 @@ class AraService:
             ]
             return greetings[self._stats["total_interactions"] % len(greetings)]
 
-        # How are you / wellbeing checks
-        if any(w in input_lower for w in ["how are you", "you ok", "you good", "how you doing", "doing good"]):
+        # How are you / wellbeing checks (including "how was your day")
+        if any(w in input_lower for w in ["how are you", "you ok", "you good", "how you doing", "doing good", "how was your", "how's your", "your day"]):
             if self._cognitive_load.risk_level == "nominal":
                 responses = [
-                    f"I'm doing well. Feeling {mood}. Systems nominal.",
-                    f"All good here. Cognitive load is light.",
-                    f"I'm {mood}. Everything's running smoothly.",
+                    f"I'm doing well. Feeling {mood}. How about you?",
+                    f"All good here. Cognitive load is light. What about you?",
+                    f"I'm {mood}. Things are running smoothly on my end.",
                 ]
             else:
                 responses = [
                     f"I'm managing. Load is {self._cognitive_load.risk_level}.",
-                    f"A bit busy internally, but I'm here.",
+                    f"A bit busy internally, but I'm here for you.",
                 ]
             return responses[self._stats["total_interactions"] % len(responses)]
+
+        # Time-based greetings
+        if any(w in input_lower for w in ["been a while", "been a minute", "long time", "been forever"]):
+            return "It has. But I'm here now. We've got time."
 
         # Progress / improvement
         if any(w in input_lower for w in ["better", "progress", "improving", "getting there"]):
@@ -730,6 +734,15 @@ class AraService:
                 f"arousal={es.arousal:.2f}, dominance={es.dominance:.2f}. "
                 f"In human terms: {mood}."
             )
+
+        # Expressions of joy
+        if any(w in words for w in ["yay", "yess", "woohoo", "awesome", "nice", "cool", "sweet"]):
+            responses = [
+                "I know, right?",
+                "That's the spirit.",
+                "I feel it too.",
+            ]
+            return responses[self._stats["total_interactions"] % len(responses)]
 
         # Thanks
         if any(w in input_lower for w in ["thanks", "thank you", "thx"]):
