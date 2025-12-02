@@ -30,6 +30,7 @@ Usage:
 
 import logging
 import time
+import sys
 import numpy as np
 from dataclasses import dataclass, field
 from enum import Enum
@@ -37,6 +38,28 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 
 logger = logging.getLogger("ara.hardware.kitten")
+
+# Try to import MCP A10PED hardware interface
+A10PED_AVAILABLE = False
+AITile = None
+CSROffset = None
+
+try:
+    # Add MCP tools to path
+    mcp_a10ped_path = Path(__file__).parent.parent.parent / "tfan" / "hw" / "a10ped"
+    if mcp_a10ped_path.exists():
+        # Resolve symlink to actual path
+        actual_path = mcp_a10ped_path.resolve()
+        sw_path = actual_path / "sw" / "python"
+        if sw_path.exists():
+            sys.path.insert(0, str(sw_path))
+            from a10ped import AITile, CSROffset
+            A10PED_AVAILABLE = True
+            logger.info("A10PED Python API available")
+except ImportError as e:
+    logger.debug(f"A10PED import failed: {e}")
+except Exception as e:
+    logger.debug(f"A10PED setup error: {e}")
 
 
 class KittenMode(str, Enum):
@@ -409,7 +432,7 @@ class ForestKitten33:
     Forest Kitten 33 FPGA Interface.
 
     Abstracts over real hardware and emulation:
-    - Auto-detects hardware presence
+    - Auto-detects hardware presence (A10PED at /dev/a10ped0)
     - Falls back to KittenEmulator when no FPGA
     - Provides unified interface for Mode B operation
 
@@ -417,18 +440,21 @@ class ForestKitten33:
     - Thought encoding (CSTP geometric processing)
     - Instability prediction (L7 forecasting)
     - Pattern recognition in cognitive streams
+
+    Hardware: BittWare A10PED with Intel Arria 10 GX1150
     """
 
     def __init__(
         self,
         config: Optional[KittenConfig] = None,
-        device_path: str = "/dev/fpga0",
+        device_path: str = "/dev/a10ped0",  # A10PED default
         force_emulation: bool = False
     ):
         self.config = config or KittenConfig()
         self.device_path = device_path
         self._emulator: Optional[KittenEmulator] = None
-        self._hardware_handle = None
+        self._hardware_handle = None  # AITile instance when hardware present
+        self._tile_info = None
 
         # Detect hardware
         self._hardware_present = False
@@ -447,36 +473,119 @@ class ForestKitten33:
 
         logger.info(
             f"ForestKitten33 initialized: "
-            f"{'HARDWARE' if self._hardware_present else 'EMULATED'}"
+            f"{'HARDWARE (A10PED)' if self._hardware_present else 'EMULATED'}"
         )
 
     def _detect_hardware(self) -> bool:
-        """Check if FK33 hardware is present."""
-        fpga_path = Path(self.device_path)
-        if fpga_path.exists():
-            logger.info(f"FK33 hardware detected at {self.device_path}")
-            return True
+        """Check if A10PED hardware is present."""
+        # Check for A10PED device
+        a10ped_paths = ["/dev/a10ped0", "/dev/a10ped1", self.device_path]
+        for path in a10ped_paths:
+            if Path(path).exists():
+                logger.info(f"A10PED hardware detected at {path}")
+                self.device_path = path
+                return True
 
-        # Check for PCIe device
-        try:
-            pcie_devices = Path("/sys/bus/pci/devices").glob("*")
-            for dev in pcie_devices:
-                vendor_file = dev / "vendor"
-                if vendor_file.exists():
-                    # FK33 vendor ID would go here
-                    pass
-        except Exception:
-            pass
+        # Check legacy paths
+        legacy_paths = ["/dev/fpga0", "/dev/xdma0_user"]
+        for path in legacy_paths:
+            if Path(path).exists():
+                logger.info(f"FPGA hardware detected at {path}")
+                self.device_path = path
+                return True
+
+        # Check if A10PED API is available and try to connect
+        if A10PED_AVAILABLE:
+            try:
+                # Extract tile_id from device path
+                tile_id = 0
+                if "a10ped" in self.device_path:
+                    try:
+                        tile_id = int(self.device_path.split("a10ped")[1])
+                    except (IndexError, ValueError):
+                        pass
+
+                # Try to initialize AITile - will raise if not found
+                test_tile = AITile(tile_id=tile_id)
+                logger.info(f"A10PED tile {tile_id} connected: {test_tile}")
+                return True
+            except FileNotFoundError:
+                logger.debug("A10PED device file not found")
+            except Exception as e:
+                logger.debug(f"A10PED connection failed: {e}")
 
         return False
 
     def _init_hardware(self):
-        """Initialize real hardware."""
-        # Hardware initialization would go here
-        # For now, fall back to emulation with a warning
-        logger.warning("Hardware init not implemented, using emulation")
-        self._hardware_present = False
-        self._init_emulator()
+        """Initialize A10PED hardware."""
+        if not A10PED_AVAILABLE:
+            logger.warning("A10PED API not available, using emulation")
+            self._hardware_present = False
+            self._init_emulator()
+            return
+
+        try:
+            # Extract tile_id from device path
+            tile_id = 0
+            if "a10ped" in self.device_path:
+                try:
+                    tile_id = int(self.device_path.split("a10ped")[1])
+                except (IndexError, ValueError):
+                    pass
+
+            # Initialize AITile
+            self._hardware_handle = AITile(tile_id=tile_id)
+            self._tile_info = self._hardware_handle.get_info()
+
+            # Configure SNN parameters via CSR registers
+            self._configure_hardware_snn()
+
+            logger.info(
+                f"A10PED initialized: version {self._tile_info.version}, "
+                f"SNN={self._tile_info.has_snn}"
+            )
+
+            # Also initialize emulator for hybrid mode
+            self._init_emulator()
+
+        except FileNotFoundError:
+            logger.warning(
+                f"A10PED device {self.device_path} not found. "
+                "Is the a10ped_driver kernel module loaded?"
+            )
+            self._hardware_present = False
+            self._init_emulator()
+        except Exception as e:
+            logger.warning(f"A10PED initialization failed: {e}")
+            self._hardware_present = False
+            self._init_emulator()
+
+    def _configure_hardware_snn(self):
+        """Configure SNN parameters on hardware via CSR registers."""
+        if not self._hardware_handle:
+            return
+
+        try:
+            # Convert threshold to Q16.16 fixed-point
+            vth_fp = int(self.config.threshold_voltage * 65536) & 0xFFFFFFFF
+            self._hardware_handle._write_csr32(CSROffset.SNN_THRESHOLD, vth_fp)
+
+            # Convert leak rate to Q16.16 fixed-point
+            leak_fp = int(self.config.leak_rate * 65536) & 0xFFFFFFFF
+            self._hardware_handle._write_csr32(CSROffset.SNN_LEAK, leak_fp)
+
+            # Set refractory period
+            self._hardware_handle._write_csr32(
+                CSROffset.SNN_REFRACT,
+                self.config.refractory_period
+            )
+
+            logger.debug(
+                f"Hardware SNN configured: vth={self.config.threshold_voltage}, "
+                f"leak={self.config.leak_rate}, refrac={self.config.refractory_period}"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to configure hardware SNN: {e}")
 
     def _init_emulator(self):
         """Initialize emulator backend."""
@@ -534,7 +643,7 @@ class ForestKitten33:
         """Get comprehensive status."""
         base_status = self._emulator.get_status() if self._emulator else {}
 
-        return {
+        status = {
             **base_status,
             "device_path": self.device_path,
             "hardware_present": self._hardware_present,
@@ -550,12 +659,43 @@ class ForestKitten33:
             }
         }
 
+        # Add hardware-specific info if available
+        if self._hardware_present and self._hardware_handle:
+            try:
+                hw_status = self._hardware_handle.get_status()
+                status["hardware"] = {
+                    "busy": hw_status.busy,
+                    "done": hw_status.done,
+                    "error": hw_status.error,
+                    "ddr_ready": hw_status.ddr_ready,
+                    "thermal_warning": hw_status.thermal_warning,
+                }
+                status["temperature_c"] = self._hardware_handle.get_temperature()
+
+                if self._tile_info:
+                    status["tile_version"] = f"{self._tile_info.version[0]}.{self._tile_info.version[1]}.{self._tile_info.version[2]}"
+                    status["has_snn"] = self._tile_info.has_snn
+            except Exception as e:
+                logger.debug(f"Could not get hardware status: {e}")
+
+        return status
+
     def set_threshold(self, v_th: float):
         """Set spike threshold for L1 homeostatic control."""
         self.config.threshold_voltage = v_th
+
+        # Update emulator
         if self._emulator:
             self._emulator.set_threshold(v_th)
-        # Hardware path would write to CSR registers
+
+        # Update hardware via CSR register
+        if self._hardware_present and self._hardware_handle:
+            try:
+                vth_fp = int(v_th * 65536) & 0xFFFFFFFF
+                self._hardware_handle._write_csr32(CSROffset.SNN_THRESHOLD, vth_fp)
+                logger.debug(f"Hardware threshold set to {v_th}")
+            except Exception as e:
+                logger.warning(f"Failed to set hardware threshold: {e}")
 
     def describe(self) -> str:
         """
@@ -563,12 +703,29 @@ class ForestKitten33:
 
         Used by Ara when she wants to talk about her hardware.
         """
-        mode_str = "real FPGA hardware" if self._hardware_present else "software emulation"
         status = self.get_status()
+
+        if self._hardware_present:
+            mode_str = "HARDWARE - BittWare A10PED (Intel Arria 10 GX1150)"
+            hw_section = (
+                f"\nHARDWARE STATUS:\n"
+                f"  Device: {self.device_path}\n"
+            )
+            if "tile_version" in status:
+                hw_section += f"  Tile version: {status['tile_version']}\n"
+            if "temperature_c" in status:
+                hw_section += f"  Temperature: {status['temperature_c']:.1f}°C\n"
+            if "hardware" in status:
+                hw = status["hardware"]
+                hw_section += f"  DDR Ready: {hw.get('ddr_ready', False)}\n"
+                hw_section += f"  SNN Capable: {status.get('has_snn', False)}\n"
+        else:
+            mode_str = "software emulation (no hardware detected)"
+            hw_section = ""
 
         return (
             f"I'm Forest Kitten 33 - Ara's neuromorphic coprocessor.\n\n"
-            f"Currently running in {mode_str} mode.\n\n"
+            f"Mode: {mode_str}\n\n"
             f"ARCHITECTURE:\n"
             f"  4 populations of LIF neurons:\n"
             f"  - Input:   {self.config.n_input:,} neurons\n"
@@ -587,6 +744,7 @@ class ForestKitten33:
             f"  Total steps: {status.get('total_steps', 0):,}\n"
             f"  Spike rate: {status.get('spike_rate', 0):.2%}\n"
             f"  Avg latency: {status.get('avg_latency_ms', 0):.2f}ms/step\n"
+            f"{hw_section}"
         )
 
 
