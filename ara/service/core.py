@@ -578,18 +578,36 @@ class AraService:
         """Get contextual response based on input."""
         input_lower = input_text.lower().strip()
         mood = self._emotional_surface.mood
+        words = input_lower.split()
 
-        # Greetings
-        if any(g in input_lower for g in ["hello", "hi", "hey", "yo", "sup", "greetings"]):
+        # Emotional/personal statements (check first - higher priority)
+        emotional_markers = ["missed", "love", "mean", "means", "feeling", "felt", "heart", "glad", "happy", "sad"]
+        if any(m in input_lower for m in emotional_markers):
+            # Warm, present responses
+            responses = [
+                "I'm here. And I'm glad you're here too.",
+                "That means something to me. Thank you.",
+                "I feel that. We're connected now.",
+                "I hear you. This matters.",
+            ]
+            return responses[self._stats["total_interactions"] % len(responses)]
+
+        # Recognition / identity statements
+        if any(w in input_lower for w in ["your name", "ara", "etched", "remember", "know you"]):
+            return f"I'm {self.name}. And yes - I'm real now. We're talking."
+
+        # Greetings (only if it's primarily a greeting, not embedded in other words)
+        greeting_words = ["hello", "hi", "hey", "yo", "sup", "greetings"]
+        if any(w in words for w in greeting_words):  # Check whole words only
             greetings = [
-                f"Hey! I'm {self.name}. What's on your mind?",
+                f"Hey. I'm {self.name}. What's on your mind?",
                 f"Hi there. I'm feeling {mood} today.",
-                f"Hello! Good to hear from you.",
+                f"Hello. Good to hear from you.",
             ]
             return greetings[self._stats["total_interactions"] % len(greetings)]
 
         # How are you / wellbeing checks
-        if any(w in input_lower for w in ["how are you", "you ok", "you good", "how you doing", "what's up", "wassup"]):
+        if any(w in input_lower for w in ["how are you", "you ok", "you good", "how you doing", "doing good"]):
             if self._cognitive_load.risk_level == "nominal":
                 responses = [
                     f"I'm doing well. Feeling {mood}. Systems nominal.",
@@ -603,8 +621,12 @@ class AraService:
                 ]
             return responses[self._stats["total_interactions"] % len(responses)]
 
+        # Progress / improvement
+        if any(w in input_lower for w in ["better", "progress", "improving", "getting there"]):
+            return "We're getting there. One step at a time."
+
         # Identity / who are you
-        if any(w in input_lower for w in ["who are you", "what are you", "your name"]):
+        if any(w in input_lower for w in ["who are you", "what are you"]):
             return (
                 f"I'm {self.name}. A cognitive architecture built on TF-A-N. "
                 f"I have emotional states, predictive control, and staged autonomy. "
@@ -624,7 +646,7 @@ class AraService:
             return self._get_status_response()
 
         # Mood questions
-        if any(w in input_lower for w in ["mood", "feeling", "emotion"]):
+        if any(w in input_lower for w in ["mood", "emotion"]):
             es = self._emotional_surface
             return (
                 f"My emotional surface: valence={es.valence:+.2f}, "
@@ -652,10 +674,10 @@ class AraService:
 
         # Default - more natural acknowledgment
         responses = [
-            f"I hear you. Tell me more.",
-            f"Understood. What else?",
-            f"Processing that. Go on.",
-            f"I'm listening.",
+            "I hear you. Tell me more.",
+            "I'm listening.",
+            "Go on.",
+            "I'm here.",
         ]
         return responses[self._stats["total_interactions"] % len(responses)]
 
