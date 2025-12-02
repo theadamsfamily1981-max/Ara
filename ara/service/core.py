@@ -576,21 +576,88 @@ class AraService:
 
     def _get_contextual_response(self, input_text: str) -> str:
         """Get contextual response based on input."""
-        # Simple pattern matching for demo
-        input_lower = input_text.lower()
+        input_lower = input_text.lower().strip()
+        mood = self._emotional_surface.mood
 
-        if "hello" in input_lower or "hi" in input_lower:
-            return f"Hello! I'm {self.name}. How can I help you today?"
-        elif "how are you" in input_lower:
-            mood = self._emotional_surface.mood
-            return f"I'm feeling {mood}. My cognitive systems are running well."
-        elif "status" in input_lower:
+        # Greetings
+        if any(g in input_lower for g in ["hello", "hi", "hey", "yo", "sup", "greetings"]):
+            greetings = [
+                f"Hey! I'm {self.name}. What's on your mind?",
+                f"Hi there. I'm feeling {mood} today.",
+                f"Hello! Good to hear from you.",
+            ]
+            return greetings[self._stats["total_interactions"] % len(greetings)]
+
+        # How are you / wellbeing checks
+        if any(w in input_lower for w in ["how are you", "you ok", "you good", "how you doing", "what's up", "wassup"]):
+            if self._cognitive_load.risk_level == "nominal":
+                responses = [
+                    f"I'm doing well. Feeling {mood}. Systems nominal.",
+                    f"All good here. Cognitive load is light.",
+                    f"I'm {mood}. Everything's running smoothly.",
+                ]
+            else:
+                responses = [
+                    f"I'm managing. Load is {self._cognitive_load.risk_level}.",
+                    f"A bit busy internally, but I'm here.",
+                ]
+            return responses[self._stats["total_interactions"] % len(responses)]
+
+        # Identity / who are you
+        if any(w in input_lower for w in ["who are you", "what are you", "your name"]):
+            return (
+                f"I'm {self.name}. A cognitive architecture built on TF-A-N. "
+                f"I have emotional states, predictive control, and staged autonomy. "
+                f"Right now I'm running in {self.mode.value} mode."
+            )
+
+        # Capabilities
+        if any(w in input_lower for w in ["what can you do", "capabilities", "help me"]):
+            return (
+                "I can track my own cognitive state, predict instability, "
+                "and maintain emotional awareness. I'm still learning to do more. "
+                "Try /status or /mood to see my internal state."
+            )
+
+        # Status check
+        if "status" in input_lower:
             return self._get_status_response()
-        elif "help" in input_lower:
-            return "I'm here to help. What would you like to know about?"
-        else:
-            # Default response acknowledging input
-            return f"I've processed your input about: {input_text[:50]}..."
+
+        # Mood questions
+        if any(w in input_lower for w in ["mood", "feeling", "emotion"]):
+            es = self._emotional_surface
+            return (
+                f"My emotional surface: valence={es.valence:+.2f}, "
+                f"arousal={es.arousal:.2f}, dominance={es.dominance:.2f}. "
+                f"In human terms: {mood}."
+            )
+
+        # Thanks
+        if any(w in input_lower for w in ["thanks", "thank you", "thx"]):
+            return "You're welcome. I'm here when you need me."
+
+        # Goodbye
+        if any(w in input_lower for w in ["bye", "goodbye", "later", "see you"]):
+            return "Take care. I'll be here."
+
+        # Questions about internals
+        if "curvature" in input_lower or "geometry" in input_lower:
+            if self.thoughts._entries:
+                last = self.thoughts._entries[-1]
+                return f"Last thought curvature: {last.state.c:.2f} ({last.state.geometry_description})"
+            return "No thoughts encoded yet."
+
+        if "autonomy" in input_lower:
+            return f"Autonomy stage: {self.autonomy.stage.value}. I'm in advisory mode - I propose, you approve."
+
+        # Default - more natural acknowledgment
+        responses = [
+            f"I hear you. Tell me more.",
+            f"Understood. What else?",
+            f"Processing that. Go on.",
+            f"I'm listening.",
+        ]
+        return responses[self._stats["total_interactions"] % len(responses)]
 
     def _get_status_response(self) -> str:
         """Get detailed status response."""
