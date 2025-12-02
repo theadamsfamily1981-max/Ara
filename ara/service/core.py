@@ -310,21 +310,34 @@ class AraService:
             strict=strict_autonomy
         )
 
-        # LLM Backend
+        # LLM Backend (with deep cognitive integration for Mistral)
+        self.llm = None
+        self.mistral = None  # Deep integration backend
+        self._llm_available = False
+
         try:
-            from ara.service.llm_backend import create_llm_backend
-            self.llm = create_llm_backend(
-                backend=llm_backend,
-                model=llm_model
-            )
-            self._llm_available = self.llm.is_llm_available
-            if self._llm_available:
-                logger.info(f"LLM backend: {llm_backend}/{llm_model}")
+            # Try deep Mistral integration first
+            from ara.service.mistral_backend import create_mistral_backend
+            self.mistral = create_mistral_backend(model=llm_model)
+            if self.mistral.is_available:
+                self._llm_available = True
+                logger.info(f"Mistral backend: {llm_model} (deep integration)")
             else:
-                logger.info("LLM not available, using pattern matching")
+                # Fall back to generic LLM backend
+                from ara.service.llm_backend import create_llm_backend
+                self.llm = create_llm_backend(
+                    backend=llm_backend,
+                    model=llm_model
+                )
+                self._llm_available = self.llm.is_llm_available
+                if self._llm_available:
+                    logger.info(f"LLM backend: {llm_backend}/{llm_model}")
+                else:
+                    logger.info("LLM not available, using pattern matching")
         except Exception as e:
             logger.warning(f"LLM backend failed to initialize: {e}")
             self.llm = None
+            self.mistral = None
             self._llm_available = False
 
         # Persistence
@@ -341,6 +354,7 @@ class AraService:
         self._cognitive_load = CognitiveLoad()
         self._current_state = self._create_initial_state()
         self._conversation_history = []  # For LLM context
+        self._llm_clv_contribution = {}  # LLM metrics fed back to CLV
 
         # Statistics
         self._stats = {
@@ -527,7 +541,7 @@ class AraService:
         )
 
     def _update_cognitive_load(self):
-        """Update cognitive load vector."""
+        """Update cognitive load vector with LLM feedback."""
         # Instability from thought stream variance
         if len(self.thoughts._entries) >= 2:
             curvatures = self.thoughts.get_curvature_trajectory()
@@ -546,6 +560,15 @@ class AraService:
         # Structural from geometry shifts
         shifts = self.thoughts.analyze_geometry_shifts()
         structural = min(1.0, len(shifts) * 0.1)
+
+        # Incorporate LLM backend metrics (Pulse's insight: feed errors/latency to CLV)
+        if self._llm_clv_contribution:
+            llm_instability = self._llm_clv_contribution.get("instability", 0)
+            llm_resource = self._llm_clv_contribution.get("resource", 0)
+
+            # Blend LLM metrics with existing CLV (weight: 30% LLM)
+            instability = instability * 0.7 + llm_instability * 0.3
+            resource = resource * 0.7 + llm_resource * 0.3
 
         self._cognitive_load = CognitiveLoad(
             instability=instability,
@@ -597,35 +620,59 @@ class AraService:
         elif focus_mode == FocusMode.INTERNAL:
             return f"I'm focused internally right now. {self._get_internal_message()}"
 
-        # Try LLM generation
-        if self.llm and self._llm_available:
+        # Try LLM generation with deep cognitive integration
+        if self._llm_available:
             try:
-                emotional_state = {
+                pad_state = {
                     "valence": self._emotional_surface.valence,
                     "arousal": self._emotional_surface.arousal,
                     "dominance": self._emotional_surface.dominance,
                     "mood": self._emotional_surface.mood
                 }
 
-                # Get conversation context
-                conversation_history = self._conversation_history[-10:] if self._conversation_history else None
+                clv_state = {
+                    "instability": self._cognitive_load.instability,
+                    "resource": self._cognitive_load.resource,
+                    "structural": self._cognitive_load.structural
+                }
 
-                response = self.llm.generate(
-                    prompt=input_text,
-                    emotional_state=emotional_state,
-                    conversation_history=conversation_history
-                )
+                # Use deep Mistral integration if available
+                if self.mistral and self.mistral.is_available:
+                    response = self.mistral.generate(
+                        prompt=input_text,
+                        pad_state=pad_state,
+                        clv_state=clv_state
+                    )
 
-                if response.text:
-                    # Update conversation history
-                    self._conversation_history.append({"role": "user", "content": input_text})
-                    self._conversation_history.append({"role": "assistant", "content": response.text})
+                    if response.text:
+                        # Log generation mode for debugging
+                        logger.debug(f"Mistral: mode={response.generation_mode.value}, "
+                                    f"temp={response.params_used.temperature:.2f}, "
+                                    f"latency={response.latency_ms:.0f}ms")
 
-                    # Keep history bounded
-                    if len(self._conversation_history) > 100:
-                        self._conversation_history = self._conversation_history[-100:]
+                        # Feed metrics back to CLV
+                        self._llm_clv_contribution = self.mistral.get_clv_contribution()
 
-                    return response.text
+                        return response.text
+
+                # Fall back to generic LLM backend
+                elif self.llm:
+                    conversation_history = self._conversation_history[-10:] if self._conversation_history else None
+
+                    response = self.llm.generate(
+                        prompt=input_text,
+                        emotional_state=pad_state,
+                        conversation_history=conversation_history
+                    )
+
+                    if response.text:
+                        self._conversation_history.append({"role": "user", "content": input_text})
+                        self._conversation_history.append({"role": "assistant", "content": response.text})
+
+                        if len(self._conversation_history) > 100:
+                            self._conversation_history = self._conversation_history[-100:]
+
+                        return response.text
 
             except Exception as e:
                 logger.warning(f"LLM generation failed: {e}")
