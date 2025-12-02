@@ -154,6 +154,7 @@ def synthesize_speech(
 def _synthesize_piper(text: str, speed: float) -> Optional[bytes]:
     """Synthesize using Piper."""
     import numpy as np
+    import wave
     import io
 
     voice = _get_piper_voice()
@@ -161,12 +162,16 @@ def _synthesize_piper(text: str, speed: float) -> Optional[bytes]:
         return None
 
     try:
-        # Synthesize to WAV
-        wav_buffer = io.BytesIO()
-        voice.synthesize(text, wav_buffer)
-        wav_buffer.seek(44)  # Skip WAV header
+        # Synthesize - piper returns audio generator
+        audio_data = []
+        for audio_bytes in voice.synthesize_stream_raw(text):
+            audio_data.append(audio_bytes)
 
-        audio = wav_buffer.read()
+        if not audio_data:
+            logger.warning("Piper produced no audio")
+            return None
+
+        audio = b''.join(audio_data)
         logger.info(f"Piper synthesized {len(audio)} bytes")
         return audio
 
