@@ -257,7 +257,11 @@ class AraService:
         mode: HardwareMode = HardwareMode.MODE_A,
         name: str = "Ara",
         auto_recovery: bool = True,
-        strict_autonomy: bool = True
+        strict_autonomy: bool = True,
+        llm_backend: str = "ollama",
+        llm_model: str = "mistral",
+        persistence_path: str = "~/.ara",
+        auto_save: bool = True
     ):
         """
         Initialize the Ara service.
@@ -267,10 +271,15 @@ class AraService:
             name: Ara instance name
             auto_recovery: Enable automatic recovery from stress
             strict_autonomy: Strict L9 autonomy checks
+            llm_backend: LLM backend type ("ollama", "openai_compatible", "fallback")
+            llm_model: Model name for LLM
+            persistence_path: Path for state persistence
+            auto_save: Automatically save state after interactions
         """
         self.name = name
         self.mode = mode
         self.auto_recovery = auto_recovery
+        self.auto_save = auto_save
         self._state = AraState.INITIALIZING
 
         # Hardware profile
@@ -301,10 +310,37 @@ class AraService:
             strict=strict_autonomy
         )
 
+        # LLM Backend
+        try:
+            from ara.service.llm_backend import create_llm_backend
+            self.llm = create_llm_backend(
+                backend=llm_backend,
+                model=llm_model
+            )
+            self._llm_available = self.llm.is_llm_available
+            if self._llm_available:
+                logger.info(f"LLM backend: {llm_backend}/{llm_model}")
+            else:
+                logger.info("LLM not available, using pattern matching")
+        except Exception as e:
+            logger.warning(f"LLM backend failed to initialize: {e}")
+            self.llm = None
+            self._llm_available = False
+
+        # Persistence
+        try:
+            from ara.service.persistence import create_persistence
+            self.persistence = create_persistence(path=persistence_path)
+            logger.info(f"Persistence: {persistence_path}")
+        except Exception as e:
+            logger.warning(f"Persistence failed to initialize: {e}")
+            self.persistence = None
+
         # Internal state
         self._emotional_surface = EmotionalSurface()
         self._cognitive_load = CognitiveLoad()
         self._current_state = self._create_initial_state()
+        self._conversation_history = []  # For LLM context
 
         # Statistics
         self._stats = {
@@ -314,6 +350,10 @@ class AraService:
             "peak_stress": 0.0,
             "start_time": datetime.now().isoformat()
         }
+
+        # Try to restore previous state
+        if self.persistence:
+            self._restore_state()
 
         self._state = AraState.READY
         logger.info(f"{name} is ready. Hardware: {mode.value}")
@@ -432,6 +472,10 @@ class AraService:
 
             self._state = AraState.READY
 
+            # Auto-save state periodically
+            if self.auto_save and self._stats["total_interactions"] % 10 == 0:
+                self.save_state()
+
             return AraResponse(
                 text=response_text,
                 thought_type=response_thought.metadata.thought_type,
@@ -545,16 +589,49 @@ class AraService:
         """
         Generate response text.
 
-        In a full implementation, this would call the language model.
-        For now, we generate contextual responses based on state.
+        Uses LLM when available, falls back to pattern matching.
+        Emotional state influences generation.
         """
         if focus_mode == FocusMode.RECOVERY:
             return f"I'm taking a moment to process. {self._get_recovery_message()}"
         elif focus_mode == FocusMode.INTERNAL:
             return f"I'm focused internally right now. {self._get_internal_message()}"
-        else:
-            # Normal response
-            return self._get_contextual_response(input_text)
+
+        # Try LLM generation
+        if self.llm and self._llm_available:
+            try:
+                emotional_state = {
+                    "valence": self._emotional_surface.valence,
+                    "arousal": self._emotional_surface.arousal,
+                    "dominance": self._emotional_surface.dominance,
+                    "mood": self._emotional_surface.mood
+                }
+
+                # Get conversation context
+                conversation_history = self._conversation_history[-10:] if self._conversation_history else None
+
+                response = self.llm.generate(
+                    prompt=input_text,
+                    emotional_state=emotional_state,
+                    conversation_history=conversation_history
+                )
+
+                if response.text:
+                    # Update conversation history
+                    self._conversation_history.append({"role": "user", "content": input_text})
+                    self._conversation_history.append({"role": "assistant", "content": response.text})
+
+                    # Keep history bounded
+                    if len(self._conversation_history) > 100:
+                        self._conversation_history = self._conversation_history[-100:]
+
+                    return response.text
+
+            except Exception as e:
+                logger.warning(f"LLM generation failed: {e}")
+
+        # Fallback to pattern matching
+        return self._get_contextual_response(input_text)
 
     def _get_recovery_message(self) -> str:
         """Get recovery mode message."""
@@ -744,7 +821,51 @@ class AraService:
             f"\n"
             f"Autonomy: {self.autonomy.stage.value}\n"
             f"Interactions: {self._stats['total_interactions']}\n"
+            f"LLM: {'connected' if self._llm_available else 'pattern-matching'}\n"
         )
+
+    def _restore_state(self) -> bool:
+        """Restore state from persistence."""
+        if not self.persistence:
+            return False
+
+        try:
+            state = self.persistence.load()
+            if state:
+                self.persistence.restore_to_service(self, state)
+                logger.info(f"Restored state: {state.total_interactions} prior interactions")
+                return True
+        except Exception as e:
+            logger.warning(f"State restore failed: {e}")
+
+        return False
+
+    def save_state(self) -> bool:
+        """Save current state to persistence."""
+        if not self.persistence:
+            return False
+
+        try:
+            return self.persistence.save(self)
+        except Exception as e:
+            logger.error(f"State save failed: {e}")
+            return False
+
+    def clear_memory(self):
+        """Clear conversation history and thought stream (keep stats)."""
+        self._conversation_history = []
+        self.thoughts._entries = []
+        if self.persistence:
+            self.persistence.clear_history()
+        logger.info("Memory cleared")
+
+    def shutdown(self):
+        """Graceful shutdown with state save."""
+        logger.info(f"{self.name} shutting down...")
+        if self.auto_save:
+            self.save_state()
+        self._state = AraState.DORMANT
+        logger.info(f"{self.name} dormant. State saved.")
 
 
 def create_ara(

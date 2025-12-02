@@ -43,8 +43,20 @@ from ara.service.core import (
 class AraCLI:
     """Interactive CLI for Ara."""
 
-    def __init__(self, mode: HardwareMode = HardwareMode.MODE_A, name: str = "Ara"):
-        self.ara = create_ara(mode=mode, name=name)
+    def __init__(
+        self,
+        mode: HardwareMode = HardwareMode.MODE_A,
+        name: str = "Ara",
+        llm_backend: str = "ollama",
+        llm_model: str = "mistral"
+    ):
+        from ara.service.core import AraService
+        self.ara = AraService(
+            mode=mode,
+            name=name,
+            llm_backend=llm_backend,
+            llm_model=llm_model
+        )
         self.running = True
         self.history = []
 
@@ -83,6 +95,10 @@ class AraCLI:
         print()
         print(f"  Hardware Mode: {self.ara.mode.value}")
         print(f"  Autonomy Stage: {self.ara.autonomy.stage.value}")
+        llm_status = "connected" if self.ara._llm_available else "pattern-matching"
+        print(f"  LLM: {llm_status}")
+        if self.ara._stats["total_interactions"] > 0:
+            print(f"  Restored: {self.ara._stats['total_interactions']} prior interactions")
         print()
         print("  Commands:")
         print("    /status  - Show current status")
@@ -100,6 +116,8 @@ class AraCLI:
         cmd = command.lower().split()[0]
 
         if cmd in ("/quit", "/exit", "/q"):
+            print("Saving state...")
+            self.ara.shutdown()
             print("Goodbye!")
             self.running = False
 
@@ -118,6 +136,16 @@ class AraCLI:
         elif cmd == "/clear":
             self.ara.thoughts._entries = []
             print("Thought stream cleared.")
+
+        elif cmd == "/save":
+            if self.ara.save_state():
+                print("State saved.")
+            else:
+                print("Save failed.")
+
+        elif cmd == "/forget":
+            self.ara.clear_memory()
+            print("Memory cleared. I won't remember this conversation.")
 
         elif cmd == "/history":
             self._show_history()
@@ -220,11 +248,13 @@ class AraCLI:
         print("  /mood     - Show emotional state (PAD)")
         print("  /load     - Show cognitive load (CLV)")
         print("  /explain  - Full state explanation")
+        print("  /save     - Save state now")
+        print("  /forget   - Clear memory (keep stats)")
         print("  /clear    - Clear thought stream")
         print("  /history  - Show input history")
         print("  /json     - Show status as JSON")
         print("  /help     - Show this help")
-        print("  /quit     - Exit")
+        print("  /quit     - Exit (saves automatically)")
         print()
 
 
@@ -393,6 +423,19 @@ Examples:
         help="Run certification check"
     )
 
+    parser.add_argument(
+        "--llm",
+        default="ollama",
+        choices=["ollama", "openai_compatible", "fallback"],
+        help="LLM backend (default: ollama)"
+    )
+
+    parser.add_argument(
+        "--model",
+        default="mistral",
+        help="LLM model name (default: mistral)"
+    )
+
     args = parser.parse_args()
 
     # Map mode string to enum
@@ -413,7 +456,12 @@ Examples:
         sys.exit(0)
 
     # Run interactive CLI
-    cli = AraCLI(mode=mode, name=args.name)
+    cli = AraCLI(
+        mode=mode,
+        name=args.name,
+        llm_backend=args.llm,
+        llm_model=args.model
+    )
     cli.run()
 
 
