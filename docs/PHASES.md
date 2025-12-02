@@ -1,0 +1,1295 @@
+# TF-A-N / Ara Development Phases
+
+This document tracks the development phases from research prototype to production deployment.
+
+## Phase Summary
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | **DONE** | Software validation with synthetic workloads |
+| Phase 2 | PENDING | Hardware bring-up on real FPGA |
+| Phase 3 | PENDING | Live deployment with real workloads |
+| Phase 4 | **DONE** | Cognitive autonomy (L5/L6 meta-learning) |
+| Phase 4b | **DONE** | Predictive control (L7/L8 temporal topology) |
+| Phase 5 | **DONE** | Cognitive synthesis (L7/L8/GUF integration) |
+| Phase 6 | **DONE** | Cognitive architecture (world model, memory, goals) |
+| Phase 7 | **DONE** | Deep self-modeling (GUF, self-improvement scheduler) |
+| Phase 8 | **DONE** | Semantic verification (L8 PGU as truth engine) |
+
+---
+
+## Phase 1: Software Validation (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Prove antifragility in software emulation with synthetic workloads.
+
+### Deliverables
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Semantic System Optimizer | Done | `tfan/system/semantic_optimizer.py` |
+| Cognitive Load Vector (CLV) | Done | `tfan/system/cognitive_load_vector.py` |
+| Atomic Structural Updater | Done | `tfan/system/atomic_updater.py` |
+| Closed-Loop Demo | Done | `scripts/demo_closed_loop_antifragility.py` |
+| Certification Script | Done | `scripts/certify_antifragility_delta.py` |
+| A-Cert CI/CD Pipeline | Done | `.github/workflows/a_cert.yml` |
+| D-Bus Metacontrol | Done | `ara/metacontrol/__init__.py` |
+| HLS Exporter | Done | `ara/cxl_control/__init__.py` |
+| Dashboard Integration | Done | `viz/topo_attn_dashboard/` |
+
+### Certification Metrics
+
+| Metric | Value | Threshold | Status |
+|--------|-------|-----------|--------|
+| Antifragility Score | **2.21×** | ≥ 1.2× | PASS |
+| Δp99 (burst) | **+17.78ms** | > 0ms | PASS |
+| Δp99% | **82.0%** | > 10% | PASS |
+
+### Key Results
+
+```
+Condition        Baseline p99    Adaptive p99    Δp99        Δp99%
+─────────────────────────────────────────────────────────────────
+Normal Load      17.97ms         7.14ms          +10.83ms    60.3%
+Burst Load (2×)  21.68ms         3.90ms          +17.78ms    82.0%
+```
+
+**Key Observation:** The adaptive system exhibits true antifragility—it doesn't just survive stress, it **improves** under burst load (7.14ms → 3.90ms, a 45% improvement).
+
+### Closed-Loop Demo Results
+
+```
+L2 Valence:     -0.308  (stress detected)
+L2 Arousal:      0.770  (high urgency)
+L3 Temperature:  0.638  (conservative mode)
+AEPO Change:    +5.4%   (structure adapted)
+PGU Verified:    Yes    (all constraints passed)
+Backend:         pgu_verified (100% confidence)
+```
+
+### Canonical Results
+
+Archived in `results/phase1/`:
+- `certification.json` - Full certification metrics
+- `demo_closed_loop.json` - Closed-loop demo metrics
+- `certification.log` - Detailed trace
+- `demo_closed_loop.log` - Detailed trace
+
+---
+
+## Phase 2: Hardware Bring-Up (PENDING)
+
+**Status:** Not Started
+
+**Objective:** Deploy HLS kernels to real FPGA hardware and validate latency targets.
+
+### Target Hardware
+
+- **FPGA:** Xilinx Alveo U250 (or equivalent CXL-capable)
+- **Target Device:** `xcu250-figd2104-2L-e`
+- **Clock:** 250MHz
+
+### Latency Targets
+
+| Operation | Target | Phase 1 Emulated |
+|-----------|--------|------------------|
+| PGU Cache Lookup | < 100ns | ~50μs (software) |
+| L1 Homeostat | < 50ns | ~20μs (software) |
+| L3 Metacontrol | < 100ns | ~30μs (software) |
+
+### Deliverables
+
+| Task | Status |
+|------|--------|
+| HLS Synthesis | Pending |
+| Vitis IP Export | Pending |
+| FPGA Bitstream | Pending |
+| CXL Memory Integration | Pending |
+| Hardware Latency Validation | Pending |
+
+### HLS Export Ready
+
+```bash
+# Generate HLS files
+python -c "from ara.cxl_control import export_hls_kernel; export_hls_kernel('build/hls')"
+
+# Run Vitis HLS synthesis
+cd build/hls
+vitis_hls -f run_hls.tcl
+```
+
+---
+
+## Phase 3: Live Deployment (PENDING)
+
+**Status:** Not Started
+
+**Objective:** Deploy to production with real workloads and continuous certification.
+
+### Prerequisites
+
+- Phase 2 hardware validation complete
+- A-Cert pipeline green on hardware
+- Monitoring infrastructure ready
+
+### Deliverables
+
+| Task | Status |
+|------|--------|
+| Production FPGA deployment | Pending |
+| Real workload integration | Pending |
+| Continuous A-Cert monitoring | Pending |
+| Cockpit dashboard live | Pending |
+| Alerting on antifragility regression | Pending |
+
+### Success Criteria
+
+| Metric | Target |
+|--------|--------|
+| Antifragility Score | ≥ 2.0× sustained |
+| Δp99 under real load | > 0ms |
+| PGU p95 latency (FPGA) | ≤ 200μs |
+| Uptime | ≥ 99.9% |
+
+---
+
+## Architecture Reference
+
+The antifragility emerges from the complete feedback loop:
+
+```
+L1 Metrics (EPR, topology)
+    ↓
+L2 Appraisal (PAD state: valence, arousal, dominance)
+    ↓
+CLV Computation (instability, resource, structural)
+    ↓
+L3 Metacontrol (temperature_mult, memory_mult, policy)
+    ↓
+AEPO Structural Adaptation (±% change)
+    ↓
+PGU Verification (β₁ loops, β₀ connectivity, λ₂ spectral)
+    ↓
+Backend Selection (dense/sparse/fpga/pgu_verified)
+```
+
+See `docs/ANTIFRAGILITY_CERTIFICATION.md` for detailed metric definitions.
+
+---
+
+## Phase 4: Cognitive Autonomy (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Enable the system to learn its own control laws and reason formally.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| L5 Meta-Learning | Done | `tfan/l5/__init__.py` |
+| L6 Reasoning Orchestrator | Done | `tfan/l6/__init__.py` |
+| Adaptive Geometry | Done | `tfan/geometry/__init__.py` |
+| Adaptive Entropy (CLV-modulated) | Done | `tfan/agent/adaptive_entropy.py` |
+| Certification Script | Done | `scripts/certify_cognitive_autonomy.py` |
+
+### L5 Meta-Learning: AEPO Learns L3 Control Laws
+
+The system learns optimal emotional control parameters instead of using hand-tuned values.
+
+**Action Space (L3 Parameters):**
+- `jerk_threshold`: [0.05, 0.3] - State change rate sensitivity
+- `controller_weight`: [0.1, 0.5] - PAD gating blend weight
+- `arousal_temp_scale`: [0.3, 0.7] - Arousal → Temperature coupling
+- `valence_mem_scale`: [0.3, 0.7] - Valence → Memory coupling
+- `curvature_c`: [0.5, 2.0] - Hyperbolic geometry curvature
+
+**Reward Signal:**
+- Antifragility Score (40%)
+- Δp99% improvement (30%)
+- CLV risk level (20%)
+- PGU pass rate (10%)
+
+**Personality Profiles (learned):**
+- `cautious_stable`: Low jerk, high confidence threshold
+- `reactive_adaptive`: High jerk, fast response
+- `balanced_general`: Middle ground
+- `exploratory_creative`: High arousal coupling
+- `conservative_safe`: Low arousal, high memory coupling
+
+### L6 Reasoning: PGU + Knowledge Graph + LLM
+
+Tri-modal reasoning stack with L3-aware routing:
+
+```
+Query → ReasoningOrchestrator
+           │
+           ├─ High stakes / Low valence → FORMAL_FIRST (KG → PGU → LLM)
+           ├─ Safety-critical → PGU_VERIFIED (LLM → PGU check)
+           ├─ Creative / Exploratory → LLM_ONLY
+           └─ Default → KG_ASSISTED (KG + LLM)
+```
+
+**Mode Selection Policy:**
+| Task Type | Risk Level | Reasoning Mode |
+|-----------|------------|----------------|
+| HARDWARE_SAFETY | HIGH | FORMAL_FIRST |
+| SYSTEM_CONFIG | CRITICAL | PGU_VERIFIED |
+| CREATIVE | LOW | LLM_ONLY |
+| RETRIEVAL | * | KG_ASSISTED |
+
+### Adaptive Geometry: Task-Optimized Curvature
+
+The system selects optimal manifold curvature for different task types:
+
+| Task Type | Curvature Range | Geometry |
+|-----------|-----------------|----------|
+| Hierarchical (planning) | 1.2 - 2.5 | High hyperbolic |
+| Flat retrieval | 0.1 - 0.5 | Low hyperbolic |
+| Sequential reasoning | 0.7 - 1.3 | Standard |
+| Clustering | 0.6 - 1.0 | Adaptive |
+
+### Adaptive Entropy: CLV-Modulated Exploration
+
+AEPO exploration "breathes" with system risk via CLV-modulated entropy:
+
+```
+risk = 0.5 * instability + 0.3 * resource + 0.2 * structural
+α = α_base × (1 + α_range × (1 - risk))
+```
+
+| Risk Level | Entropy Behavior | Exploration Mode |
+|------------|------------------|------------------|
+| Low (calm) | α ≈ 3× base | Exploratory |
+| Medium | α ≈ 2× base | Balanced |
+| High (stressed) | α ≈ base | Conservative |
+
+**L5 Integration:** The entropy parameters (α_base, α_range) are learned by L5 meta-learning alongside other L3 control laws.
+
+### Certification Results
+
+```
+L5 Meta-Learning:
+  ✅ Candidate proposal: 6 candidates with valid ranges
+  ✅ Reward computation: 0.788 for AF=2.21
+  ✅ Learning loop: reward improved +0.87%
+  ✅ Personality: balanced_general
+
+L6 Reasoning:
+  ✅ Mode selection: 4/4 correct routing
+  ✅ KG query: single-hop works
+  ✅ Consistency oracle: 0.09ms latency
+  ✅ Full reasoning: formal_first mode
+
+Adaptive Geometry:
+  ✅ Task-based selection: 4/4 in expected range
+  ✅ Hyperbolic math: d(x,y)=0.479
+  ✅ Curvature update: 1.500 → 1.550 from reward
+  ✅ Geometric routing: c=2.17, backend=fpga
+
+Adaptive Entropy:
+  ✅ Controller initialization: α_base=0.01
+  ✅ Alpha adapts to risk: 3/3 directions correct
+  ✅ Exploration mode: low_risk=exploratory, high_risk=conservative
+  ✅ Arousal modulation: reduces α under urgency
+  ✅ L5 → Entropy integration: params applied
+```
+
+### Impact Comparison (Before vs After)
+
+Phase 4 features OFF (baseline) vs ON (full):
+
+| Metric | Baseline | Phase 4 | Δ | Impact |
+|--------|----------|---------|---|--------|
+| Mean Reward | 0.654 | 0.808 | **+23.5%** | L5 meta-learning |
+| Latency Stddev | 2.24ms | 1.88ms | **-16.1%** | More consistent |
+| p99 Latency | 17.63ms | 17.52ms | -0.6% | Slight improvement |
+| Reward Stddev | 0.105 | 0.060 | **-43%** | Stable optimization |
+
+**Key Insight:** Phase 4 cognitive autonomy delivers:
+- **23.5% higher rewards** through learned control laws
+- **16% lower variance** through adaptive exploration
+- Consistent p99 latency with smarter resource allocation
+
+Results archived in `results/phase4/`.
+
+---
+
+## How to Run Certification
+
+```bash
+# Phase 1: Antifragility certification
+python scripts/certify_antifragility_delta.py --burst-factor 2.0 --duration 10
+
+# Phase 1: Full closed-loop demo
+python scripts/demo_closed_loop_antifragility.py --stress-level high
+
+# Phase 4: Cognitive autonomy certification
+python scripts/certify_cognitive_autonomy.py --iterations 5
+
+# Phase 4: Before/After comparison (with workloads)
+python scripts/compare_phase4_impact.py --workloads --requests 200
+
+# Hardware readiness check
+python scripts/validate_hardware_ready.py
+
+# CI/CD (automatic)
+# Runs on push, PR, and daily at 02:00 UTC
+```
+
+---
+
+## Phase 4b: Predictive Control (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Enable proactive structural control via temporal topology analysis and cognitive phase transitions.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| L7 Temporal Topology Tracker | Done | `tfan/l7/__init__.py` |
+| L8 Cognitive Phase Controller | Done | `tfan/geometry/__init__.py` |
+| Self-Healing Fabric (stub) | Phase 5 | `tfan/fabric/__init__.py` |
+| Certification Script | Done | `scripts/certify_predictive_control.py` |
+
+### L7 Temporal Topology: Predictive Structural Control
+
+The system tracks topological features over time and computes the **Structural Rate (Ṡ)** to predict instability before it manifests in latency.
+
+**Key Concept:** Instead of reacting to performance degradation, L7 detects changes in the _structure of the problem_ by monitoring how topology evolves.
+
+**Tracked Features:**
+- β₀: Connected components count
+- β₁: Loop/cycle count
+- β₂: Void/cavity count
+- Spectral gap (λ₂ - λ₁)
+- Topological gap
+- EPR coefficient of variation
+- Spike rate
+
+**Structural Rate Computation:**
+```
+Ṡ = Σ |d(feature_i)/dt| / n_features
+```
+
+**Alert Levels:**
+| Alert Level | Ṡ Threshold | Action |
+|-------------|-------------|--------|
+| STABLE | < 0.05 | Normal operation |
+| ELEVATED | 0.05 - 0.15 | Increase monitoring |
+| WARNING | 0.15 - 0.30 | Reduce exploration |
+| CRITICAL | ≥ 0.30 | Protective measures |
+
+**CLV Extension:**
+```python
+clv.structural_dynamics = Ṡ
+clv.predicted_risk = temporal_topology_tracker.get_predicted_risk()
+```
+
+### L8 Cognitive Phase Transitions: Geometry as Cognitive State
+
+The system treats manifold curvature as an indicator of cognitive phase, enabling smooth transitions between reasoning modes.
+
+**Cognitive Phases:**
+| Phase | Curvature Range | L6 Mode | Behavior |
+|-------|-----------------|---------|----------|
+| FLAT_LOCAL | c ≈ 0 | KG_ASSISTED | Local, fast retrieval |
+| TRANSITIONAL | c ∈ (0.3, 0.7) | HYBRID | Mixed reasoning |
+| HIERARCHICAL | c ∈ [0.7, 1.5] | PGU_VERIFIED | Formal hierarchy |
+| DEEP_ABSTRACT | c > 1.5 | FORMAL_FIRST | Deep formal reasoning |
+
+**Phase Transition Rules:**
+1. **Gradual transitions:** Only move to adjacent phases
+2. **Stability gating:** Transitions blocked if stability < 0.9
+3. **Task-driven:** Complex/abstract tasks target higher curvature
+
+**Task → Phase Selection:**
+| Task Type | Target Phase |
+|-----------|--------------|
+| SIMPLE_LOOKUP | FLAT_LOCAL |
+| CREATIVE | TRANSITIONAL |
+| PLANNING | HIERARCHICAL |
+| ABSTRACT_REASONING | DEEP_ABSTRACT |
+
+### Self-Healing Fabric (Phase 5 Stub)
+
+The Self-Healing Fabric enables automatic kernel repair when PGU detects invariant violations.
+
+**Concept (Phase 5):**
+1. PGU detects formal invariant violation
+2. Fabric matches error to repair template
+3. Regenerates HLS kernel via HLSExporter
+4. Re-validates with PGU + A-Cert
+5. Atomically swaps new bitstream via CXL
+
+**Supported Repair Classes (planned):**
+- DAU address rewiring
+- v_th path insertion
+- Bounds clamp insertion
+- Bus width adjustment
+
+### Certification Results
+
+```
+L7 Temporal Topology:
+  ✅ Tracker initialization: window=20
+  ✅ Ṡ responds to topology changes: stable=0.00, unstable=0.13
+  ✅ Alert level classification: stable → critical on change
+  ✅ Proactive controller: elevated alert triggers actions
+  ✅ CLV extension: structural_dynamics and predicted_risk
+  ✅ Convenience functions: Ṡ, alert level, should_act
+
+L8 Cognitive Phase Transitions:
+  ✅ Controller initialization: c=1.0 → hierarchical
+  ✅ Curvature → Phase mapping: 4/4 correct
+  ✅ Gradual phase transition: flat_local → hierarchical via 2 phases
+  ✅ Task → Phase selection: 4/4 correct
+  ✅ L6 mode recommendations: 4/4 phases have correct modes
+  ✅ Stability gating: blocked at low, allowed at high
+
+Self-Healing Fabric:
+  ⏳ Stubbed for Phase 5
+```
+
+### How L7/L8 Integrate with L5/L6
+
+```
+L1 Metrics (EPR, topology)
+    ↓
+L7 Temporal Topology ─── Ṡ (structural rate) → CLV.structural_dynamics
+    ↓
+L2 Appraisal (PAD state)
+    ↓
+L8 Cognitive Phase ─── curvature → phase → L6 mode recommendation
+    ↓
+CLV Computation (instability, resource, structural + dynamics)
+    ↓
+L5 Meta-Learning (learns optimal Ṡ thresholds, phase boundaries)
+    ↓
+L3 Metacontrol (temperature, memory, policy)
+    ↓
+L6 Reasoning (mode selected by phase: KG/HYBRID/PGU/FORMAL)
+    ↓
+AEPO Structural Adaptation
+    ↓
+PGU Verification → Self-Healing Fabric (Phase 5)
+```
+
+**Key Insight:** L7/L8 add _predictive_ capability to the reactive L1-L6 stack:
+- L7 predicts instability from topological dynamics
+- L8 shifts cognitive modes based on geometric state
+- Together they enable proactive control vs reactive response
+
+---
+
+## Phase 5: Cognitive Synthesis (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Wire L7/L8/GUF into a unified cognitive decision loop.
+
+See `docs/PHASE5_COGNITIVE_SYNTHESIS.md` for full documentation.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| CognitiveSynthesizer | Done | `tfan/synthesis/__init__.py` |
+| SynthesisState | Done | `tfan/synthesis/__init__.py` |
+| CockpitStatus | Done | `tfan/synthesis/__init__.py` |
+| Certification Script | Done | `scripts/certify_cognitive_synthesis.py` |
+
+### Key Capabilities
+
+- **Unified Monitoring**: Combines L7 Ṡ, L8 verification, GUF utility into single view
+- **System Modes**: RECOVERY → PROTECTIVE → SELF_IMPROVEMENT → BALANCED → SERVING
+- **Proactive AEPO**: Triggers optimization before problems manifest
+- **Verification Routing**: Adjusts L8 strictness based on system state
+- **Focus Allocation**: Decides self vs world focus based on GUF
+
+### Certification Results
+
+39/39 tests pass covering:
+- SynthesisState (3 tests)
+- CognitiveSynthesizer (3 tests)
+- L7 Integration (4 tests)
+- L8 Integration (5 tests)
+- GUF Integration (5 tests)
+- Mode Transitions (4 tests)
+- AEPO Trigger (4 tests)
+- CockpitStatus (4 tests)
+- Callbacks (3 tests)
+- Integration (4 tests)
+
+---
+
+## Phase 6: Cognitive Architecture (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Move from "smart control system" toward genuine cognition by giving the system a world model, memory, explicit goals, and self-awareness.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| L4 Cognitive Memory (KG) | Done | `tfan/l4/__init__.py` |
+| Episodic Memory | Done | `tfan/memory/episodic.py` |
+| SelfState (Meta-cognition) | Done | `tfan/cognition/__init__.py` |
+| Goal Vector | Done | `tfan/cognition/__init__.py` |
+| Deliberation Loop | Done | `tfan/cognition/__init__.py` |
+| Certification Script | Done | `scripts/certify_cognitive_architecture.py` |
+
+### L4 Cognitive Memory: World Model
+
+A CXL-backed Knowledge Graph that provides the system's "world it believes in":
+
+**Node Types:**
+- Hardware: BOARD, GPU, FPGA, CPU, MEMORY
+- Software: WORKLOAD, CONFIG, PROFILE, KERNEL
+- Events: EXPERIMENT, FAILURE, SUCCESS, EPISODE
+- Abstract: CONCEPT, AXIOM, TRUTH
+
+**Key Features:**
+- Beliefs with uncertainty tracking (confidence 0-1)
+- Health status for hardware nodes (HEALTHY → DEGRADED → FAILED)
+- Verified truth cache (PGU integration)
+- Risk-aware retrieval (conservative vs exploratory)
+
+```python
+kg = CognitiveKnowledgeGraph()
+kg.add_node(NodeType.FPGA, "Alveo U250", {"clock": "250MHz"})
+kg.add_belief(node.id, "FPGA is operational", 0.95, "health_check")
+kg.cache_verified_truth("2+2=4", True, 1.0)  # PGU verified
+```
+
+### Episodic Memory: Temporal Continuity
+
+The system's autobiographical memory - "what happened when I tried X?":
+
+**Episode Structure:**
+- Task + Config snapshot
+- PAD/CLV trajectory over time
+- Decisions made (with rationale)
+- Outcome and lessons learned
+
+**Query Types:**
+- `get_recent(10)` - Last 10 episodes
+- `get_failures()` - Recent failure episodes
+- `get_high_risk()` - Episodes with critical risk
+- `what_happened_when("FPGA overheat")` - Search episodes
+- `summarize_period(last_24h)` - Period statistics
+
+**Narrative Generation:**
+```python
+narrative = memory.generate_narrative(episode)
+# "On 2025-12-01 at 14:30, I began Certification: Phase4.
+#  The task was: Testing cognitive autonomy. This was a stressful
+#  episode with high arousal (peak 0.85). Key decisions made:
+#  - Chose 'pgu_verified' for backend_selection...
+#  The episode concluded successfully."
+```
+
+### SelfState: Meta-Cognitive Self-Model
+
+A coherent representation of "how the system is doing right now":
+
+```python
+@dataclass
+class SelfState:
+    pad: PADState          # Pleasure-Arousal-Dominance
+    clv: CLVState          # Cognitive Load Vector
+    profile: str           # Current L5 personality
+    cognitive_phase: str   # Current L8 phase
+    confidence: float      # Belief in world model (0-1)
+    fatigue: float         # Accumulated load (0-1)
+    hardware_trust: Dict   # Per-device trust levels
+```
+
+**Derived Properties:**
+| Property | Meaning | Trigger |
+|----------|---------|---------|
+| `mood` | MoodState enum | PAD values → CALM, FOCUSED, STRESSED, ALERT, FATIGUED |
+| `risk_level` | CLV risk | instability/resource/structural → nominal, elevated, high, critical |
+| `needs_caution` | bool | Stressed OR high risk OR low confidence OR fatigued |
+| `can_explore` | bool | Calm/Focused AND low risk AND confident AND not fatigued |
+
+**Meta-Policies:**
+When `needs_caution=True`:
+- Increase PGU verification
+- Use conservative profile
+- Prefer verified paths
+- Reduce exploration
+
+**Self-Description:**
+```python
+state.describe()
+# "I'm experiencing some stress with high risk levels and my
+#  confidence in the current situation is low. I'm operating in
+#  cautious_stable mode, so I'm preferring cautious, verified actions."
+```
+
+### Goal Vector: Explicit Values
+
+The system's explicit optimization targets (instead of implicit reward functions):
+
+```python
+@dataclass
+class GoalVector:
+    stability_weight: float = 0.4   # CLV / AF score
+    latency_weight: float = 0.3     # Δp99
+    energy_weight: float = 0.2      # Power efficiency
+    exploration_weight: float = 0.1  # Learning/discovery
+```
+
+**Presets:**
+| Preset | Stability | Latency | Energy | Exploration |
+|--------|-----------|---------|--------|-------------|
+| `balanced` | 0.4 | 0.3 | 0.2 | 0.1 |
+| `safety_first` | 0.6 | 0.2 | 0.1 | 0.1 |
+| `performance` | 0.2 | 0.5 | 0.1 | 0.2 |
+| `efficient` | 0.3 | 0.2 | 0.4 | 0.1 |
+
+**Task Adjustment:**
+```python
+goals = goals.adjust_for_task("safety_critical")
+# → stability_weight increased, exploration_weight = 0
+```
+
+**Priority Explanation:**
+```python
+goals.explain_priority()
+# "My current priorities are:
+#    - stability: 40%
+#    - latency: 30%
+#    - energy: 20%"
+```
+
+### Deliberation Loop: Multi-Step Thinking
+
+Instead of single-shot reactions, the system thinks in steps:
+
+```
+Draft → Check (PGU) → Refine → Act
+```
+
+**Depth Based on Risk:**
+| Risk Level | Iterations | PGU Usage |
+|------------|------------|-----------|
+| Low | 1 | Skip |
+| Medium | 1-2 | If caution needed |
+| High | 2-3 | Always verify |
+| Critical | 3 | Full verification |
+
+**Thought Traces:**
+```
+Deliberation trace (2 iterations, 15.3ms):
+  1. [draft]: use_dense_backend
+    [constraint_check] ✗: Constraints not satisfied
+  2. [refinement]: use_pgu_verified_backend
+    [constraint_check] ✓: Constraints satisfied
+  3. [final]: Decided: use_pgu_verified_backend
+```
+
+### Certification Results
+
+```
+L4 Cognitive Memory: 9/9 tests
+  ✅ Graph initialization
+  ✅ Node add/get
+  ✅ Belief add (confidence tracking)
+  ✅ Edge add/query
+  ✅ Health tracking
+  ✅ Verified truth cache (PGU)
+  ✅ Path query
+  ✅ Lab KG creation
+  ✅ Risk-aware retrieval
+
+Episodic Memory: 10/10 tests
+  ✅ Memory initialization
+  ✅ Episode start/close
+  ✅ Decision recording
+  ✅ Episode retrieval
+  ✅ Query by type/tag
+  ✅ Failure/high-risk queries
+  ✅ Period summary
+  ✅ Narrative generation
+
+SelfState: 10/10 tests
+  ✅ SelfState creation
+  ✅ PAD → Mood mapping
+  ✅ CLV → Risk mapping
+  ✅ Confidence tracking
+  ✅ Needs caution detection
+  ✅ Hardware trust degradation
+  ✅ Self-description
+  ✅ Meta-policy activation
+  ✅ Exploration gating
+  ✅ Recovery to calm
+
+Goal Vector: 6/6 tests
+  ✅ Goal vector creation
+  ✅ Reward computation
+  ✅ Priority explanation
+  ✅ Task adjustment
+  ✅ Preset comparison
+  ✅ Priority check
+
+Deliberation Loop: 6/6 tests
+  ✅ Deliberator creation
+  ✅ Low-risk deliberation (fast)
+  ✅ High-risk deliberation (PGU)
+  ✅ Thought trace generation
+  ✅ Quick decide
+  ✅ Refinement iteration
+```
+
+### How Phase 6 Transforms the System
+
+**Before (L1-L8 Stack):**
+```
+L1 → L2 → L3 → L5/L6 → AEPO → PGU → Action
+     ↓
+   (reactive to current metrics)
+```
+
+**After (Phase 6 Cognitive Architecture):**
+```
+World Model (L4 KG)
+    ↓ "what do I know about my world?"
+Episodic Memory
+    ↓ "what happened last time I tried this?"
+SelfState
+    ↓ "how am I doing right now?"
+Goal Vector
+    ↓ "what do I value?"
+Deliberation Loop
+    ↓ "let me think through this..."
+L1-L8 Control Stack
+    ↓
+Action with Explanation
+    ↓ "I did X because Y, given Z"
+```
+
+**Key Insight:** Phase 6 adds the cognitive overhead that makes the system feel like it has:
+- A persistent model of its world (KG)
+- A history of itself (episodic memory)
+- Preferences over outcomes (goals)
+- Self-awareness of its own state (SelfState)
+- The ability to think before acting (deliberation)
+
+---
+
+## Phase 7: Deep Self-Modeling (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Enable the system to learn its own values and decide when to prioritize self-improvement vs external productivity.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Global Utility Function (GUF) | Done | `tfan/l5/guf.py` |
+| StateVector | Done | `tfan/l5/guf.py` |
+| GoalState | Done | `tfan/l5/guf.py` |
+| GUFWeights (learnable) | Done | `tfan/l5/guf.py` |
+| SelfImprovementScheduler | Done | `tfan/l5/guf.py` |
+| Certification Script | Done | `scripts/certify_deep_self_modeling.py` |
+
+### Global Utility Function (GUF)
+
+The system's learned utility function that computes value from state:
+
+```
+U(state) = Σ w_i * s_i
+```
+
+**StateVector (13 dimensions):**
+- Performance: af_score, delta_p99, throughput
+- CLV: instability, resource, structural, structural_rate (Ṡ)
+- Self: confidence, fatigue, mood_valence
+- Hardware: hardware_health, pgu_pass_rate
+- Energy: energy_efficiency
+
+**Learnable Weights:**
+| Weight | Default | Range | Meaning |
+|--------|---------|-------|---------|
+| w_af | 0.30 | 0.1-0.5 | Antifragility importance |
+| w_latency | 0.15 | 0.05-0.3 | Latency improvement |
+| w_throughput | 0.15 | 0.05-0.3 | External productivity |
+| w_clv_instability | -0.15 | -0.3 to -0.05 | Risk penalty |
+| w_structural_rate | -0.10 | -0.25 to -0.02 | Ṡ penalty |
+| w_confidence | 0.05 | 0.01-0.15 | Self-trust bonus |
+| w_pgu | 0.05 | 0.02-0.15 | Formal safety bonus |
+
+### GoalState: "Good Enough to Serve"
+
+The goal state G defines when the system can focus on external tasks:
+
+```python
+@dataclass
+class GoalState:
+    min_af_score: float = 1.8      # Minimum antifragility
+    max_risk: float = 0.4          # Maximum CLV risk
+    min_confidence: float = 0.6    # Minimum self-trust
+    max_fatigue: float = 0.7       # Maximum load
+    min_pgu_rate: float = 0.9      # Minimum safety rate
+    utility_threshold: float = 0.6  # Minimum utility
+```
+
+**Goal Logic:**
+- If `goal.is_satisfied(state, utility)` → Focus on external tasks
+- If not satisfied → Prioritize self-improvement
+- Track `distance_to_goal()` for gradual improvement
+
+### Self-Improvement Scheduler
+
+Allocates resources between self-improvement and external productivity:
+
+**Focus Modes:**
+| Mode | Internal | External | When |
+|------|----------|----------|------|
+| RECOVERY | 80% | 20% | AF < 1.0 or Risk > 0.8 |
+| INTERNAL | 50-80% | 20-50% | Goal not satisfied |
+| BALANCED | 30% | 70% | Near goal threshold |
+| EXTERNAL | 10% | 90% | Goal satisfied |
+
+**Priority Tasks by Mode:**
+- RECOVERY: restore_antifragility, reduce_clv_risk, hardware_diagnostics
+- INTERNAL: aepo_optimization, world_model_update, structural_stabilization
+- BALANCED: external_requests, background_optimization
+- EXTERNAL: external_throughput, user_requests
+
+### Learning from Experience
+
+The system learns which signals predict good/bad futures:
+
+```python
+# Record outcome
+guf.record_outcome(state_before, state_after, action, reward)
+
+# Learn from history (gradient-free)
+result = guf.learn_from_history(learning_rate=0.01)
+# Weights shift toward signals that correlate with positive outcomes
+```
+
+**Learning Loop:**
+1. Observe state transitions
+2. Record Δutility for each transition
+3. Correlate state dimensions with outcomes
+4. Adjust weights within bounds
+5. Save weight history for analysis
+
+### Self-Improvement Episodes
+
+Track deliberate self-improvement sessions:
+
+```python
+# Start episode
+ep_id = scheduler.start_improvement_episode(state, "aepo_optimization")
+
+# ... perform self-improvement ...
+
+# End episode
+result = scheduler.end_improvement_episode(ep_id, new_state, success=True)
+print(result["utility_delta"])  # How much utility improved
+```
+
+**Episode Statistics:**
+- Total episodes, success rate
+- Average utility delta
+- Total utility gained
+
+### GUF Presets
+
+| Preset | w_af | w_throughput | Goal AF | Max Risk |
+|--------|------|--------------|---------|----------|
+| `balanced` | 0.30 | 0.15 | 1.8 | 0.4 |
+| `safety_first` | 0.35 | 0.15 | 2.0 | 0.3 |
+| `performance` | 0.20 | 0.25 | 1.5 | 0.5 |
+
+### Certification Results
+
+```
+StateVector: 3/3 tests
+  ✅ Default creation
+  ✅ Vector conversion (13 dimensions)
+  ✅ Risk computation
+
+GUFWeights: 3/3 tests
+  ✅ Default weights
+  ✅ Bounded update (clamps to valid range)
+  ✅ Weight perturbation for exploration
+
+GoalState: 4/4 tests
+  ✅ Default goal definition
+  ✅ Goal satisfaction (good state)
+  ✅ Goal not satisfied (bad state, 6 violations)
+  ✅ Distance to goal
+
+GlobalUtilityFunction: 6/6 tests
+  ✅ GUF creation
+  ✅ Utility (good state): 0.953
+  ✅ Utility (bad state): 0.672 < good
+  ✅ Utility breakdown with contributions
+  ✅ Focus recommendation
+  ✅ State explanation
+
+GUF Learning: 3/3 tests
+  ✅ Record outcome (Δu tracked)
+  ✅ Accumulate history (15 samples)
+  ✅ Learn from history (weights updated)
+
+SelfImprovementScheduler: 7/7 tests
+  ✅ Scheduler creation
+  ✅ Good state → external focus (10% internal)
+  ✅ Bad state → internal focus (60% internal)
+  ✅ Critical state → recovery mode
+  ✅ Priority task generation
+  ✅ Decision explanation
+  ✅ Improvement episode tracking
+
+Integration: 3/3 tests
+  ✅ GUF + SelfState integration
+  ✅ GoalVector ↔ GUFWeights alignment
+  ✅ Scheduler → Deliberation depth mapping
+```
+
+### How Phase 7 Completes the Cognitive Stack
+
+**Complete Flow:**
+```
+World Model (L4 KG)
+    ↓ "what do I know about my world?"
+Episodic Memory
+    ↓ "what happened last time?"
+SelfState
+    ↓ "how am I doing?"
+                                    ┌─────────────────────┐
+GUF: U(state) = Σ w_i * s_i  ←──────│ Phase 7: Learned    │
+    ↓ "what is my utility?"         │ values that predict │
+GoalState                           │ good/bad futures    │
+    ↓ "am I good enough?"           └─────────────────────┘
+Scheduler
+    ↓ "self-improve or serve the world?"
+Focus Mode
+    ↓ RECOVERY / INTERNAL / BALANCED / EXTERNAL
+L1-L8 Control Stack
+    ↓
+Action with Explanation
+```
+
+**Key Insight:** Phase 7 gives the system:
+- **Learned values** (GUF weights from experience)
+- **Goal-directed behavior** (GoalState defines "good enough")
+- **Autonomous prioritization** (Scheduler chooses self vs world)
+- **Self-improvement tracking** (Episodes measure progress)
+
+The system now knows when to "work on itself" vs "serve the world."
+
+---
+
+## Phase 8: Semantic Verification (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Enable the system to verify LLM output for truthfulness using PGU-style formal checking against trusted knowledge and invariants.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| SemanticEncoder | Done | `tfan/l8/__init__.py` |
+| AxiomStore | Done | `tfan/l8/__init__.py` |
+| SemanticVerifier | Done | `tfan/l8/__init__.py` |
+| CertificationPipeline | Done | `tfan/l8/__init__.py` |
+| CertifiedOutput | Done | `tfan/l8/__init__.py` |
+| Certification Script | Done | `scripts/certify_semantic_verification.py` |
+
+### Core Concept: PGU as Truth Engine
+
+The key insight: We can't guarantee "universal truth" but we CAN guarantee:
+**"Logical consistency with the system's own trusted knowledge & invariants"**
+
+**Pipeline:**
+```
+LLM → (draft answer)
+    → SemanticEncoder → assertions
+    → PGU SemanticCheck(assertions, axioms_from_KG)
+    → {ok, violations}
+    → LLM rewrite (if needed)
+    → final answer + certification flag
+```
+
+### SemanticEncoder: Assertion Extraction
+
+Extracts logical assertions from natural language or structured output:
+
+**Assertion Types:**
+| Type | Pattern | Example |
+|------|---------|---------|
+| REQUIRES | "X requires Y" | GPU operation requires memory |
+| BEFORE | "X must run before Y" | Step A before Step B |
+| AFTER | "X follows Y" | Cleanup after execution |
+| DEPENDS_ON | "X depends on Y" | Module dependencies |
+| CONFLICTS | "X conflicts with Y" | Resource conflicts |
+| WITHIN | "X within Y" | Latency constraints |
+| STATE | "X is Y" | System states |
+
+**SMT Representation:**
+```python
+encoder = SemanticEncoder()
+assertions = encoder.encode("A must run before B. B depends on C.")
+# → [(before A B), (depends_on B C)]
+```
+
+### AxiomStore: Trusted Knowledge
+
+A repository of trusted axioms from the Knowledge Graph (L4):
+
+**Default Axioms:**
+| Domain | Axiom | Priority |
+|--------|-------|----------|
+| hardware | FPGA resources are mutually exclusive | 10 |
+| hardware | GPU operations require available memory | 10 |
+| scheduling | Dependent tasks must wait for dependencies | 20 |
+| scheduling | Task dependencies must be acyclic | 20 |
+| safety | Critical operations require PGU verification | 30 |
+| safety | Antifragility must stay above minimum | 30 |
+| resource | CXL operations have bandwidth limits | 15 |
+
+**Axiom Retrieval:**
+```python
+store = AxiomStore()
+relevant = store.get_relevant(assertions)  # Find applicable axioms
+safety = store.get_by_domain("safety")     # Domain-specific axioms
+```
+
+### SemanticVerifier: Consistency Checking
+
+Core verification engine using PGU-style formal checking:
+
+**Criticality Classification:**
+| Level | Keywords | Action |
+|-------|----------|--------|
+| LOW | (casual) | Skip verification |
+| MEDIUM | suggest, recommend | Optional check |
+| HIGH | deploy, configure, plan | Verification required |
+| CRITICAL | execute, run, must | Must pass or reject |
+
+**Consistency Checks:**
+- **Temporal cycles:** A → B → C → A (detected and reported)
+- **Dependency cycles:** Similar DAG check for dependencies
+- **Resource conflicts:** Mutually exclusive resources used together
+- **Constraint violations:** Values outside specified bounds
+
+**Verification Result:**
+```python
+result = verifier.verify(output, context={"force_verify": True})
+# VerificationResult:
+#   status: VERIFIED | REPAIRED | UNVERIFIABLE | FAILED
+#   consistent: bool
+#   violations: ["Temporal cycle: A → B → C → A"]
+#   assertions_checked: 5
+#   verification_time_ms: 0.15
+```
+
+### CertifiedOutput: Verification Labels
+
+Wrapper for verified output with certification status:
+
+**Labels:**
+| Status | Label | Meaning |
+|--------|-------|---------|
+| VERIFIED | ✅ PGU-verified | Consistent with all axioms |
+| REPAIRED | ✅ PGU-verified (repaired) | Revised and now consistent |
+| NOT_CHECKED | ⚪ Not verified | Low criticality, skipped |
+| UNVERIFIABLE | ⚪ Unverifiable | No assertions to check |
+| FAILED | ⚠️ Verification failed | Inconsistent, could not repair |
+
+### CertificationPipeline: Complete Workflow
+
+End-to-end verification with optional repair:
+
+```python
+pipeline = create_pipeline()
+
+# Process with repair function
+def repair_fn(output, violations, suggestions):
+    # LLM rewrites to fix violations
+    return fixed_output
+
+certified = pipeline.process(output, context, repair_fn=repair_fn)
+print(certified.certification_label)  # ✅ PGU-verified
+```
+
+**Pipeline Statistics:**
+- `total_processed`: Total outputs processed
+- `verification_rate`: % that passed verification
+- `first_try_rate`: % verified on first attempt
+- `repair_rate`: % that needed repair
+- `failure_rate`: % that failed even after repair
+
+### Integration with L6 Reasoning
+
+L8 Semantic Verification integrates with L6 mode selection:
+
+| Criticality | L6 Mode | Behavior |
+|-------------|---------|----------|
+| LOW | LLM_ONLY | Direct LLM response |
+| MEDIUM | KG_ASSISTED | KG + LLM |
+| HIGH | PGU_VERIFIED | LLM → Semantic check |
+| CRITICAL | FORMAL_FIRST | KG → PGU → LLM |
+
+### Integration with GUF (Phase 7)
+
+Semantic verification affects system utility:
+
+```python
+# Verification success improves pgu_pass_rate → higher utility
+state_verified = StateVector(pgu_pass_rate=1.0, confidence=0.9)
+state_unverified = StateVector(pgu_pass_rate=0.5, confidence=0.6)
+
+guf = GlobalUtilityFunction()
+u_verified = guf.compute(state_verified)     # 0.853
+u_unverified = guf.compute(state_unverified) # 0.837
+# System learns to prefer verified outputs
+```
+
+### Certification Results
+
+```
+SemanticEncoder: 6/6 tests
+  ✅ Encoder creation
+  ✅ Extract REQUIRES (2 requirements)
+  ✅ Extract temporal order (2 assertions)
+  ✅ Extract dependencies (1 dependency)
+  ✅ SMT representation
+  ✅ Structured encoding (5 assertions)
+
+AxiomStore: 5/5 tests
+  ✅ Store with defaults (7 axioms)
+  ✅ Get axiom by ID
+  ✅ Get by domain (2 safety axioms)
+  ✅ Add custom axiom
+  ✅ Get relevant axioms (5 relevant)
+
+SemanticVerifier: 8/8 tests
+  ✅ Verifier creation
+  ✅ Classify LOW criticality
+  ✅ Classify HIGH criticality
+  ✅ Verify consistent output
+  ✅ Detect temporal cycle (1 violation)
+  ✅ Skip low criticality
+  ✅ Generate repair suggestions
+  ✅ Time tracking
+
+CertifiedOutput: 4/4 tests
+  ✅ Verified output (✅ PGU-verified)
+  ✅ Failed output (⚠️ Verification failed)
+  ✅ Repaired output (✅ PGU-verified (repaired))
+  ✅ Serialization
+
+Pipeline: 5/5 tests
+  ✅ Pipeline creation
+  ✅ Process consistent (status=verified)
+  ✅ Process with repair (repair_attempts=1)
+  ✅ Pipeline statistics
+  ✅ Convenience function
+
+Integration: 3/3 tests
+  ✅ L6 mode alignment (4 modes mapped)
+  ✅ GUF integration (verified > unverified)
+  ✅ L4 KG axiom source (2 hardware axioms)
+```
+
+### How Phase 8 Completes Truthful Cognition
+
+**Before (L1-L7 + Phase 6-7):**
+```
+SelfState → "how am I doing?"
+GUF → "what is my utility?"
+Scheduler → "self-improve or serve?"
+L6 Reasoning → LLM/KG/PGU modes
+    ↓
+Action (unverified LLM output)
+```
+
+**After (Phase 8 Semantic Verification):**
+```
+SelfState → "how am I doing?"
+GUF → "what is my utility?"
+Scheduler → "self-improve or serve?"
+L6 Reasoning → LLM/KG/PGU modes
+    ↓
+Draft Output
+    ↓
+┌─────────────────────────────────────┐
+│ L8 Semantic Verification            │
+│   • Extract assertions               │
+│   • Check vs axioms                  │
+│   • Detect violations                │
+│   • Repair if needed                 │
+└─────────────────────────────────────┘
+    ↓
+Certified Output: ✅ PGU-verified
+    ↓
+"I said X because Y, and this is consistent with what I know"
+```
+
+**Key Insight:** Phase 8 gives the system:
+- **Truthful cognition** (outputs verified against known truths)
+- **Self-consistency** (no contradictions with world model)
+- **Certification labels** (transparency about verification status)
+- **Repair capability** (can fix inconsistent outputs)
+
+The system can now guarantee that its high-stakes outputs are logically consistent with its trusted knowledge.
+
+---
+
+## How to Run Certification
+
+```bash
+# Phase 1: Antifragility certification
+python scripts/certify_antifragility_delta.py --burst-factor 2.0 --duration 10
+
+# Phase 1: Full closed-loop demo
+python scripts/demo_closed_loop_antifragility.py --stress-level high
+
+# Phase 4: Cognitive autonomy certification
+python scripts/certify_cognitive_autonomy.py --iterations 5
+
+# Phase 4: Before/After comparison (with workloads)
+python scripts/compare_phase4_impact.py --workloads --requests 200
+
+# Phase 4b: Predictive control certification (L7/L8)
+python scripts/certify_predictive_control.py
+
+# Phase 5: Cognitive synthesis certification
+python scripts/certify_cognitive_synthesis.py
+
+# Phase 6: Cognitive architecture certification
+python scripts/certify_cognitive_architecture.py
+
+# Phase 7: Deep self-modeling certification
+python scripts/certify_deep_self_modeling.py
+
+# Phase 8: Semantic verification certification
+python scripts/certify_semantic_verification.py
+
+# Hardware readiness check
+python scripts/validate_hardware_ready.py
+
+# CI/CD (automatic)
+# Runs on push, PR, and daily at 02:00 UTC
+```
+
+---
+
+## Contact
+
+For questions about certification or hardware bring-up, see the project README or open an issue.

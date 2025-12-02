@@ -1,0 +1,13 @@
+{
+  "timestamp": "2025-12-01T20:26:51.099333",
+  "workload": {
+    "latency_p99_improvement_ms": 0.11220002064997203,
+    "latency_p99_improvement_pct": 0.6363741085088463,
+    "latency_mean_improvement_ms": -1.0619934329949778,
+    "latency_stddev_reduction": 0.3618692278259448
+  },
+  "rewards": {
+    "mean_improvement": 0.1538559429260764,
+    "mean_improvement_pct": 23.53682955369112
+  }
+}
