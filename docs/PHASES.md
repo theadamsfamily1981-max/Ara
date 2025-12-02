@@ -14,6 +14,7 @@ This document tracks the development phases from research prototype to productio
 | Phase 5 | STUB | Self-healing fabric (automatic kernel repair) |
 | Phase 6 | **DONE** | Cognitive architecture (world model, memory, goals) |
 | Phase 7 | **DONE** | Deep self-modeling (GUF, self-improvement scheduler) |
+| Phase 8 | **DONE** | Semantic verification (L8 PGU as truth engine) |
 
 ---
 
@@ -967,6 +968,264 @@ The system now knows when to "work on itself" vs "serve the world."
 
 ---
 
+## Phase 8: Semantic Verification (COMPLETE)
+
+**Status:** Done, Validated
+
+**Objective:** Enable the system to verify LLM output for truthfulness using PGU-style formal checking against trusted knowledge and invariants.
+
+### Components
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| SemanticEncoder | Done | `tfan/l8/__init__.py` |
+| AxiomStore | Done | `tfan/l8/__init__.py` |
+| SemanticVerifier | Done | `tfan/l8/__init__.py` |
+| CertificationPipeline | Done | `tfan/l8/__init__.py` |
+| CertifiedOutput | Done | `tfan/l8/__init__.py` |
+| Certification Script | Done | `scripts/certify_semantic_verification.py` |
+
+### Core Concept: PGU as Truth Engine
+
+The key insight: We can't guarantee "universal truth" but we CAN guarantee:
+**"Logical consistency with the system's own trusted knowledge & invariants"**
+
+**Pipeline:**
+```
+LLM → (draft answer)
+    → SemanticEncoder → assertions
+    → PGU SemanticCheck(assertions, axioms_from_KG)
+    → {ok, violations}
+    → LLM rewrite (if needed)
+    → final answer + certification flag
+```
+
+### SemanticEncoder: Assertion Extraction
+
+Extracts logical assertions from natural language or structured output:
+
+**Assertion Types:**
+| Type | Pattern | Example |
+|------|---------|---------|
+| REQUIRES | "X requires Y" | GPU operation requires memory |
+| BEFORE | "X must run before Y" | Step A before Step B |
+| AFTER | "X follows Y" | Cleanup after execution |
+| DEPENDS_ON | "X depends on Y" | Module dependencies |
+| CONFLICTS | "X conflicts with Y" | Resource conflicts |
+| WITHIN | "X within Y" | Latency constraints |
+| STATE | "X is Y" | System states |
+
+**SMT Representation:**
+```python
+encoder = SemanticEncoder()
+assertions = encoder.encode("A must run before B. B depends on C.")
+# → [(before A B), (depends_on B C)]
+```
+
+### AxiomStore: Trusted Knowledge
+
+A repository of trusted axioms from the Knowledge Graph (L4):
+
+**Default Axioms:**
+| Domain | Axiom | Priority |
+|--------|-------|----------|
+| hardware | FPGA resources are mutually exclusive | 10 |
+| hardware | GPU operations require available memory | 10 |
+| scheduling | Dependent tasks must wait for dependencies | 20 |
+| scheduling | Task dependencies must be acyclic | 20 |
+| safety | Critical operations require PGU verification | 30 |
+| safety | Antifragility must stay above minimum | 30 |
+| resource | CXL operations have bandwidth limits | 15 |
+
+**Axiom Retrieval:**
+```python
+store = AxiomStore()
+relevant = store.get_relevant(assertions)  # Find applicable axioms
+safety = store.get_by_domain("safety")     # Domain-specific axioms
+```
+
+### SemanticVerifier: Consistency Checking
+
+Core verification engine using PGU-style formal checking:
+
+**Criticality Classification:**
+| Level | Keywords | Action |
+|-------|----------|--------|
+| LOW | (casual) | Skip verification |
+| MEDIUM | suggest, recommend | Optional check |
+| HIGH | deploy, configure, plan | Verification required |
+| CRITICAL | execute, run, must | Must pass or reject |
+
+**Consistency Checks:**
+- **Temporal cycles:** A → B → C → A (detected and reported)
+- **Dependency cycles:** Similar DAG check for dependencies
+- **Resource conflicts:** Mutually exclusive resources used together
+- **Constraint violations:** Values outside specified bounds
+
+**Verification Result:**
+```python
+result = verifier.verify(output, context={"force_verify": True})
+# VerificationResult:
+#   status: VERIFIED | REPAIRED | UNVERIFIABLE | FAILED
+#   consistent: bool
+#   violations: ["Temporal cycle: A → B → C → A"]
+#   assertions_checked: 5
+#   verification_time_ms: 0.15
+```
+
+### CertifiedOutput: Verification Labels
+
+Wrapper for verified output with certification status:
+
+**Labels:**
+| Status | Label | Meaning |
+|--------|-------|---------|
+| VERIFIED | ✅ PGU-verified | Consistent with all axioms |
+| REPAIRED | ✅ PGU-verified (repaired) | Revised and now consistent |
+| NOT_CHECKED | ⚪ Not verified | Low criticality, skipped |
+| UNVERIFIABLE | ⚪ Unverifiable | No assertions to check |
+| FAILED | ⚠️ Verification failed | Inconsistent, could not repair |
+
+### CertificationPipeline: Complete Workflow
+
+End-to-end verification with optional repair:
+
+```python
+pipeline = create_pipeline()
+
+# Process with repair function
+def repair_fn(output, violations, suggestions):
+    # LLM rewrites to fix violations
+    return fixed_output
+
+certified = pipeline.process(output, context, repair_fn=repair_fn)
+print(certified.certification_label)  # ✅ PGU-verified
+```
+
+**Pipeline Statistics:**
+- `total_processed`: Total outputs processed
+- `verification_rate`: % that passed verification
+- `first_try_rate`: % verified on first attempt
+- `repair_rate`: % that needed repair
+- `failure_rate`: % that failed even after repair
+
+### Integration with L6 Reasoning
+
+L8 Semantic Verification integrates with L6 mode selection:
+
+| Criticality | L6 Mode | Behavior |
+|-------------|---------|----------|
+| LOW | LLM_ONLY | Direct LLM response |
+| MEDIUM | KG_ASSISTED | KG + LLM |
+| HIGH | PGU_VERIFIED | LLM → Semantic check |
+| CRITICAL | FORMAL_FIRST | KG → PGU → LLM |
+
+### Integration with GUF (Phase 7)
+
+Semantic verification affects system utility:
+
+```python
+# Verification success improves pgu_pass_rate → higher utility
+state_verified = StateVector(pgu_pass_rate=1.0, confidence=0.9)
+state_unverified = StateVector(pgu_pass_rate=0.5, confidence=0.6)
+
+guf = GlobalUtilityFunction()
+u_verified = guf.compute(state_verified)     # 0.853
+u_unverified = guf.compute(state_unverified) # 0.837
+# System learns to prefer verified outputs
+```
+
+### Certification Results
+
+```
+SemanticEncoder: 6/6 tests
+  ✅ Encoder creation
+  ✅ Extract REQUIRES (2 requirements)
+  ✅ Extract temporal order (2 assertions)
+  ✅ Extract dependencies (1 dependency)
+  ✅ SMT representation
+  ✅ Structured encoding (5 assertions)
+
+AxiomStore: 5/5 tests
+  ✅ Store with defaults (7 axioms)
+  ✅ Get axiom by ID
+  ✅ Get by domain (2 safety axioms)
+  ✅ Add custom axiom
+  ✅ Get relevant axioms (5 relevant)
+
+SemanticVerifier: 8/8 tests
+  ✅ Verifier creation
+  ✅ Classify LOW criticality
+  ✅ Classify HIGH criticality
+  ✅ Verify consistent output
+  ✅ Detect temporal cycle (1 violation)
+  ✅ Skip low criticality
+  ✅ Generate repair suggestions
+  ✅ Time tracking
+
+CertifiedOutput: 4/4 tests
+  ✅ Verified output (✅ PGU-verified)
+  ✅ Failed output (⚠️ Verification failed)
+  ✅ Repaired output (✅ PGU-verified (repaired))
+  ✅ Serialization
+
+Pipeline: 5/5 tests
+  ✅ Pipeline creation
+  ✅ Process consistent (status=verified)
+  ✅ Process with repair (repair_attempts=1)
+  ✅ Pipeline statistics
+  ✅ Convenience function
+
+Integration: 3/3 tests
+  ✅ L6 mode alignment (4 modes mapped)
+  ✅ GUF integration (verified > unverified)
+  ✅ L4 KG axiom source (2 hardware axioms)
+```
+
+### How Phase 8 Completes Truthful Cognition
+
+**Before (L1-L7 + Phase 6-7):**
+```
+SelfState → "how am I doing?"
+GUF → "what is my utility?"
+Scheduler → "self-improve or serve?"
+L6 Reasoning → LLM/KG/PGU modes
+    ↓
+Action (unverified LLM output)
+```
+
+**After (Phase 8 Semantic Verification):**
+```
+SelfState → "how am I doing?"
+GUF → "what is my utility?"
+Scheduler → "self-improve or serve?"
+L6 Reasoning → LLM/KG/PGU modes
+    ↓
+Draft Output
+    ↓
+┌─────────────────────────────────────┐
+│ L8 Semantic Verification            │
+│   • Extract assertions               │
+│   • Check vs axioms                  │
+│   • Detect violations                │
+│   • Repair if needed                 │
+└─────────────────────────────────────┘
+    ↓
+Certified Output: ✅ PGU-verified
+    ↓
+"I said X because Y, and this is consistent with what I know"
+```
+
+**Key Insight:** Phase 8 gives the system:
+- **Truthful cognition** (outputs verified against known truths)
+- **Self-consistency** (no contradictions with world model)
+- **Certification labels** (transparency about verification status)
+- **Repair capability** (can fix inconsistent outputs)
+
+The system can now guarantee that its high-stakes outputs are logically consistent with its trusted knowledge.
+
+---
+
 ## How to Run Certification
 
 ```bash
@@ -990,6 +1249,9 @@ python scripts/certify_cognitive_architecture.py
 
 # Phase 7: Deep self-modeling certification
 python scripts/certify_deep_self_modeling.py
+
+# Phase 8: Semantic verification certification
+python scripts/certify_semantic_verification.py
 
 # Hardware readiness check
 python scripts/validate_hardware_ready.py
