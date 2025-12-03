@@ -49,14 +49,26 @@ try:
 except ImportError:
     pass
 
-# Check for espeak
+# Check for espeak / espeak-ng
+ESPEAK_CMD = None
 try:
-    result = subprocess.run(["espeak", "--version"], capture_output=True)
+    result = subprocess.run(["espeak-ng", "--version"], capture_output=True)
     if result.returncode == 0:
         ESPEAK_AVAILABLE = True
-        logger.info("espeak available")
+        ESPEAK_CMD = "espeak-ng"
+        logger.info("espeak-ng available")
 except FileNotFoundError:
     pass
+
+if not ESPEAK_AVAILABLE:
+    try:
+        result = subprocess.run(["espeak", "--version"], capture_output=True)
+        if result.returncode == 0:
+            ESPEAK_AVAILABLE = True
+            ESPEAK_CMD = "espeak"
+            logger.info("espeak available")
+    except FileNotFoundError:
+        pass
 
 
 # Global TTS instance (lazy loaded)
@@ -153,7 +165,6 @@ def synthesize_speech(
 
 def _synthesize_piper(text: str, speed: float) -> Optional[bytes]:
     """Synthesize using Piper."""
-    import numpy as np
     import wave
     import io
 
@@ -162,30 +173,31 @@ def _synthesize_piper(text: str, speed: float) -> Optional[bytes]:
         return None
 
     try:
-        # Try different Piper API methods
+        # Piper synthesize() needs a wave.Wave_write object
+        # Create a BytesIO buffer and wrap it with wave module
         wav_buffer = io.BytesIO()
 
-        # Method 1: synthesize to file-like object
-        if hasattr(voice, 'synthesize'):
-            for audio_bytes in voice.synthesize(text, wav_buffer):
-                pass  # synthesize yields and writes to buffer
-            wav_buffer.seek(0)
-            # Skip WAV header (44 bytes)
-            wav_buffer.seek(44)
-            audio = wav_buffer.read()
-        else:
-            logger.error("Piper voice has no synthesize method")
+        with wave.open(wav_buffer, 'wb') as wav_file:
+            voice.synthesize(text, wav_file)
+
+        # Read the complete WAV data
+        wav_buffer.seek(0)
+        wav_data = wav_buffer.read()
+
+        if len(wav_data) <= 44:  # Just header, no audio
+            logger.warning("Piper produced no audio data")
             return None
 
-        if len(audio) == 0:
-            logger.warning("Piper produced no audio")
-            return None
+        # Skip WAV header (44 bytes) to get raw PCM
+        audio = wav_data[44:]
 
         logger.info(f"Piper synthesized {len(audio)} bytes")
         return audio
 
     except Exception as e:
         logger.error(f"Piper synthesis error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
 
 
@@ -262,7 +274,7 @@ def _synthesize_espeak(text: str, speed: float) -> Optional[bytes]:
         wpm = int(175 * speed)
 
         subprocess.run([
-            "espeak",
+            ESPEAK_CMD,
             "-w", wav_path,
             "-s", str(wpm),
             "-v", "en",  # English voice

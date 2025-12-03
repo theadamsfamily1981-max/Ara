@@ -20,6 +20,7 @@ gi.require_version('GstVideo', '1.0')
 from gi.repository import Gtk, Gst, GstVideo, GLib, Gio
 from pathlib import Path
 import logging
+import cairo
 
 logger = logging.getLogger(__name__)
 
@@ -252,11 +253,220 @@ class VideoBackground:
         logger.info("[Video] Cleaned up")
 
 
+class Particle:
+    """A particle in the premium holographic field."""
+    def __init__(self, width, height):
+        import random
+        self.x = random.uniform(0, width)
+        self.y = random.uniform(0, height)
+        self.z = random.uniform(0.2, 1.0)
+        self.vx = random.uniform(-0.2, 0.2)
+        self.vy = random.uniform(-0.15, 0.15)
+        self.size = random.uniform(0.8, 2.0)
+        self.alpha = random.uniform(0.15, 0.45)
+        self.phase = random.uniform(0, 6.28)
+        # Premium color palette - soft blues and purples
+        self.color = random.choice([
+            (0.4, 0.7, 1.0),    # Soft blue
+            (0.5, 0.6, 0.9),    # Lavender blue
+            (0.6, 0.5, 0.85),   # Soft purple
+            (0.35, 0.65, 0.9),  # Sky blue
+            (0.45, 0.55, 0.95), # Periwinkle
+        ])
+
+    def update(self, width, height, dt, time):
+        import math
+        # Smooth floating motion
+        self.x += self.vx * dt * 60
+        self.y += self.vy * dt * 60
+        # Subtle oscillation
+        self.x += math.sin(time + self.phase) * 0.1
+        self.y += math.cos(time * 0.7 + self.phase) * 0.08
+        # Wrap around
+        if self.x < -10: self.x = width + 10
+        elif self.x > width + 10: self.x = -10
+        if self.y < -10: self.y = height + 10
+        elif self.y > height + 10: self.y = -10
+
+
+class HolographicBackground(Gtk.DrawingArea):
+    """Premium animated holographic background using Cairo drawing."""
+
+    def __init__(self):
+        super().__init__()
+        import math
+        import time
+        import random
+
+        self.set_hexpand(True)
+        self.set_vexpand(True)
+
+        self.time = 0
+        self.particles = [Particle(800, 1280) for _ in range(60)]
+        self.grid_phase = 0
+        self.last_update = time.time()
+
+        self.set_draw_func(self._draw)
+        GLib.timeout_add(33, self._animate)
+
+    def _animate(self):
+        import time
+        now = time.time()
+        dt = now - self.last_update
+        self.last_update = now
+        self.time += dt
+        self.grid_phase += dt * 0.3
+
+        alloc = self.get_allocation()
+        for p in self.particles:
+            p.update(alloc.width or 800, alloc.height or 1280, dt, self.time)
+
+        self.queue_draw()
+        return True
+
+    def _draw(self, area, cr, width, height):
+        import math
+
+        # Premium deep space background
+        pattern = cairo.LinearGradient(0, 0, width * 0.3, height)
+        pattern.add_color_stop_rgb(0, 0.012, 0.020, 0.032)
+        pattern.add_color_stop_rgb(0.3, 0.039, 0.086, 0.110)
+        pattern.add_color_stop_rgb(0.6, 0.051, 0.102, 0.141)
+        pattern.add_color_stop_rgb(1, 0.020, 0.050, 0.080)
+        cr.set_source(pattern)
+        cr.paint()
+
+        # Subtle vignette effect
+        vignette = cairo.RadialGradient(
+            width / 2, height / 2, min(width, height) * 0.2,
+            width / 2, height / 2, max(width, height) * 0.8
+        )
+        vignette.add_color_stop_rgba(0, 0, 0, 0, 0)
+        vignette.add_color_stop_rgba(1, 0, 0, 0, 0.4)
+        cr.set_source(vignette)
+        cr.paint()
+
+        # Premium grid - perspective lines
+        cr.set_line_width(0.5)
+        horizon = height * 0.35
+        center_x = width / 2
+
+        # Horizontal grid lines (fading with distance)
+        for i in range(20):
+            y = horizon + (i * i * 2.5)
+            if y > height: break
+            alpha = max(0, 0.08 - i * 0.003)
+            pulse = math.sin(self.grid_phase + i * 0.15) * 0.3 + 0.7
+            cr.set_source_rgba(0.4, 0.7, 1.0, alpha * pulse)
+            cr.move_to(0, y)
+            cr.line_to(width, y)
+            cr.stroke()
+
+        # Vertical perspective lines (converging to horizon)
+        for i in range(-8, 9):
+            if i == 0: continue
+            x_bottom = center_x + i * 120
+            x_top = center_x + i * 20
+            alpha = 0.04 - abs(i) * 0.003
+            if alpha > 0:
+                cr.set_source_rgba(0.4, 0.7, 1.0, alpha)
+                cr.move_to(x_top, horizon)
+                cr.line_to(x_bottom, height)
+                cr.stroke()
+
+        # Ambient glow orbs (very subtle)
+        for i, (ox, oy, osize, ophase) in enumerate([
+            (0.2, 0.3, 0.15, 0), (0.8, 0.4, 0.12, 2), (0.5, 0.7, 0.18, 4),
+            (0.3, 0.8, 0.1, 1), (0.7, 0.2, 0.08, 3)
+        ]):
+            pulse = math.sin(self.time * 0.5 + ophase) * 0.3 + 0.7
+            gx, gy = width * ox, height * oy
+            radius = min(width, height) * osize * pulse
+
+            orb = cairo.RadialGradient(gx, gy, 0, gx, gy, radius)
+            orb.add_color_stop_rgba(0, 0.3, 0.5, 0.8, 0.03 * pulse)
+            orb.add_color_stop_rgba(0.5, 0.2, 0.4, 0.7, 0.015 * pulse)
+            orb.add_color_stop_rgba(1, 0, 0, 0, 0)
+            cr.set_source(orb)
+            cr.arc(gx, gy, radius, 0, 2 * math.pi)
+            cr.fill()
+
+        # Premium particles with soft glow
+        for p in self.particles:
+            size = p.size * p.z
+            pulse = math.sin(self.time * 2 + p.phase) * 0.2 + 0.8
+
+            # Outer glow
+            cr.set_source_rgba(p.color[0], p.color[1], p.color[2], p.alpha * 0.15 * pulse)
+            cr.arc(p.x, p.y, size * 4, 0, 2 * math.pi)
+            cr.fill()
+
+            # Inner glow
+            cr.set_source_rgba(p.color[0], p.color[1], p.color[2], p.alpha * 0.4 * pulse)
+            cr.arc(p.x, p.y, size * 2, 0, 2 * math.pi)
+            cr.fill()
+
+            # Core
+            cr.set_source_rgba(
+                min(1, p.color[0] + 0.3),
+                min(1, p.color[1] + 0.3),
+                min(1, p.color[2] + 0.2),
+                p.alpha * 0.9 * pulse
+            )
+            cr.arc(p.x, p.y, size * 0.6, 0, 2 * math.pi)
+            cr.fill()
+
+        # Central neural glow (subtle breathing)
+        cx, cy = width / 2, height * 0.45
+        pulse = math.sin(self.time * 0.8) * 0.15 + 0.85
+        radius = min(width, height) * 0.35 * pulse
+
+        # Outer halo
+        halo = cairo.RadialGradient(cx, cy, 0, cx, cy, radius)
+        halo.add_color_stop_rgba(0, 0.4, 0.5, 0.8, 0.04)
+        halo.add_color_stop_rgba(0.3, 0.3, 0.45, 0.7, 0.025)
+        halo.add_color_stop_rgba(0.6, 0.2, 0.35, 0.6, 0.01)
+        halo.add_color_stop_rgba(1, 0, 0, 0, 0)
+        cr.set_source(halo)
+        cr.arc(cx, cy, radius, 0, 2 * math.pi)
+        cr.fill()
+
+        # Very subtle scanlines
+        cr.set_source_rgba(0.5, 0.7, 1.0, 0.008)
+        for y in range(0, int(height), 4):
+            cr.move_to(0, y)
+            cr.line_to(width, y)
+        cr.set_line_width(1)
+        cr.stroke()
+
+    def play(self): pass
+    def stop(self): pass
+    def cleanup(self): pass
+
+
 class AnimatedBackground:
     """
     CSS-animated fallback background when video is not available.
 
     Creates animated gradient/particle effects using pure CSS.
+    """
+
+    def __init__(self):
+        """Initialize animated background."""
+        # Use HolographicBackground for better visuals
+        self.widget = HolographicBackground()
+
+    def get_widget(self) -> Gtk.Widget:
+        return self.widget
+
+    def play(self): pass
+    def stop(self): pass
+    def cleanup(self): pass
+
+
+class AnimatedBackgroundCSS:
+    """
+    Pure CSS-animated fallback (lighter weight).
     """
 
     def __init__(self):
@@ -345,17 +555,19 @@ def create_background(video_path: str = None) -> tuple:
     if video_path and Path(video_path).exists():
         bg = VideoBackground(video_path)
         if bg.player:
+            logger.info(f"[Video] Using video background: {video_path}")
             return bg.get_widget(), bg
 
     # Check default video locations
     bg = VideoBackground()
     if bg.player:
+        logger.info(f"[Video] Using default video background: {bg.video_path}")
         return bg.get_widget(), bg
 
-    # Fall back to animated CSS background
-    logger.info("[Video] Using animated CSS background")
-    bg = AnimatedBackground()
-    return bg.get_widget(), bg
+    # Fall back to HolographicBackground (animated Cairo drawing)
+    logger.info("[Video] Using holographic animated background")
+    holo_bg = HolographicBackground()
+    return holo_bg, holo_bg
 
 
 # Example usage / testing
