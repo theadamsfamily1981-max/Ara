@@ -42,6 +42,8 @@ def main():
 
     # Initialize dialogue manager
     try:
+        # Remove 'model' from engine_cfg to avoid duplicate argument
+        engine_cfg.pop('model', None)
         dialogue = DialogueManager(
             engine=engine,
             model=model,
