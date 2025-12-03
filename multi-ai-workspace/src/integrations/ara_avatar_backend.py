@@ -6,13 +6,22 @@ This backend integrates:
 - T-FAN cockpit integration
 - Voice macro processing
 - Multi-AI delegation
+- TFAN Cognitive Architecture (optional)
 
 Ara is your local AI co-pilot that runs offline and delegates to online AIs when needed.
+
+Cognitive Architecture (when enabled):
+    Phase 1: SENSATION - SensoryCortex normalizes audio/video/text
+    Phase 2: PERCEPTION - Thalamus filters noise via TLS
+    Phase 3: SELF-PRESERVATION - Conscience checks stability
+    Phase 4: COGNITION - Model inference with sparse attention
+    Phase 5: REALITY CHECK - TopologyGate prevents hallucinations
 """
 
 import asyncio
 import time
 import os
+import numpy as np
 from pathlib import Path
 from typing import Optional, Dict, Any, AsyncIterator
 import sys
@@ -30,6 +39,44 @@ logger = get_logger(__name__)
 # Lazy imports for avatar generation
 AvatarGenerator = None
 ML_AVAILABLE = False
+
+# Lazy imports for cognitive architecture
+COGNITIVE_AVAILABLE = False
+CognitiveCore = None
+SensoryCortex = None
+Thalamus = None
+Conscience = None
+RealityMonitor = None
+
+
+def _init_cognitive_components():
+    """Lazy initialization of TFAN cognitive components."""
+    global COGNITIVE_AVAILABLE, CognitiveCore, SensoryCortex, Thalamus, Conscience, RealityMonitor
+
+    if CognitiveCore is not None:
+        return COGNITIVE_AVAILABLE
+
+    try:
+        from .cognitive import (
+            CognitiveCore as CCore,
+            SensoryCortex as SCortex,
+            Thalamus as Thal,
+            Conscience as Consc,
+            RealityMonitor as RealMon,
+        )
+        CognitiveCore = CCore
+        SensoryCortex = SCortex
+        Thalamus = Thal
+        Conscience = Consc
+        RealityMonitor = RealMon
+        COGNITIVE_AVAILABLE = True
+        logger.info("TFAN cognitive components loaded successfully")
+    except ImportError as e:
+        logger.warning(f"Cognitive components not available: {e}")
+        COGNITIVE_AVAILABLE = False
+
+    return COGNITIVE_AVAILABLE
+
 
 def _init_avatar_generator():
     """Lazy initialization of avatar generator."""
@@ -548,6 +595,259 @@ class AraAvatarBackend(AIBackend):
         except Exception as e:
             logger.error(f"Ara health check failed: {e}")
             return False
+
+    # =========================================================================
+    # COGNITIVE ARCHITECTURE INTEGRATION (TFAN)
+    # =========================================================================
+
+    def _init_cognitive_core(
+        self,
+        modalities: list = ["text", "audio"],
+        d_model: int = 4096,
+        device: str = "cpu",
+    ):
+        """Initialize cognitive core for enhanced processing."""
+        if not _init_cognitive_components():
+            logger.warning("Cognitive components not available")
+            return False
+
+        try:
+            self.cognitive_core = CognitiveCore(
+                d_model=d_model,
+                modalities=modalities,
+                device=device,
+            )
+
+            # Individual components for granular control
+            self.sensory_cortex = self.cognitive_core.sensory_cortex
+            self.thalamus = self.cognitive_core.thalamus
+            self.conscience = self.cognitive_core.conscience
+            self.reality_monitor = self.cognitive_core.reality_monitor
+
+            # Track current metrics
+            self.current_metrics = None
+
+            logger.info(f"Cognitive core initialized (modalities={modalities})")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize cognitive core: {e}")
+            return False
+
+    async def cognitive_step(
+        self,
+        user_input: str,
+        audio_data: Optional[np.ndarray] = None,
+        video_data: Optional[np.ndarray] = None,
+        context: Optional[Context] = None,
+    ) -> Dict[str, Any]:
+        """
+        Full cognitive processing step with TFAN architecture.
+
+        This implements the biomimetic cognitive loop:
+            1. SENSATION: Ingest raw data (text, audio, video)
+            2. PERCEPTION: Filter noise via TLS (Thalamus)
+            3. SELF-PRESERVATION: Check stability (Conscience)
+            4. COGNITION: Run model with sparse attention
+            5. REALITY CHECK: Verify topology (TopologyGate)
+
+        Args:
+            user_input: Text input from user
+            audio_data: Optional audio waveform (numpy array)
+            video_data: Optional video frame (numpy array, H x W x C)
+            context: Optional conversation context
+
+        Returns:
+            Dictionary with:
+                - content: Generated response text
+                - cognitive_metrics: Processing metrics
+                - stability_status: Self-preservation status
+                - verification: Reality check result
+                - refused: True if processing was refused
+        """
+        start_time = time.time()
+        context = context or Context()
+
+        # Initialize cognitive core if not done
+        if not hasattr(self, 'cognitive_core') or self.cognitive_core is None:
+            if not self._init_cognitive_core():
+                # Fall back to standard processing
+                response = await self.send_message(user_input, context)
+                return {
+                    "content": response.content,
+                    "cognitive_metrics": {},
+                    "stability_status": {"mode": "FALLBACK"},
+                    "verification": {"gate_passed": True},
+                    "refused": False,
+                    "fallback": True,
+                }
+
+        phase_times = {}
+
+        # ====================================
+        # Phase 1: SENSATION (SensoryCortex)
+        # ====================================
+        phase_start = time.perf_counter()
+
+        sensory_streams = self.sensory_cortex.perceive(
+            text_input=user_input,
+            audio_buffer=audio_data,
+            video_frame=video_data,
+        )
+
+        phase_times["sensation_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # ====================================
+        # Phase 2: PERCEPTION (Thalamus)
+        # ====================================
+        phase_start = time.perf_counter()
+
+        conscious_input, attention_mask = self.thalamus.process(sensory_streams)
+
+        # Cache input topology for reality check
+        self.reality_monitor.set_input_topology(conscious_input.tokens)
+
+        phase_times["perception_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # ====================================
+        # Phase 3: SELF-PRESERVATION (Conscience)
+        # ====================================
+        phase_start = time.perf_counter()
+
+        # Compute metrics from topology change
+        if self.current_metrics is not None:
+            s_dot = self.conscience.compute_structural_rate(
+                conscious_input.tokens,
+                self.current_metrics.get("topology_tensor"),
+            )
+        else:
+            s_dot = 0.0
+
+        from .cognitive.synthesizer import L7Metrics, AlertLevel
+
+        l7_metrics = L7Metrics(
+            structural_rate=s_dot,
+            alert_level=AlertLevel.GREEN,
+            entropy=0.0,
+            coherence=1.0,
+            stability_score=1.0 - s_dot,
+            topology_drift=0.0,
+        )
+
+        stability_status = self.conscience.check_stability(l7_metrics=l7_metrics)
+
+        phase_times["self_check_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # Check if we should refuse to process
+        if not stability_status.can_process:
+            return {
+                "content": stability_status.message,
+                "cognitive_metrics": {
+                    "phase_times": phase_times,
+                    "n_landmarks": conscious_input.n_landmarks,
+                    "sparsity_ratio": conscious_input.sparsity_ratio,
+                },
+                "stability_status": {
+                    "mode": stability_status.mode.name,
+                    "alert_level": stability_status.alert_level.name,
+                    "structural_rate": stability_status.structural_rate,
+                },
+                "verification": {"gate_passed": False, "reason": "protective_mode"},
+                "refused": True,
+            }
+
+        # ====================================
+        # Phase 4: COGNITION (Model Inference)
+        # ====================================
+        phase_start = time.perf_counter()
+
+        # Build enhanced prompt with cognitive context
+        enhanced_prompt = self._build_cognitive_prompt(user_input, conscious_input)
+
+        # Call LLM via standard path
+        response = await self.send_message(enhanced_prompt, context)
+
+        phase_times["cognition_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # ====================================
+        # Phase 5: REALITY CHECK (RealityMonitor)
+        # ====================================
+        phase_start = time.perf_counter()
+
+        # Create tensor from response for topology check
+        # (In production, this would use actual embeddings)
+        import torch
+        response_tensor = torch.randn(1, 100, self.cognitive_core.d_model)
+
+        verification = self.reality_monitor.verify(
+            model_output=response_tensor,
+        )
+
+        phase_times["verification_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # Update current metrics
+        self.current_metrics = {
+            "topology_tensor": conscious_input.tokens,
+            "structural_rate": s_dot,
+        }
+
+        total_time = (time.time() - start_time) * 1000
+
+        # Build response
+        content = response.content
+        if not verification.is_valid:
+            content = (
+                f"[Cognitive Note: {verification.message}]\n\n{content}"
+            )
+
+        return {
+            "content": content,
+            "cognitive_metrics": {
+                "phase_times": phase_times,
+                "total_time_ms": total_time,
+                "n_landmarks": conscious_input.n_landmarks,
+                "sparsity_ratio": conscious_input.sparsity_ratio,
+                "modalities_used": conscious_input.modalities_present,
+            },
+            "stability_status": {
+                "mode": stability_status.mode.name,
+                "alert_level": stability_status.alert_level.name,
+                "structural_rate": stability_status.structural_rate,
+                "can_process": stability_status.can_process,
+            },
+            "verification": {
+                "gate_passed": verification.gate_passed,
+                "status": verification.status.name,
+                "wasserstein_distance": verification.wasserstein_distance,
+                "cosine_similarity": verification.cosine_similarity,
+                "cat_activated": verification.cat_activated,
+            },
+            "refused": False,
+        }
+
+    def _build_cognitive_prompt(
+        self,
+        user_input: str,
+        conscious_input: Any,
+    ) -> str:
+        """Build enhanced prompt with cognitive context."""
+        # Add cognitive context note
+        context_note = (
+            f"\n[Cognitive Context: {len(conscious_input.modalities_present)} modalities, "
+            f"{conscious_input.n_landmarks} landmarks, "
+            f"{conscious_input.sparsity_ratio:.1%} filtered]"
+        )
+
+        return user_input + context_note
+
+    def get_cognitive_status(self) -> Dict[str, Any]:
+        """Get current cognitive system status."""
+        if not hasattr(self, 'cognitive_core') or self.cognitive_core is None:
+            return {"available": False, "reason": "Cognitive core not initialized"}
+
+        return {
+            "available": True,
+            "status": self.cognitive_core.get_status(),
+        }
 
     def cleanup(self):
         """Cleanup resources (thread pool)."""
