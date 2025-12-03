@@ -252,11 +252,146 @@ class VideoBackground:
         logger.info("[Video] Cleaned up")
 
 
+class Particle:
+    """A particle in the holographic field."""
+    def __init__(self, width, height):
+        import random
+        self.x = random.uniform(0, width)
+        self.y = random.uniform(0, height)
+        self.z = random.uniform(0.1, 1.0)
+        self.vx = random.uniform(-0.5, 0.5)
+        self.vy = random.uniform(-0.3, 0.3)
+        self.size = random.uniform(1, 3)
+        self.alpha = random.uniform(0.3, 0.8)
+        self.color = random.choice([
+            (0, 1, 1), (0.5, 0, 1), (0, 0.8, 1), (0.8, 0, 0.8),
+        ])
+
+    def update(self, width, height, dt):
+        self.x += self.vx * dt * 60
+        self.y += self.vy * dt * 60
+        if self.x < 0: self.x = width
+        elif self.x > width: self.x = 0
+        if self.y < 0: self.y = height
+        elif self.y > height: self.y = 0
+
+
+class HolographicBackground(Gtk.DrawingArea):
+    """Animated holographic background using Cairo drawing."""
+
+    def __init__(self):
+        super().__init__()
+        import math
+        import time
+        import random
+
+        self.set_hexpand(True)
+        self.set_vexpand(True)
+
+        self.time = 0
+        self.particles = [Particle(800, 1280) for _ in range(80)]
+        self.grid_phase = 0
+        self.last_update = time.time()
+
+        self.set_draw_func(self._draw)
+        GLib.timeout_add(33, self._animate)
+
+    def _animate(self):
+        import time
+        now = time.time()
+        dt = now - self.last_update
+        self.last_update = now
+        self.time += dt
+        self.grid_phase += dt * 0.5
+
+        alloc = self.get_allocation()
+        for p in self.particles:
+            p.update(alloc.width or 800, alloc.height or 1280, dt)
+
+        self.queue_draw()
+        return True
+
+    def _draw(self, area, cr, width, height):
+        import math
+
+        # Background
+        pattern = cr.create_linear_gradient(0, 0, width, height)
+        pattern.add_color_stop_rgb(0, 0.02, 0.02, 0.05)
+        pattern.add_color_stop_rgb(0.5, 0.05, 0.05, 0.12)
+        pattern.add_color_stop_rgb(1, 0.02, 0.02, 0.05)
+        cr.set_source(pattern)
+        cr.paint()
+
+        # Grid
+        cr.set_line_width(0.5)
+        horizon = height * 0.3
+        for i in range(15):
+            y = horizon + (i * 40 * (1 + i * 0.1))
+            if y > height: break
+            pulse = math.sin(self.grid_phase + i * 0.2) * 0.3 + 0.5
+            cr.set_source_rgba(0, 0.8, 1, 0.1 * pulse)
+            cr.move_to(0, y)
+            cr.line_to(width, y)
+            cr.stroke()
+
+        # Particles
+        for p in self.particles:
+            size = p.size * p.z
+            cr.set_source_rgba(p.color[0], p.color[1], p.color[2], p.alpha * 0.3)
+            cr.arc(p.x, p.y, size * 3, 0, 2 * math.pi)
+            cr.fill()
+            cr.set_source_rgba(p.color[0], p.color[1], p.color[2], p.alpha)
+            cr.arc(p.x, p.y, size, 0, 2 * math.pi)
+            cr.fill()
+
+        # Central glow
+        cx, cy = width / 2, height / 2
+        pulse = math.sin(self.time * 2) * 0.2 + 0.8
+        radius = min(width, height) * 0.25 * pulse
+        pattern = cr.create_radial_gradient(cx, cy, 0, cx, cy, radius)
+        pattern.add_color_stop_rgba(0, 0.5, 0, 1, 0.12)
+        pattern.add_color_stop_rgba(0.5, 0, 0.8, 1, 0.06)
+        pattern.add_color_stop_rgba(1, 0, 0, 0, 0)
+        cr.set_source(pattern)
+        cr.arc(cx, cy, radius, 0, 2 * math.pi)
+        cr.fill()
+
+        # Scanlines
+        cr.set_source_rgba(0, 1, 1, 0.015)
+        for y in range(0, int(height), 3):
+            cr.move_to(0, y)
+            cr.line_to(width, y)
+        cr.set_line_width(1)
+        cr.stroke()
+
+    def play(self): pass
+    def stop(self): pass
+    def cleanup(self): pass
+
+
 class AnimatedBackground:
     """
     CSS-animated fallback background when video is not available.
 
     Creates animated gradient/particle effects using pure CSS.
+    """
+
+    def __init__(self):
+        """Initialize animated background."""
+        # Use HolographicBackground for better visuals
+        self.widget = HolographicBackground()
+
+    def get_widget(self) -> Gtk.Widget:
+        return self.widget
+
+    def play(self): pass
+    def stop(self): pass
+    def cleanup(self): pass
+
+
+class AnimatedBackgroundCSS:
+    """
+    Pure CSS-animated fallback (lighter weight).
     """
 
     def __init__(self):

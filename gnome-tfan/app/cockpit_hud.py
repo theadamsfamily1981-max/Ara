@@ -511,6 +511,30 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
         }
 
+        /* Window Controls */
+        .window-control {
+            background: rgba(0, 40, 60, 0.6);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 4px;
+            color: #00d4ff;
+            font-size: 14px;
+            font-weight: bold;
+            min-width: 32px;
+            min-height: 32px;
+            padding: 4px 8px;
+        }
+
+        .window-control:hover {
+            background: rgba(0, 60, 80, 0.8);
+            border-color: #00ffff;
+        }
+
+        .window-control-close:hover {
+            background: rgba(200, 50, 50, 0.8);
+            border-color: #ff4444;
+            color: #ffffff;
+        }
+
         /* Neural Activity */
         .neural-grid {
             background: rgba(0, 10, 20, 0.5);
@@ -712,10 +736,43 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         strip_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         strip_box.add_css_class('hud-strip')
 
-        # Title
+        # Top row with title and window controls
+        top_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        top_row.set_margin_bottom(8)
+
+        # Title (centered, takes most space)
         title_label = Gtk.Label(label="⚛ ARA COCKPIT ⚛")
         title_label.add_css_class('hud-title')
-        strip_box.append(title_label)
+        title_label.set_hexpand(True)
+        top_row.append(title_label)
+
+        # Window control buttons (right side)
+        controls_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+
+        # Minimize button
+        minimize_btn = Gtk.Button(label="─")
+        minimize_btn.add_css_class('window-control')
+        minimize_btn.set_tooltip_text("Minimize (Esc)")
+        minimize_btn.connect('clicked', self._on_minimize_clicked)
+        controls_box.append(minimize_btn)
+
+        # Fullscreen toggle button
+        self.fullscreen_btn = Gtk.Button(label="⛶")
+        self.fullscreen_btn.add_css_class('window-control')
+        self.fullscreen_btn.set_tooltip_text("Toggle Fullscreen (F11)")
+        self.fullscreen_btn.connect('clicked', self._on_fullscreen_clicked)
+        controls_box.append(self.fullscreen_btn)
+
+        # Close button
+        close_btn = Gtk.Button(label="✕")
+        close_btn.add_css_class('window-control')
+        close_btn.add_css_class('window-control-close')
+        close_btn.set_tooltip_text("Close")
+        close_btn.connect('clicked', self._on_close_clicked)
+        controls_box.append(close_btn)
+
+        top_row.append(controls_box)
+        strip_box.append(top_row)
 
         # Button grid (2 rows)
         grid = Gtk.Grid()
@@ -752,7 +809,54 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
         strip_box.append(grid)
 
+        # Setup keyboard shortcuts
+        self._setup_keyboard_shortcuts()
+
         return strip_box
+
+    def _setup_keyboard_shortcuts(self):
+        """Setup keyboard shortcuts."""
+        # Key controller for the window
+        key_controller = Gtk.EventControllerKey()
+        key_controller.connect('key-pressed', self._on_key_pressed)
+        self.add_controller(key_controller)
+
+    def _on_key_pressed(self, controller, keyval, keycode, state):
+        """Handle key press events."""
+        key_name = Gdk.keyval_name(keyval)
+
+        if key_name == 'Escape':
+            self.minimize()
+            return True
+        elif key_name == 'F11':
+            self._toggle_fullscreen()
+            return True
+        elif key_name == 'q' and (state & Gdk.ModifierType.CONTROL_MASK):
+            self.close()
+            return True
+
+        return False
+
+    def _on_minimize_clicked(self, button):
+        """Minimize the window."""
+        self.minimize()
+
+    def _on_fullscreen_clicked(self, button):
+        """Toggle fullscreen."""
+        self._toggle_fullscreen()
+
+    def _on_close_clicked(self, button):
+        """Close the window."""
+        self.close()
+
+    def _toggle_fullscreen(self):
+        """Toggle fullscreen mode."""
+        if self.is_fullscreen():
+            self.unfullscreen()
+            self.fullscreen_btn.set_label("⛶")
+        else:
+            self.fullscreen()
+            self.fullscreen_btn.set_label("⧈")
 
     def _on_mode_button_clicked(self, button, mode_id):
         """Handle HUD mode button click."""
@@ -1684,21 +1788,38 @@ class CockpitHUDApplication(Adw.Application):
 
     def __init__(self, **kwargs):
         super().__init__(application_id='com.ara.cockpit', **kwargs)
+        self.fullscreen_mode = False
 
     def do_activate(self):
         """Activate application."""
         win = self.props.active_window
         if not win:
             win = CockpitHUDWindow(application=self)
-        win.fullscreen()
+
+        # Check command line args for fullscreen
+        if self.fullscreen_mode or '--fullscreen' in sys.argv or '-f' in sys.argv:
+            win.fullscreen()
+        else:
+            # Windowed mode - good size for side monitor
+            win.set_default_size(800, 1000)
+
         win.present()
 
 
 def main():
     """Main entry point."""
     logging.basicConfig(level=logging.INFO)
+
+    # Parse args
+    import argparse
+    parser = argparse.ArgumentParser(description='Ara Cockpit HUD')
+    parser.add_argument('-f', '--fullscreen', action='store_true', help='Start in fullscreen mode')
+    parser.add_argument('--monitor', type=str, help='Target monitor (e.g., HDMI-1)')
+    args, remaining = parser.parse_known_args()
+
     app = CockpitHUDApplication()
-    return app.run(sys.argv)
+    app.fullscreen_mode = args.fullscreen
+    return app.run(remaining)
 
 
 if __name__ == '__main__':
