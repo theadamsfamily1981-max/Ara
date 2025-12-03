@@ -1,0 +1,31 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ara Spaceship
+GenericName=Neural Command Center
+Comment=Launch the Ara AI Spaceship Command Center with Cockpit HUD
+Icon=utilities-system-monitor
+Exec=/home/user/Ara/launch_spaceship.sh
+Terminal=true
+Categories=Development;System;Monitor;
+Keywords=Ara;AI;Neural;Cockpit;HUD;Spaceship;
+StartupNotify=true
+StartupWMClass=ara-cockpit
+
+Actions=work;relax;cockpit;shutdown;
+
+[Desktop Action work]
+Name=Work Mode (Blue/Cyan)
+Exec=/home/user/Ara/launch_spaceship.sh --work
+
+[Desktop Action relax]
+Name=Relax Mode (Purple/Magenta)
+Exec=/home/user/Ara/launch_spaceship.sh --relax
+
+[Desktop Action cockpit]
+Name=Cockpit Only
+Exec=/home/user/Ara/launch_spaceship.sh --cockpit-only
+
+[Desktop Action shutdown]
+Name=Shutdown All Systems
+Exec=/home/user/Ara/launch_spaceship.sh --shutdown
