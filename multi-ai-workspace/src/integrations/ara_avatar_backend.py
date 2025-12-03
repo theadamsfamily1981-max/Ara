@@ -58,12 +58,16 @@ AppraisalEngine = None
 NIBManager = None
 CognitiveSynthesizer = None
 AEPO = None
+# Level 9 components
+ThermodynamicMonitor = None
+EpisodicMemory = None
 
 
 def _init_cognitive_components():
     """Lazy initialization of TFAN cognitive components."""
     global COGNITIVE_AVAILABLE, CognitiveCore, SensoryCortex, Thalamus, Conscience, RealityMonitor
     global PredictiveController, HomeostaticCore, AppraisalEngine, NIBManager, CognitiveSynthesizer, AEPO
+    global ThermodynamicMonitor, EpisodicMemory
 
     if CognitiveCore is not None:
         return COGNITIVE_AVAILABLE
@@ -83,6 +87,9 @@ def _init_cognitive_components():
             NIBManager as NIBMgr,
             CognitiveSynthesizer as CogSynth,
             AEPO as AEPOCtrl,
+            # Level 9 components
+            ThermodynamicMonitor as ThermoMon,
+            EpisodicMemory as EpiMem,
         )
         # Core
         CognitiveCore = CCore
@@ -97,8 +104,11 @@ def _init_cognitive_components():
         NIBManager = NIBMgr
         CognitiveSynthesizer = CogSynth
         AEPO = AEPOCtrl
+        # Level 9
+        ThermodynamicMonitor = ThermoMon
+        EpisodicMemory = EpiMem
         COGNITIVE_AVAILABLE = True
-        logger.info("TFAN cognitive components loaded successfully (full architecture)")
+        logger.info("TFAN cognitive components loaded successfully (full architecture + Level 9)")
     except ImportError as e:
         logger.warning(f"Cognitive components not available: {e}")
         COGNITIVE_AVAILABLE = False
@@ -680,12 +690,29 @@ class AraAvatarBackend(AIBackend):
                 device=device,
             )
 
+            # Level 9: Thermodynamic Monitor
+            self.thermo_monitor = ThermodynamicMonitor(
+                max_entropy_threshold=2.0,
+                energy_capacity=100.0,
+                consumption_rate=0.1,
+                recovery_rate=0.05,
+                device=device,
+            )
+
+            # Level 9: Episodic Memory (CXL-backed)
+            self.episodic_memory = EpisodicMemory(
+                use_cxl=True,
+                capacity_gb=100.0,  # 100GB virtual
+                ram_budget_mb=256.0,
+                embedding_dim=d_model,
+            )
+
             # Track current metrics and state
             self.current_metrics = None
             self._last_prediction = None
             self._cognitive_initialized = True
 
-            logger.info(f"Full cognitive architecture initialized (modalities={modalities})")
+            logger.info(f"Full cognitive architecture initialized with Level 9 (modalities={modalities})")
             return True
         except Exception as e:
             logger.error(f"Failed to initialize cognitive core: {e}")
@@ -968,6 +995,56 @@ class AraAvatarBackend(AIBackend):
         phase_times["verification_ms"] = (time.perf_counter() - phase_start) * 1000
 
         # ========================================
+        # Phase 10: THERMODYNAMICS (Energy Cost)
+        # ========================================
+        phase_start = time.perf_counter()
+
+        # Compute thermodynamic cost of this cognitive step
+        thermo_stats = self.thermo_monitor.compute_entropy_production(
+            activations=conscious_input.tokens,
+        )
+
+        # Check if we're overheating
+        force_recovery = False
+        if self.thermo_monitor.should_force_recovery():
+            force_recovery = True
+            # Trigger recovery mode in conscience
+            from .cognitive.synthesizer import SystemMode
+            self.conscience.mode = SystemMode.RECOVERY
+            logger.warning(
+                f"Cognitive overheating detected (Pi_q={thermo_stats.Pi_q:.3f}). "
+                "Entering recovery mode."
+            )
+
+        phase_times["thermodynamics_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # ========================================
+        # Phase 11: MEMORY (Episodic Storage)
+        # ========================================
+        phase_start = time.perf_counter()
+
+        # Store this interaction as an episode
+        episode_id = None
+        if hasattr(self, 'episodic_memory') and self.episodic_memory:
+            # Compute importance based on surprise and emotional valence
+            importance = 0.5 + 0.2 * is_surprised + 0.3 * abs(appraisal.valence)
+            importance = min(1.0, importance)
+
+            # Store with embedding (use mean of conscious tokens)
+            episode_embedding = conscious_input.tokens.mean(dim=(0, 1)).cpu().numpy()
+            episode_id = self.episodic_memory.store_episode(
+                content=f"User: {user_input[:200]}\nAra: {response.content[:200]}",
+                embedding=episode_embedding,
+                importance=importance,
+                context={
+                    "emotion": appraisal.emotion_label,
+                    "persona": active_nib.name if active_nib else "unknown",
+                },
+            )
+
+        phase_times["memory_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # ========================================
         # Update State for Next Cycle
         # ========================================
 
@@ -993,6 +1070,13 @@ class AraAvatarBackend(AIBackend):
         content = response.content
         if not verification.is_valid:
             content = f"[Cognitive Note: {verification.message}]\n\n{content}"
+
+        # Add recovery warning if overheating
+        if force_recovery:
+            content = (
+                "[I am cognitively overheating and entering recovery mode. "
+                "My next responses may be slower as I consolidate.]\n\n" + content
+            )
 
         return {
             "content": content,
@@ -1040,6 +1124,19 @@ class AraAvatarBackend(AIBackend):
                 "wasserstein_distance": verification.wasserstein_distance,
                 "cosine_similarity": verification.cosine_similarity,
                 "cat_activated": verification.cat_activated,
+            },
+            "thermodynamics": {
+                "Pi_q": thermo_stats.Pi_q,
+                "vfe": thermo_stats.vfe,
+                "thermal_state": thermo_stats.thermal_state.name,
+                "efficiency": thermo_stats.efficiency,
+                "energy_remaining_pct": self.thermo_monitor.energy_budget.percentage * 100,
+                "force_recovery": force_recovery,
+            },
+            "memory": {
+                "episode_stored": episode_id is not None,
+                "episode_id": episode_id,
+                "total_episodes": self.episodic_memory.total_episodes if self.episodic_memory else 0,
             },
             "refused": False,
         }

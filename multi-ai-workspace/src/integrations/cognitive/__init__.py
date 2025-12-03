@@ -43,6 +43,21 @@ Architecture Components:
         - Working memory management
         - Tool use decision via Adaptive Entropy Policy Optimization
 
+    AutonomyEngine & VolitionLoop (autonomy.py)
+        - Layer 9: Self-directed behavior
+        - Background volition loop for unprompted action
+        - Drive-based task initiation
+
+    ThermodynamicMonitor (thermodynamics.py)
+        - Entropy Production (Π_q) tracking
+        - Variational Free Energy computation
+        - Energy budget and recovery management
+
+    EpisodicMemory & CXLPager (memory.py)
+        - Long-term episodic memory
+        - CXL-backed infinite storage
+        - Vector similarity search for recall
+
 Usage:
     from multi_ai_workspace.src.integrations.cognitive import (
         SensoryCortex,
@@ -126,6 +141,34 @@ from .executive import (
     ActionType,
 )
 
+# Level 9: Autonomy (The Will to Act)
+from .autonomy import (
+    AutonomyEngine,
+    VolitionLoop,
+    Intent,
+    DriveState,
+    VolitionState,
+    TaskType,
+    AutonomyLevel,
+)
+
+# Level 9: Thermodynamics (Physical Constraints)
+from .thermodynamics import (
+    ThermodynamicMonitor,
+    ThermodynamicStats,
+    ThermalState,
+    EnergyBudget,
+)
+
+# Level 9: Infinite Memory (CXL Cortex Extension)
+from .memory import (
+    EpisodicMemory,
+    CXLPager,
+    Episode,
+    MemoryTier,
+    VectorIndex,
+)
+
 __all__ = [
     # Phase 1: Senses
     "SensoryCortex",
@@ -176,4 +219,23 @@ __all__ = [
     "ExecutiveDecision",
     "ExecutiveMode",
     "ActionType",
+    # Level 9: Autonomy
+    "AutonomyEngine",
+    "VolitionLoop",
+    "Intent",
+    "DriveState",
+    "VolitionState",
+    "TaskType",
+    "AutonomyLevel",
+    # Level 9: Thermodynamics
+    "ThermodynamicMonitor",
+    "ThermodynamicStats",
+    "ThermalState",
+    "EnergyBudget",
+    # Level 9: Infinite Memory
+    "EpisodicMemory",
+    "CXLPager",
+    "Episode",
+    "MemoryTier",
+    "VectorIndex",
 ]
