@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     espeak-ng \
     libespeak-ng1 \
     # OpenCV dependencies
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -125,7 +125,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2-dev \
     espeak-ng \
     libespeak-ng1 \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     git \
     && apt-get clean \
