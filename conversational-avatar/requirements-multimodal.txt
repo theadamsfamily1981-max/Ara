@@ -1,0 +1,20 @@
+# Ara Multimodal - Voice & Vision Requirements
+# Install with: pip install -r requirements-multimodal.txt
+
+# LLM
+ollama>=0.1
+
+# Text-to-Speech
+pyttsx3>=2.90
+
+# Speech Recognition
+SpeechRecognition>=3.10
+
+# For microphone input
+pyaudio>=0.2.14
+
+# Computer Vision
+opencv-python>=4.8
+
+# Image processing
+pillow>=10.0
