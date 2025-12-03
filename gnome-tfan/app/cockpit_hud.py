@@ -294,18 +294,36 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         logger.info("[COCKPIT] Ara Neural Command Center initialized")
 
     def _load_cockpit_css(self):
-        """Load badass cockpit theme."""
+        """Load premium high-end cockpit theme."""
         display = Gdk.Display.get_default()
 
         css = """
-        /* === ARA COCKPIT THEME === */
+        /* ═══════════════════════════════════════════════════════════════════
+           ARA NEURAL COMMAND CENTER - PREMIUM INTERFACE
+           Advanced AI Control System - High-End Design Language
+           ═══════════════════════════════════════════════════════════════════ */
+
+        /* === FOUNDATION === */
+        * {
+            font-family: 'Inter', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+        }
 
         .cockpit-window {
-            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+            background: linear-gradient(165deg,
+                #030508 0%,
+                #0a1628 25%,
+                #0d1a2d 50%,
+                #081420 75%,
+                #020406 100%);
         }
 
         .cockpit-bg {
-            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+            background: linear-gradient(165deg,
+                #030508 0%,
+                #0a1628 25%,
+                #0d1a2d 50%,
+                #081420 75%,
+                #020406 100%);
         }
 
         .cockpit-content {
@@ -316,324 +334,417 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             pointer-events: none;
         }
 
+        /* Subtle scanlines for depth - very refined */
         .cockpit-scanlines {
             background-image: repeating-linear-gradient(
                 0deg,
-                rgba(0, 255, 255, 0.03) 0px,
-                rgba(0, 255, 255, 0.03) 1px,
+                rgba(120, 200, 255, 0.008) 0px,
+                rgba(120, 200, 255, 0.008) 1px,
                 transparent 1px,
-                transparent 2px
+                transparent 3px
             );
-            animation: scanline-flicker 0.1s infinite;
         }
 
-        @keyframes scanline-flicker {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.98; }
-        }
-
-        /* HUD Strip */
+        /* === HEADER / HUD STRIP === */
         .hud-strip {
-            background: linear-gradient(180deg, rgba(0,20,40,0.95) 0%, rgba(0,10,20,0.9) 100%);
-            border-bottom: 2px solid rgba(0, 255, 255, 0.5);
-            padding: 12px;
-            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.2);
+            background: linear-gradient(180deg,
+                rgba(8, 20, 35, 0.98) 0%,
+                rgba(5, 12, 22, 0.95) 100%);
+            border-bottom: 1px solid rgba(100, 180, 255, 0.15);
+            padding: 16px 20px;
+            box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.03),
+                0 8px 32px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.02);
         }
 
         .hud-title {
-            font-size: 28px;
-            font-weight: 900;
-            color: #00ffff;
-            text-shadow: 0 0 20px rgba(0, 255, 255, 0.8),
-                         0 0 40px rgba(0, 255, 255, 0.4);
-            letter-spacing: 4px;
-            margin-bottom: 8px;
+            font-size: 22px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.95);
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            text-shadow: 0 0 40px rgba(100, 200, 255, 0.3);
         }
 
+        /* === NAVIGATION BUTTONS === */
         .hud-button {
-            background: linear-gradient(180deg, rgba(0,40,60,0.8) 0%, rgba(0,20,40,0.9) 100%);
-            border: 2px solid rgba(0, 255, 255, 0.4);
-            border-radius: 8px;
-            color: #00d4ff;
-            font-weight: 700;
-            font-size: 12px;
-            padding: 12px 16px;
-            min-width: 80px;
-            transition: all 0.2s ease;
-            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+            background: linear-gradient(180deg,
+                rgba(20, 40, 60, 0.6) 0%,
+                rgba(10, 25, 40, 0.7) 100%);
+            border: 1px solid rgba(100, 180, 255, 0.12);
+            border-radius: 10px;
+            color: rgba(180, 210, 240, 0.9);
+            font-weight: 500;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            padding: 14px 18px;
+            min-width: 85px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow:
+                0 2px 8px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03);
         }
 
         .hud-button:hover {
-            background: linear-gradient(180deg, rgba(0,60,80,0.9) 0%, rgba(0,40,60,0.95) 100%);
-            border-color: rgba(0, 255, 255, 0.8);
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+            background: linear-gradient(180deg,
+                rgba(30, 55, 80, 0.7) 0%,
+                rgba(20, 40, 60, 0.8) 100%);
+            border-color: rgba(100, 180, 255, 0.25);
+            color: rgba(220, 240, 255, 1);
+            box-shadow:
+                0 4px 16px rgba(0, 0, 0, 0.4),
+                0 0 20px rgba(100, 180, 255, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transform: translateY(-1px);
         }
 
         .hud-button.active, .hud-button.selected {
-            background: linear-gradient(180deg, rgba(0,100,120,0.9) 0%, rgba(0,60,80,0.95) 100%);
-            border-color: #00ffff;
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.6),
-                        inset 0 0 20px rgba(0, 255, 255, 0.1);
+            background: linear-gradient(180deg,
+                rgba(40, 100, 140, 0.7) 0%,
+                rgba(25, 70, 100, 0.8) 100%);
+            border-color: rgba(100, 200, 255, 0.4);
             color: #ffffff;
+            box-shadow:
+                0 4px 20px rgba(60, 160, 220, 0.2),
+                0 0 30px rgba(100, 180, 255, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08),
+                inset 0 0 20px rgba(100, 180, 255, 0.05);
         }
 
-        /* Metric Cards */
+        /* === METRIC CARDS - GLASSMORPHISM === */
         .metric-card {
-            background: linear-gradient(135deg, rgba(0,30,50,0.85) 0%, rgba(0,15,30,0.9) 100%);
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            border-radius: 12px;
-            padding: 16px;
-            margin: 8px 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5),
-                        inset 0 1px 0 rgba(255,255,255,0.05);
+            background: linear-gradient(135deg,
+                rgba(15, 30, 50, 0.75) 0%,
+                rgba(8, 18, 32, 0.85) 100%);
+            border: 1px solid rgba(100, 180, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px 24px;
+            margin: 10px 16px;
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.3),
+                0 2px 8px rgba(0, 0, 0, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03),
+                inset 0 0 60px rgba(100, 180, 255, 0.02);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .metric-card:hover {
+            border-color: rgba(100, 180, 255, 0.18);
+            box-shadow:
+                0 12px 40px rgba(0, 0, 0, 0.35),
+                0 4px 12px rgba(0, 0, 0, 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                inset 0 0 80px rgba(100, 180, 255, 0.03);
         }
 
         .metric-card-critical {
-            border-color: rgba(255, 50, 50, 0.6);
-            box-shadow: 0 0 30px rgba(255, 50, 50, 0.3);
-            animation: critical-pulse 1s infinite;
+            border-color: rgba(255, 80, 80, 0.3);
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.3),
+                0 0 40px rgba(255, 80, 80, 0.1),
+                inset 0 0 40px rgba(255, 80, 80, 0.03);
+            animation: critical-glow 2s ease-in-out infinite;
         }
 
-        @keyframes critical-pulse {
-            0%, 100% { border-color: rgba(255, 50, 50, 0.6); }
-            50% { border-color: rgba(255, 50, 50, 1); }
+        @keyframes critical-glow {
+            0%, 100% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 40px rgba(255, 80, 80, 0.1); }
+            50% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 60px rgba(255, 80, 80, 0.2); }
         }
 
         .metric-card-neural {
-            border-color: rgba(138, 43, 226, 0.5);
-            box-shadow: 0 0 25px rgba(138, 43, 226, 0.2);
+            border-color: rgba(140, 100, 220, 0.2);
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.3),
+                inset 0 0 50px rgba(140, 100, 220, 0.03);
         }
 
         .metric-card-emotional {
-            border-color: rgba(255, 165, 0, 0.5);
-            box-shadow: 0 0 25px rgba(255, 165, 0, 0.2);
+            border-color: rgba(255, 180, 100, 0.15);
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.3),
+                inset 0 0 50px rgba(255, 180, 100, 0.02);
         }
 
+        /* === TYPOGRAPHY === */
         .metric-title {
-            font-size: 14px;
-            font-weight: 800;
-            color: #00ffff;
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(150, 190, 230, 0.9);
             text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 8px;
-            text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+            letter-spacing: 2.5px;
+            margin-bottom: 12px;
         }
 
         .metric-value-huge {
-            font-size: 64px;
-            font-weight: 900;
-            color: #ffffff;
-            text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+            font-size: 56px;
+            font-weight: 300;
+            color: rgba(255, 255, 255, 0.95);
+            letter-spacing: -2px;
+            line-height: 1;
         }
 
         .metric-value-large {
-            font-size: 36px;
-            font-weight: 800;
-            color: #00ffff;
-            text-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+            font-size: 32px;
+            font-weight: 400;
+            color: rgba(150, 210, 255, 0.95);
+            letter-spacing: -1px;
         }
 
         .metric-value-medium {
-            font-size: 24px;
-            font-weight: 700;
-            color: #00d4ff;
+            font-size: 20px;
+            font-weight: 500;
+            color: rgba(140, 200, 255, 0.9);
         }
 
         .metric-label {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.7);
+            font-size: 10px;
+            font-weight: 500;
+            color: rgba(180, 200, 220, 0.6);
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
         }
 
         .metric-warning {
-            color: #ff6b35 !important;
-            text-shadow: 0 0 20px rgba(255, 107, 53, 0.8);
-            animation: warning-pulse 0.5s infinite;
+            color: rgba(255, 140, 80, 1) !important;
+            animation: warning-glow 1.5s ease-in-out infinite;
         }
 
-        @keyframes warning-pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+        @keyframes warning-glow {
+            0%, 100% { text-shadow: 0 0 20px rgba(255, 140, 80, 0.3); }
+            50% { text-shadow: 0 0 30px rgba(255, 140, 80, 0.5); }
         }
 
-        /* Progress Bars */
+        /* === PROGRESS BARS === */
         .metric-progress trough {
-            background: rgba(0, 20, 40, 0.8);
-            border-radius: 4px;
-            min-height: 12px;
+            background: rgba(20, 40, 60, 0.5);
+            border-radius: 6px;
+            min-height: 8px;
+            border: 1px solid rgba(100, 180, 255, 0.08);
         }
 
         .metric-progress progress {
-            background: linear-gradient(90deg, #00ffff 0%, #00d4ff 100%);
-            border-radius: 4px;
-            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+            background: linear-gradient(90deg,
+                rgba(80, 160, 220, 0.9) 0%,
+                rgba(120, 200, 255, 0.95) 100%);
+            border-radius: 5px;
+            box-shadow: 0 0 12px rgba(100, 180, 255, 0.3);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .metric-progress text {
+            font-size: 9px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
         }
 
         .progress-neural progress {
-            background: linear-gradient(90deg, #8a2be2 0%, #da70d6 100%);
-            box-shadow: 0 0 10px rgba(138, 43, 226, 0.5);
+            background: linear-gradient(90deg,
+                rgba(120, 80, 200, 0.9) 0%,
+                rgba(180, 120, 255, 0.95) 100%);
+            box-shadow: 0 0 12px rgba(140, 100, 220, 0.3);
         }
 
         .progress-emotional progress {
-            background: linear-gradient(90deg, #ff6b35 0%, #ffa500 100%);
-            box-shadow: 0 0 10px rgba(255, 165, 0, 0.5);
+            background: linear-gradient(90deg,
+                rgba(220, 140, 80, 0.9) 0%,
+                rgba(255, 180, 100, 0.95) 100%);
+            box-shadow: 0 0 12px rgba(255, 160, 80, 0.3);
         }
 
-        /* PAD Bars */
-        .pad-positive progress {
-            background: linear-gradient(90deg, #00ff00 0%, #7fff00 100%);
-        }
-
-        .pad-negative progress {
-            background: linear-gradient(90deg, #ff4444 0%, #ff6666 100%);
-        }
-
-        /* Status Bar */
+        /* === STATUS BAR === */
         .status-bar {
-            background: linear-gradient(180deg, rgba(0,10,20,0.9) 0%, rgba(0,20,40,0.95) 100%);
-            border-top: 1px solid rgba(0, 255, 255, 0.3);
-            padding: 8px 16px;
+            background: linear-gradient(180deg,
+                rgba(8, 16, 28, 0.95) 0%,
+                rgba(5, 10, 18, 0.98) 100%);
+            border-top: 1px solid rgba(100, 180, 255, 0.08);
+            padding: 12px 20px;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.02),
+                0 -4px 20px rgba(0, 0, 0, 0.3);
         }
 
         .status-indicator {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.8);
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 500;
+            color: rgba(180, 200, 220, 0.7);
+            letter-spacing: 0.5px;
         }
 
         .status-connected {
-            color: #00ff00;
-            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+            color: rgba(100, 220, 150, 0.95);
+            text-shadow: 0 0 10px rgba(100, 220, 150, 0.3);
         }
 
         .status-disconnected {
-            color: #ff4444;
-            text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+            color: rgba(255, 120, 100, 0.9);
+            text-shadow: 0 0 10px rgba(255, 120, 100, 0.3);
         }
 
-        /* Window Controls */
+        /* === WINDOW CONTROLS === */
         .window-control {
-            background: rgba(0, 40, 60, 0.6);
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            border-radius: 4px;
-            color: #00d4ff;
-            font-size: 14px;
-            font-weight: bold;
-            min-width: 32px;
-            min-height: 32px;
-            padding: 4px 8px;
+            background: rgba(30, 50, 70, 0.4);
+            border: 1px solid rgba(100, 180, 255, 0.1);
+            border-radius: 6px;
+            color: rgba(180, 210, 240, 0.7);
+            font-size: 12px;
+            font-weight: 500;
+            min-width: 36px;
+            min-height: 28px;
+            padding: 4px 10px;
+            transition: all 0.2s ease;
         }
 
         .window-control:hover {
-            background: rgba(0, 60, 80, 0.8);
-            border-color: #00ffff;
+            background: rgba(40, 70, 100, 0.5);
+            border-color: rgba(100, 180, 255, 0.2);
+            color: rgba(220, 240, 255, 0.9);
         }
 
         .window-control-close:hover {
-            background: rgba(200, 50, 50, 0.8);
-            border-color: #ff4444;
-            color: #ffffff;
+            background: rgba(180, 60, 60, 0.5);
+            border-color: rgba(255, 100, 100, 0.3);
+            color: rgba(255, 220, 220, 0.95);
         }
 
-        /* Neural Activity */
+        /* === NEURAL ACTIVITY GRID === */
         .neural-grid {
-            background: rgba(0, 10, 20, 0.5);
-            border: 1px solid rgba(138, 43, 226, 0.3);
-            border-radius: 8px;
-            padding: 8px;
+            background: rgba(10, 20, 35, 0.4);
+            border: 1px solid rgba(140, 100, 220, 0.12);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: inset 0 0 40px rgba(140, 100, 220, 0.03);
         }
 
         .neuron-active {
-            background: radial-gradient(circle, #da70d6 0%, #8a2be2 70%, transparent 100%);
+            background: radial-gradient(circle,
+                rgba(180, 140, 255, 0.9) 0%,
+                rgba(120, 80, 200, 0.6) 60%,
+                transparent 100%);
             border-radius: 50%;
-            box-shadow: 0 0 15px rgba(218, 112, 214, 0.8);
-            animation: neuron-fire 0.3s ease-out;
-        }
-
-        @keyframes neuron-fire {
-            0% { transform: scale(1.5); opacity: 1; }
-            100% { transform: scale(1); opacity: 0.7; }
+            box-shadow: 0 0 12px rgba(160, 120, 240, 0.6);
         }
 
         .neuron-idle {
-            background: rgba(138, 43, 226, 0.2);
+            background: rgba(100, 80, 160, 0.15);
             border-radius: 50%;
         }
 
-        /* Chat */
+        /* === CHAT INTERFACE === */
         .chat-entry {
-            background: rgba(0, 20, 40, 0.8);
-            border: 2px solid rgba(0, 255, 255, 0.4);
-            border-radius: 8px;
-            color: #ffffff;
-            padding: 12px;
+            background: rgba(15, 30, 50, 0.6);
+            border: 1px solid rgba(100, 180, 255, 0.15);
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            padding: 14px 18px;
             font-size: 14px;
+            transition: all 0.25s ease;
         }
 
         .chat-entry:focus {
-            border-color: #00ffff;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+            background: rgba(20, 40, 65, 0.7);
+            border-color: rgba(100, 180, 255, 0.3);
+            box-shadow:
+                0 0 20px rgba(100, 180, 255, 0.1),
+                inset 0 0 30px rgba(100, 180, 255, 0.02);
         }
 
         .chat-message-user {
-            background: rgba(0, 100, 150, 0.4);
-            border-radius: 12px 12px 4px 12px;
-            padding: 10px 14px;
-            margin: 4px 8px 4px 40px;
-            color: #ffffff;
+            background: linear-gradient(135deg,
+                rgba(40, 80, 120, 0.4) 0%,
+                rgba(30, 60, 90, 0.5) 100%);
+            border-radius: 16px 16px 4px 16px;
+            padding: 14px 18px;
+            margin: 6px 12px 6px 50px;
+            color: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(100, 180, 255, 0.1);
+            font-size: 14px;
+            line-height: 1.5;
         }
 
         .chat-message-ara {
-            background: linear-gradient(135deg, rgba(138, 43, 226, 0.3) 0%, rgba(75, 0, 130, 0.3) 100%);
-            border-radius: 12px 12px 12px 4px;
-            padding: 10px 14px;
-            margin: 4px 40px 4px 8px;
-            color: #ffffff;
-            border-left: 3px solid #da70d6;
+            background: linear-gradient(135deg,
+                rgba(60, 40, 100, 0.35) 0%,
+                rgba(40, 25, 70, 0.45) 100%);
+            border-radius: 16px 16px 16px 4px;
+            padding: 14px 18px;
+            margin: 6px 50px 6px 12px;
+            color: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(140, 100, 220, 0.15);
+            border-left: 3px solid rgba(160, 120, 240, 0.5);
+            font-size: 14px;
+            line-height: 1.5;
         }
 
-        /* Kitten Stats */
+        /* === KITTEN STATS === */
         .kitten-stat {
-            font-family: monospace;
-            font-size: 14px;
-            color: #da70d6;
+            font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+            font-size: 13px;
+            color: rgba(180, 140, 255, 0.9);
+            letter-spacing: 0.5px;
         }
 
         .kitten-hardware {
-            color: #00ff00;
-            font-weight: bold;
+            color: rgba(100, 220, 150, 0.95);
+            font-weight: 600;
+            text-shadow: 0 0 15px rgba(100, 220, 150, 0.2);
         }
 
         .kitten-emulated {
-            color: #ffaa00;
+            color: rgba(255, 200, 100, 0.9);
         }
 
-        /* Holographic effect */
+        /* === HOLOGRAPHIC EFFECT === */
         .holographic {
             position: relative;
+            overflow: hidden;
         }
 
         .holographic::before {
             content: '';
             position: absolute;
             top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
             background: linear-gradient(
-                45deg,
-                transparent 30%,
-                rgba(0, 255, 255, 0.05) 50%,
-                transparent 70%
+                90deg,
+                transparent 0%,
+                rgba(100, 180, 255, 0.03) 45%,
+                rgba(140, 200, 255, 0.06) 50%,
+                rgba(100, 180, 255, 0.03) 55%,
+                transparent 100%
             );
-            animation: hologram-sweep 3s linear infinite;
+            animation: hologram-sweep 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
             pointer-events: none;
         }
 
         @keyframes hologram-sweep {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
+            0% { left: -100%; }
+            100% { left: 200%; }
+        }
+
+        /* === SCROLLBAR STYLING === */
+        scrollbar {
+            background: transparent;
+        }
+
+        scrollbar slider {
+            background: rgba(100, 180, 255, 0.2);
+            border-radius: 10px;
+            min-width: 6px;
+            min-height: 40px;
+            border: none;
+        }
+
+        scrollbar slider:hover {
+            background: rgba(100, 180, 255, 0.3);
+        }
+
+        /* === ACCENT GLOW ANIMATION === */
+        @keyframes ambient-pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
         }
         """
 
