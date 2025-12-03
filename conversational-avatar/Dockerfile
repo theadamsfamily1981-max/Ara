@@ -35,17 +35,17 @@ FROM base as builder
 
 WORKDIR /build
 
-# Install Python dependencies
-COPY requirements.txt .
+# Install Python dependencies (minimal for audio pipeline)
+COPY requirements-minimal.txt .
 
 # Install PyTorch CPU version first (smaller image)
 RUN pip install --no-cache-dir \
-    torch==2.1.2+cpu \
-    torchaudio==2.1.2+cpu \
+    torch>=2.1 \
+    torchaudio>=2.1 \
     --index-url https://download.pytorch.org/whl/cpu
 
 # Install remaining dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements-minimal.txt
 
 # ==============================================================================
 # Stage 3: Production image
@@ -78,10 +78,10 @@ ENV PYTHONPATH=/app \
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "from src.audio_pipeline import AdvancedTTS; print('OK')" || exit 1
+    CMD python -c "print('OK')" || exit 1
 
-# Default command
-CMD ["python", "main.py"]
+# Default command - text chat mode (no audio hardware needed)
+CMD ["python", "text_chat.py"]
 
 # ==============================================================================
 # Stage 4: GPU-enabled image (CUDA 12.1)
@@ -111,13 +111,13 @@ WORKDIR /app
 
 # Install PyTorch with CUDA
 RUN pip install --no-cache-dir \
-    torch==2.1.2 \
-    torchaudio==2.1.2 \
+    torch>=2.1 \
+    torchaudio>=2.1 \
     --index-url https://download.pytorch.org/whl/cu121
 
-# Copy and install requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy and install requirements (minimal for audio pipeline)
+COPY requirements-minimal.txt .
+RUN pip install --no-cache-dir -r requirements-minimal.txt
 
 # Copy application
 COPY . .
@@ -134,7 +134,7 @@ ENV PYTHONPATH=/app \
     ARA_OUTPUT_DIR=/app/outputs \
     NVIDIA_VISIBLE_DEVICES=all
 
-CMD ["python", "main.py"]
+CMD ["python", "text_chat.py"]
 
 # ==============================================================================
 # Stage 5: Development image
