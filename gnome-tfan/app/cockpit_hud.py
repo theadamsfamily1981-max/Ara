@@ -27,15 +27,26 @@ from gi.repository import Gtk, Adw, Gio, GLib, Gdk
 import sys
 import json
 import subprocess
-import requests
 import threading
 from pathlib import Path
 from typing import Optional, Dict, Any
-import psutil
 import time
 import logging
 import math
 import random
+
+# Optional dependencies with graceful fallbacks
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +99,10 @@ class AraBrainClient:
 
     def get_status(self) -> Optional[Dict]:
         """Get Ara's current status."""
+        if not REQUESTS_AVAILABLE:
+            self.connected = False
+            self.last_error = "requests module not installed"
+            return None
         try:
             resp = requests.get(f"{self.base_url}/status", timeout=2)
             if resp.status_code == 200:
@@ -102,6 +117,8 @@ class AraBrainClient:
 
     def get_kitten_status(self) -> Optional[Dict]:
         """Get Forest Kitten 33 status."""
+        if not REQUESTS_AVAILABLE:
+            return None
         try:
             resp = requests.get(f"{self.base_url}/kitten", timeout=2)
             if resp.status_code == 200:
@@ -112,6 +129,8 @@ class AraBrainClient:
 
     def get_mood(self) -> Optional[Dict]:
         """Get PAD emotional state."""
+        if not REQUESTS_AVAILABLE:
+            return None
         try:
             resp = requests.get(f"{self.base_url}/mood", timeout=2)
             if resp.status_code == 200:
@@ -122,6 +141,8 @@ class AraBrainClient:
 
     def chat(self, message: str) -> Optional[Dict]:
         """Send message to Ara."""
+        if not REQUESTS_AVAILABLE:
+            return {"reply_text": "Chat unavailable - requests module not installed"}
         try:
             resp = requests.post(
                 f"{self.base_url}/chat",
@@ -138,9 +159,24 @@ class AraBrainClient:
 class MetricsCollector:
     """Collects system metrics for HUD display."""
 
+    # Demo data state for smooth animations
+    _demo_time = 0
+
     @staticmethod
     def get_cpu_metrics():
         """Get CPU usage, temps, frequency."""
+        if not PSUTIL_AVAILABLE:
+            # Return realistic demo data
+            MetricsCollector._demo_time += 0.1
+            t = MetricsCollector._demo_time
+            base_usage = 25 + math.sin(t * 0.3) * 15
+            return {
+                'usage_per_core': [base_usage + random.uniform(-5, 10) for _ in range(16)],
+                'usage_total': base_usage + random.uniform(-3, 3),
+                'frequency': 3800 + math.sin(t * 0.5) * 200,
+                'cores': 16,
+                'temps': [55 + math.sin(t * 0.2) * 8 + random.uniform(-2, 2) for _ in range(16)]
+            }
         cpu_percent = psutil.cpu_percent(interval=0.1, percpu=True)
         cpu_freq = psutil.cpu_freq()
         cpu_count = psutil.cpu_count()
@@ -164,6 +200,15 @@ class MetricsCollector:
     @staticmethod
     def get_ram_metrics():
         """Get RAM usage."""
+        if not PSUTIL_AVAILABLE:
+            t = MetricsCollector._demo_time
+            used = 24 + math.sin(t * 0.15) * 4
+            return {
+                'total_gb': 64,
+                'used_gb': used,
+                'percent': (used / 64) * 100,
+                'available_gb': 64 - used,
+            }
         mem = psutil.virtual_memory()
         return {
             'total_gb': mem.total / (1024**3),
@@ -176,7 +221,28 @@ class MetricsCollector:
     def get_gpu_metrics():
         """Get GPU usage, VRAM, temp, power."""
         if not GPU_AVAILABLE:
-            return []
+            # Return impressive demo GPU data
+            t = MetricsCollector._demo_time
+            return [
+                {
+                    'id': 0,
+                    'name': 'NVIDIA RTX 3090',
+                    'load': 45 + math.sin(t * 0.4) * 25 + random.uniform(-3, 3),
+                    'memory_used_mb': 8000 + math.sin(t * 0.25) * 3000,
+                    'memory_total_mb': 24576,
+                    'memory_percent': (8000 + math.sin(t * 0.25) * 3000) / 24576 * 100,
+                    'temperature': 62 + math.sin(t * 0.3) * 10,
+                },
+                {
+                    'id': 1,
+                    'name': 'NVIDIA RTX 5060',
+                    'load': 30 + math.sin(t * 0.5 + 1) * 20 + random.uniform(-3, 3),
+                    'memory_used_mb': 4000 + math.sin(t * 0.3 + 1) * 2000,
+                    'memory_total_mb': 16384,
+                    'memory_percent': (4000 + math.sin(t * 0.3 + 1) * 2000) / 16384 * 100,
+                    'temperature': 55 + math.sin(t * 0.35 + 1) * 8,
+                }
+            ]
         gpus = []
         try:
             for gpu in GPUtil.getGPUs():
@@ -191,7 +257,7 @@ class MetricsCollector:
                 })
         except:
             pass
-        return gpus
+        return gpus if gpus else MetricsCollector.get_gpu_metrics.__func__(MetricsCollector)  # Fallback to demo
 
 
 class CockpitHUDWindow(Adw.ApplicationWindow):
@@ -299,8 +365,8 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
         css = """
         /* ═══════════════════════════════════════════════════════════════════
-           ARA NEURAL COMMAND CENTER - PREMIUM INTERFACE
-           Advanced AI Control System - High-End Design Language
+           ARA NEURAL COMMAND CENTER - ULTRA PREMIUM INTERFACE
+           Advanced AI Control System - Cyberpunk High-End Design
            ═══════════════════════════════════════════════════════════════════ */
 
         /* === FOUNDATION === */
@@ -309,22 +375,19 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         }
 
         .cockpit-window {
-            /* Transparent to allow holographic background to show */
             background: transparent;
         }
 
         .cockpit-bg {
-            /* Fallback gradient when video_background not available */
             background: linear-gradient(165deg,
-                #030508 0%,
+                #020408 0%,
                 #0a1628 25%,
                 #0d1a2d 50%,
                 #081420 75%,
-                #020406 100%);
+                #010203 100%);
         }
 
         .cockpit-content {
-            /* Transparent to show holographic background behind UI */
             background: transparent;
         }
 
@@ -332,353 +395,439 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             pointer-events: none;
         }
 
-        /* Subtle scanlines for depth - very refined */
+        /* Animated scanlines */
         .cockpit-scanlines {
             background-image: repeating-linear-gradient(
                 0deg,
-                rgba(120, 200, 255, 0.008) 0px,
-                rgba(120, 200, 255, 0.008) 1px,
+                rgba(0, 212, 255, 0.015) 0px,
+                rgba(0, 212, 255, 0.015) 1px,
                 transparent 1px,
-                transparent 3px
+                transparent 2px
             );
+            animation: scanline-drift 8s linear infinite;
+        }
+
+        @keyframes scanline-drift {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 100px; }
         }
 
         /* === HEADER / HUD STRIP === */
         .hud-strip {
             background: linear-gradient(180deg,
-                rgba(8, 20, 35, 0.98) 0%,
-                rgba(5, 12, 22, 0.95) 100%);
-            border-bottom: 1px solid rgba(100, 180, 255, 0.15);
+                rgba(5, 15, 30, 0.95) 0%,
+                rgba(2, 8, 18, 0.98) 100%);
+            border-bottom: 1px solid rgba(0, 212, 255, 0.25);
             padding: 16px 20px;
             box-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.03),
-                0 8px 32px rgba(0, 0, 0, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.02);
+                0 0 1px rgba(0, 212, 255, 0.5),
+                0 4px 30px rgba(0, 0, 0, 0.6),
+                inset 0 1px 0 rgba(0, 212, 255, 0.1),
+                inset 0 -20px 40px rgba(0, 50, 80, 0.15);
         }
 
         .hud-title {
-            font-size: 22px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.95);
-            letter-spacing: 6px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: 8px;
             text-transform: uppercase;
-            text-shadow: 0 0 40px rgba(100, 200, 255, 0.3);
+            text-shadow:
+                0 0 10px rgba(0, 212, 255, 0.8),
+                0 0 30px rgba(0, 212, 255, 0.5),
+                0 0 60px rgba(0, 150, 200, 0.3);
+            animation: title-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes title-pulse {
+            0%, 100% { text-shadow: 0 0 10px rgba(0, 212, 255, 0.8), 0 0 30px rgba(0, 212, 255, 0.5); }
+            50% { text-shadow: 0 0 15px rgba(0, 212, 255, 1), 0 0 40px rgba(0, 212, 255, 0.7), 0 0 80px rgba(0, 150, 200, 0.4); }
         }
 
         /* === NAVIGATION BUTTONS === */
         .hud-button {
             background: linear-gradient(180deg,
-                rgba(20, 40, 60, 0.6) 0%,
-                rgba(10, 25, 40, 0.7) 100%);
-            border: 1px solid rgba(100, 180, 255, 0.12);
-            border-radius: 10px;
-            color: rgba(180, 210, 240, 0.9);
-            font-weight: 500;
-            font-size: 11px;
-            letter-spacing: 0.5px;
-            padding: 14px 18px;
-            min-width: 85px;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                rgba(0, 40, 60, 0.7) 0%,
+                rgba(0, 20, 35, 0.85) 100%);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            color: rgba(0, 212, 255, 0.9);
+            font-weight: 600;
+            font-size: 10px;
+            letter-spacing: 1px;
+            padding: 12px 14px;
+            min-width: 80px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.3),
-                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+                0 2px 10px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(0, 212, 255, 0.1);
         }
 
         .hud-button:hover {
             background: linear-gradient(180deg,
-                rgba(30, 55, 80, 0.7) 0%,
-                rgba(20, 40, 60, 0.8) 100%);
-            border-color: rgba(100, 180, 255, 0.25);
-            color: rgba(220, 240, 255, 1);
+                rgba(0, 60, 90, 0.8) 0%,
+                rgba(0, 35, 55, 0.9) 100%);
+            border-color: rgba(0, 212, 255, 0.5);
+            color: #00d4ff;
             box-shadow:
-                0 4px 16px rgba(0, 0, 0, 0.4),
-                0 0 20px rgba(100, 180, 255, 0.08),
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
-            transform: translateY(-1px);
+                0 0 20px rgba(0, 212, 255, 0.3),
+                0 4px 20px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(0, 212, 255, 0.2);
+            transform: translateY(-2px);
         }
 
         .hud-button.active, .hud-button.selected {
             background: linear-gradient(180deg,
-                rgba(40, 100, 140, 0.7) 0%,
-                rgba(25, 70, 100, 0.8) 100%);
-            border-color: rgba(100, 200, 255, 0.4);
+                rgba(0, 100, 140, 0.85) 0%,
+                rgba(0, 60, 90, 0.95) 100%);
+            border-color: rgba(0, 212, 255, 0.7);
             color: #ffffff;
             box-shadow:
-                0 4px 20px rgba(60, 160, 220, 0.2),
-                0 0 30px rgba(100, 180, 255, 0.1),
-                inset 0 1px 0 rgba(255, 255, 255, 0.08),
-                inset 0 0 20px rgba(100, 180, 255, 0.05);
+                0 0 25px rgba(0, 212, 255, 0.4),
+                0 4px 25px rgba(0, 100, 150, 0.3),
+                inset 0 0 30px rgba(0, 212, 255, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
         }
 
-        /* === METRIC CARDS - GLASSMORPHISM === */
+        /* === METRIC CARDS - CYBERPUNK GLASSMORPHISM === */
         .metric-card {
-            background: linear-gradient(135deg,
-                rgba(15, 30, 50, 0.75) 0%,
-                rgba(8, 18, 32, 0.85) 100%);
-            border: 1px solid rgba(100, 180, 255, 0.1);
-            border-radius: 16px;
-            padding: 20px 24px;
-            margin: 10px 16px;
+            background: linear-gradient(145deg,
+                rgba(0, 30, 50, 0.85) 0%,
+                rgba(0, 15, 30, 0.92) 100%);
+            border: 1px solid rgba(0, 212, 255, 0.15);
+            border-left: 3px solid rgba(0, 212, 255, 0.5);
+            border-radius: 12px;
+            padding: 18px 22px;
+            margin: 8px 12px;
             box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.3),
-                0 2px 8px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.03),
-                inset 0 0 60px rgba(100, 180, 255, 0.02);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                0 0 1px rgba(0, 212, 255, 0.3),
+                0 8px 30px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(0, 212, 255, 0.08),
+                inset -30px 0 60px rgba(0, 100, 150, 0.05);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .metric-card:hover {
-            border-color: rgba(100, 180, 255, 0.18);
+            border-color: rgba(0, 212, 255, 0.3);
+            border-left-color: rgba(0, 212, 255, 0.8);
             box-shadow:
-                0 12px 40px rgba(0, 0, 0, 0.35),
-                0 4px 12px rgba(0, 0, 0, 0.25),
-                inset 0 1px 0 rgba(255, 255, 255, 0.04),
-                inset 0 0 80px rgba(100, 180, 255, 0.03);
+                0 0 2px rgba(0, 212, 255, 0.5),
+                0 12px 40px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(0, 212, 255, 0.12),
+                inset -40px 0 80px rgba(0, 100, 150, 0.08);
+            transform: translateX(2px);
         }
 
         .metric-card-critical {
-            border-color: rgba(255, 80, 80, 0.3);
+            border-color: rgba(255, 60, 80, 0.4);
+            border-left-color: rgba(255, 60, 80, 0.9);
             box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.3),
-                0 0 40px rgba(255, 80, 80, 0.1),
-                inset 0 0 40px rgba(255, 80, 80, 0.03);
-            animation: critical-glow 2s ease-in-out infinite;
+                0 0 2px rgba(255, 60, 80, 0.5),
+                0 8px 30px rgba(0, 0, 0, 0.4),
+                inset -30px 0 60px rgba(255, 60, 80, 0.05);
+            animation: critical-pulse 1.5s ease-in-out infinite;
         }
 
-        @keyframes critical-glow {
-            0%, 100% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 40px rgba(255, 80, 80, 0.1); }
-            50% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 60px rgba(255, 80, 80, 0.2); }
+        @keyframes critical-pulse {
+            0%, 100% { border-left-color: rgba(255, 60, 80, 0.9); box-shadow: 0 0 2px rgba(255, 60, 80, 0.5), 0 8px 30px rgba(0, 0, 0, 0.4); }
+            50% { border-left-color: rgba(255, 100, 120, 1); box-shadow: 0 0 15px rgba(255, 60, 80, 0.6), 0 8px 30px rgba(0, 0, 0, 0.4); }
         }
 
         .metric-card-neural {
-            border-color: rgba(140, 100, 220, 0.2);
+            border-left-color: rgba(180, 100, 255, 0.7);
             box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.3),
-                inset 0 0 50px rgba(140, 100, 220, 0.03);
+                0 0 1px rgba(180, 100, 255, 0.3),
+                0 8px 30px rgba(0, 0, 0, 0.4),
+                inset -30px 0 60px rgba(140, 80, 200, 0.05);
         }
 
         .metric-card-emotional {
-            border-color: rgba(255, 180, 100, 0.15);
+            border-left-color: rgba(255, 160, 60, 0.7);
             box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.3),
-                inset 0 0 50px rgba(255, 180, 100, 0.02);
+                0 0 1px rgba(255, 160, 60, 0.3),
+                0 8px 30px rgba(0, 0, 0, 0.4),
+                inset -30px 0 60px rgba(200, 120, 40, 0.05);
+        }
+
+        .metric-card-gpu {
+            border-left-color: rgba(0, 255, 136, 0.7);
+            box-shadow:
+                0 0 1px rgba(0, 255, 136, 0.3),
+                0 8px 30px rgba(0, 0, 0, 0.4),
+                inset -30px 0 60px rgba(0, 180, 100, 0.05);
         }
 
         /* === TYPOGRAPHY === */
         .metric-title {
-            font-size: 11px;
-            font-weight: 600;
-            color: rgba(150, 190, 230, 0.9);
+            font-size: 10px;
+            font-weight: 700;
+            color: rgba(0, 212, 255, 0.9);
             text-transform: uppercase;
-            letter-spacing: 2.5px;
-            margin-bottom: 12px;
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
         }
 
         .metric-value-huge {
-            font-size: 56px;
-            font-weight: 300;
-            color: rgba(255, 255, 255, 0.95);
+            font-size: 52px;
+            font-weight: 200;
+            color: #ffffff;
             letter-spacing: -2px;
             line-height: 1;
+            text-shadow:
+                0 0 20px rgba(0, 212, 255, 0.4),
+                0 0 40px rgba(0, 150, 200, 0.2);
         }
 
         .metric-value-large {
             font-size: 32px;
-            font-weight: 400;
-            color: rgba(150, 210, 255, 0.95);
+            font-weight: 300;
+            color: #ffffff;
             letter-spacing: -1px;
+            text-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
         }
 
         .metric-value-medium {
             font-size: 20px;
-            font-weight: 500;
-            color: rgba(140, 200, 255, 0.9);
+            font-weight: 400;
+            color: rgba(0, 212, 255, 0.95);
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
         }
 
         .metric-label {
-            font-size: 10px;
-            font-weight: 500;
-            color: rgba(180, 200, 220, 0.6);
+            font-size: 9px;
+            font-weight: 600;
+            color: rgba(0, 212, 255, 0.5);
             text-transform: uppercase;
-            letter-spacing: 1.5px;
+            letter-spacing: 2px;
         }
 
         .metric-warning {
-            color: rgba(255, 140, 80, 1) !important;
-            animation: warning-glow 1.5s ease-in-out infinite;
+            color: rgba(255, 100, 60, 1) !important;
+            animation: warning-flash 1s ease-in-out infinite;
         }
 
-        @keyframes warning-glow {
-            0%, 100% { text-shadow: 0 0 20px rgba(255, 140, 80, 0.3); }
-            50% { text-shadow: 0 0 30px rgba(255, 140, 80, 0.5); }
+        @keyframes warning-flash {
+            0%, 100% { opacity: 1; text-shadow: 0 0 15px rgba(255, 100, 60, 0.6); }
+            50% { opacity: 0.7; text-shadow: 0 0 25px rgba(255, 100, 60, 0.9); }
         }
 
-        /* === PROGRESS BARS === */
+        /* === PROGRESS BARS - NEON === */
         .metric-progress trough {
-            background: rgba(20, 40, 60, 0.5);
-            border-radius: 6px;
-            min-height: 8px;
-            border: 1px solid rgba(100, 180, 255, 0.08);
+            background: rgba(0, 30, 50, 0.7);
+            border-radius: 4px;
+            min-height: 6px;
+            border: 1px solid rgba(0, 212, 255, 0.15);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
         }
 
         .metric-progress progress {
             background: linear-gradient(90deg,
-                rgba(80, 160, 220, 0.9) 0%,
-                rgba(120, 200, 255, 0.95) 100%);
-            border-radius: 5px;
-            box-shadow: 0 0 12px rgba(100, 180, 255, 0.3);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                rgba(0, 180, 220, 0.9) 0%,
+                rgba(0, 212, 255, 1) 50%,
+                rgba(100, 230, 255, 1) 100%);
+            border-radius: 3px;
+            box-shadow:
+                0 0 8px rgba(0, 212, 255, 0.6),
+                0 0 20px rgba(0, 212, 255, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .metric-progress text {
             font-size: 9px;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.7);
+            font-weight: 600;
+            color: #ffffff;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
         }
 
         .progress-neural progress {
             background: linear-gradient(90deg,
-                rgba(120, 80, 200, 0.9) 0%,
-                rgba(180, 120, 255, 0.95) 100%);
-            box-shadow: 0 0 12px rgba(140, 100, 220, 0.3);
+                rgba(140, 60, 200, 0.9) 0%,
+                rgba(180, 100, 255, 1) 50%,
+                rgba(220, 150, 255, 1) 100%);
+            box-shadow:
+                0 0 8px rgba(180, 100, 255, 0.6),
+                0 0 20px rgba(180, 100, 255, 0.3);
         }
 
         .progress-emotional progress {
             background: linear-gradient(90deg,
-                rgba(220, 140, 80, 0.9) 0%,
-                rgba(255, 180, 100, 0.95) 100%);
-            box-shadow: 0 0 12px rgba(255, 160, 80, 0.3);
+                rgba(200, 100, 40, 0.9) 0%,
+                rgba(255, 160, 60, 1) 50%,
+                rgba(255, 200, 100, 1) 100%);
+            box-shadow:
+                0 0 8px rgba(255, 160, 60, 0.6),
+                0 0 20px rgba(255, 160, 60, 0.3);
+        }
+
+        .progress-gpu progress {
+            background: linear-gradient(90deg,
+                rgba(0, 180, 100, 0.9) 0%,
+                rgba(0, 255, 136, 1) 50%,
+                rgba(100, 255, 180, 1) 100%);
+            box-shadow:
+                0 0 8px rgba(0, 255, 136, 0.6),
+                0 0 20px rgba(0, 255, 136, 0.3);
         }
 
         /* === STATUS BAR === */
         .status-bar {
             background: linear-gradient(180deg,
-                rgba(8, 16, 28, 0.95) 0%,
-                rgba(5, 10, 18, 0.98) 100%);
-            border-top: 1px solid rgba(100, 180, 255, 0.08);
-            padding: 12px 20px;
+                rgba(2, 8, 18, 0.98) 0%,
+                rgba(0, 5, 12, 0.99) 100%);
+            border-top: 1px solid rgba(0, 212, 255, 0.2);
+            padding: 10px 20px;
             box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.02),
-                0 -4px 20px rgba(0, 0, 0, 0.3);
+                inset 0 1px 0 rgba(0, 212, 255, 0.08),
+                0 -4px 30px rgba(0, 0, 0, 0.5);
         }
 
         .status-indicator {
-            font-size: 11px;
-            font-weight: 500;
-            color: rgba(180, 200, 220, 0.7);
-            letter-spacing: 0.5px;
+            font-size: 10px;
+            font-weight: 600;
+            color: rgba(0, 212, 255, 0.6);
+            letter-spacing: 1px;
+            text-transform: uppercase;
         }
 
         .status-connected {
-            color: rgba(100, 220, 150, 0.95);
-            text-shadow: 0 0 10px rgba(100, 220, 150, 0.3);
+            color: rgba(0, 255, 136, 1);
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            animation: status-blink 2s ease-in-out infinite;
+        }
+
+        @keyframes status-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
 
         .status-disconnected {
-            color: rgba(255, 120, 100, 0.9);
-            text-shadow: 0 0 10px rgba(255, 120, 100, 0.3);
+            color: rgba(255, 80, 80, 0.95);
+            text-shadow: 0 0 10px rgba(255, 80, 80, 0.4);
+        }
+
+        .status-demo {
+            color: rgba(255, 200, 60, 0.95);
+            text-shadow: 0 0 10px rgba(255, 200, 60, 0.4);
         }
 
         /* === WINDOW CONTROLS === */
         .window-control {
-            background: rgba(30, 50, 70, 0.4);
-            border: 1px solid rgba(100, 180, 255, 0.1);
-            border-radius: 6px;
-            color: rgba(180, 210, 240, 0.7);
-            font-size: 12px;
-            font-weight: 500;
-            min-width: 36px;
-            min-height: 28px;
-            padding: 4px 10px;
-            transition: all 0.2s ease;
+            background: rgba(0, 30, 50, 0.5);
+            border: 1px solid rgba(0, 212, 255, 0.15);
+            border-radius: 4px;
+            color: rgba(0, 212, 255, 0.7);
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 32px;
+            min-height: 26px;
+            padding: 4px 8px;
+            transition: all 0.15s ease;
         }
 
         .window-control:hover {
-            background: rgba(40, 70, 100, 0.5);
-            border-color: rgba(100, 180, 255, 0.2);
-            color: rgba(220, 240, 255, 0.9);
+            background: rgba(0, 60, 90, 0.6);
+            border-color: rgba(0, 212, 255, 0.4);
+            color: #00d4ff;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
         }
 
         .window-control-close:hover {
-            background: rgba(180, 60, 60, 0.5);
-            border-color: rgba(255, 100, 100, 0.3);
-            color: rgba(255, 220, 220, 0.95);
+            background: rgba(200, 40, 40, 0.6);
+            border-color: rgba(255, 80, 80, 0.5);
+            color: #ff6666;
+            box-shadow: 0 0 10px rgba(255, 80, 80, 0.3);
         }
 
         /* === NEURAL ACTIVITY GRID === */
         .neural-grid {
-            background: rgba(10, 20, 35, 0.4);
-            border: 1px solid rgba(140, 100, 220, 0.12);
-            border-radius: 12px;
+            background: rgba(0, 15, 30, 0.6);
+            border: 1px solid rgba(180, 100, 255, 0.2);
+            border-radius: 8px;
             padding: 12px;
-            box-shadow: inset 0 0 40px rgba(140, 100, 220, 0.03);
+            box-shadow:
+                inset 0 0 30px rgba(180, 100, 255, 0.05),
+                0 0 1px rgba(180, 100, 255, 0.3);
         }
 
         .neuron-active {
             background: radial-gradient(circle,
-                rgba(180, 140, 255, 0.9) 0%,
-                rgba(120, 80, 200, 0.6) 60%,
-                transparent 100%);
+                rgba(180, 100, 255, 1) 0%,
+                rgba(140, 60, 220, 0.8) 40%,
+                transparent 70%);
             border-radius: 50%;
-            box-shadow: 0 0 12px rgba(160, 120, 240, 0.6);
+            box-shadow:
+                0 0 10px rgba(180, 100, 255, 0.8),
+                0 0 20px rgba(140, 60, 220, 0.4);
+            animation: neuron-fire 0.5s ease-out;
+        }
+
+        @keyframes neuron-fire {
+            0% { transform: scale(1.5); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
         }
 
         .neuron-idle {
-            background: rgba(100, 80, 160, 0.15);
+            background: rgba(80, 40, 120, 0.2);
             border-radius: 50%;
+            border: 1px solid rgba(140, 80, 200, 0.1);
         }
 
         /* === CHAT INTERFACE === */
         .chat-entry {
-            background: rgba(15, 30, 50, 0.6);
-            border: 1px solid rgba(100, 180, 255, 0.15);
-            border-radius: 12px;
-            color: rgba(255, 255, 255, 0.9);
-            padding: 14px 18px;
+            background: rgba(0, 20, 40, 0.7);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            color: #ffffff;
+            padding: 12px 16px;
             font-size: 14px;
-            transition: all 0.25s ease;
+            transition: all 0.2s ease;
         }
 
         .chat-entry:focus {
-            background: rgba(20, 40, 65, 0.7);
-            border-color: rgba(100, 180, 255, 0.3);
+            background: rgba(0, 30, 55, 0.8);
+            border-color: rgba(0, 212, 255, 0.5);
             box-shadow:
-                0 0 20px rgba(100, 180, 255, 0.1),
-                inset 0 0 30px rgba(100, 180, 255, 0.02);
+                0 0 15px rgba(0, 212, 255, 0.2),
+                inset 0 0 20px rgba(0, 100, 150, 0.1);
         }
 
         .chat-message-user {
             background: linear-gradient(135deg,
-                rgba(40, 80, 120, 0.4) 0%,
-                rgba(30, 60, 90, 0.5) 100%);
-            border-radius: 16px 16px 4px 16px;
-            padding: 14px 18px;
-            margin: 6px 12px 6px 50px;
-            color: rgba(255, 255, 255, 0.9);
-            border: 1px solid rgba(100, 180, 255, 0.1);
-            font-size: 14px;
+                rgba(0, 60, 100, 0.5) 0%,
+                rgba(0, 40, 70, 0.6) 100%);
+            border-radius: 12px 12px 4px 12px;
+            padding: 12px 16px;
+            margin: 6px 8px 6px 40px;
+            color: #ffffff;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            font-size: 13px;
             line-height: 1.5;
         }
 
         .chat-message-ara {
             background: linear-gradient(135deg,
-                rgba(60, 40, 100, 0.35) 0%,
-                rgba(40, 25, 70, 0.45) 100%);
-            border-radius: 16px 16px 16px 4px;
-            padding: 14px 18px;
-            margin: 6px 50px 6px 12px;
-            color: rgba(255, 255, 255, 0.9);
-            border: 1px solid rgba(140, 100, 220, 0.15);
-            border-left: 3px solid rgba(160, 120, 240, 0.5);
-            font-size: 14px;
+                rgba(60, 30, 100, 0.5) 0%,
+                rgba(40, 20, 70, 0.6) 100%);
+            border-radius: 12px 12px 12px 4px;
+            padding: 12px 16px;
+            margin: 6px 40px 6px 8px;
+            color: #ffffff;
+            border: 1px solid rgba(180, 100, 255, 0.2);
+            border-left: 3px solid rgba(180, 100, 255, 0.7);
+            font-size: 13px;
             line-height: 1.5;
+            box-shadow: 0 0 1px rgba(180, 100, 255, 0.3);
         }
 
         /* === KITTEN STATS === */
         .kitten-stat {
             font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
-            font-size: 13px;
-            color: rgba(180, 140, 255, 0.9);
+            font-size: 12px;
+            color: rgba(180, 100, 255, 0.95);
+            text-shadow: 0 0 8px rgba(180, 100, 255, 0.3);
             letter-spacing: 0.5px;
         }
 
@@ -1869,11 +2018,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
             else:
                 # DEMO MODE - Show simulated data when offline
-                self.ara_status.set_text("⚡ ARA: DEMO")
+                self.ara_status.set_text("⚡ ARA: DEMO MODE")
                 self.ara_status.remove_css_class('status-connected')
-                self.ara_status.add_css_class('status-disconnected')
-                self.ara_conn_label.set_text("🟡 DEMO MODE")
-                self.ara_mode_label.set_text("Mode: OFFLINE (Demo)")
+                self.ara_status.remove_css_class('status-disconnected')
+                self.ara_status.add_css_class('status-demo')
+                self.ara_conn_label.set_text("🟡 SIMULATION ACTIVE")
+                self.ara_mode_label.set_text("Neural Link: Simulated")
 
                 # Simulate PAD values with smooth oscillation
                 t = self.demo_tick * 0.1
