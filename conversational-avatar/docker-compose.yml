@@ -1,0 +1,142 @@
+# Ara Conversational Avatar - Docker Compose
+# Usage:
+#   CPU:  docker-compose up ara
+#   GPU:  docker-compose up ara-gpu
+#   Dev:  docker-compose up ara-dev
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Production - CPU
+  # ==========================================================================
+  ara:
+    build:
+      context: .
+      target: production
+    container_name: ara-avatar
+    restart: unless-stopped
+    volumes:
+      - ./outputs:/app/outputs
+      - ./models:/app/models
+      - ./voice_samples:/app/voice_samples
+      - ./config:/app/config:ro
+    environment:
+      - ARA_PROFILE=balanced
+      - ARA_DEVICE=cpu
+    # For microphone access (Linux)
+    devices:
+      - /dev/snd:/dev/snd
+    # Audio group access
+    group_add:
+      - audio
+
+  # ==========================================================================
+  # Production - GPU (NVIDIA)
+  # ==========================================================================
+  ara-gpu:
+    build:
+      context: .
+      target: gpu
+    container_name: ara-avatar-gpu
+    restart: unless-stopped
+    volumes:
+      - ./outputs:/app/outputs
+      - ./models:/app/models
+      - ./voice_samples:/app/voice_samples
+      - ./config:/app/config:ro
+    environment:
+      - ARA_PROFILE=deep
+      - ARA_DEVICE=cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      - audio
+
+  # ==========================================================================
+  # Development
+  # ==========================================================================
+  ara-dev:
+    build:
+      context: .
+      target: development
+    container_name: ara-avatar-dev
+    volumes:
+      - .:/app
+      - ./outputs:/app/outputs
+      - ./models:/app/models
+    environment:
+      - ARA_PROFILE=fast
+      - ARA_DEVICE=cpu
+    ports:
+      - "8888:8888"  # Jupyter
+    stdin_open: true
+    tty: true
+
+  # ==========================================================================
+  # TTS Service (API)
+  # ==========================================================================
+  ara-tts-api:
+    build:
+      context: .
+      target: production
+    container_name: ara-tts-api
+    command: >
+      python -c "
+      from fastapi import FastAPI, HTTPException
+      from fastapi.responses import FileResponse
+      from pydantic import BaseModel
+      import uvicorn
+      from pathlib import Path
+      from src.audio_pipeline import AdvancedTTS, AudioMastering, ProfileManager, ProfileMode
+
+      app = FastAPI(title='Ara TTS API')
+      pm = ProfileManager()
+      profile = pm.get_profile(ProfileMode.BALANCED)
+      tts = AdvancedTTS(profile.tts_config)
+      mastering = AudioMastering(profile.mastering_config)
+
+      class TTSRequest(BaseModel):
+          text: str
+          speed: float = 1.0
+          language: str = 'en'
+
+      @app.post('/synthesize')
+      async def synthesize(req: TTSRequest):
+          try:
+              tts.set_speed(req.speed)
+              tts.set_language(req.language)
+              output = tts.synthesize(req.text, output_path=Path('/tmp/output.wav'))
+              mastering.process_file(output, output)
+              return FileResponse(output, media_type='audio/wav', filename='speech.wav')
+          except Exception as e:
+              raise HTTPException(500, str(e))
+
+      @app.get('/health')
+      async def health():
+          return {'status': 'ok'}
+
+      uvicorn.run(app, host='0.0.0.0', port=8000)
+      "
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./voice_samples:/app/voice_samples
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  models:
+  outputs:
+  voice_samples:

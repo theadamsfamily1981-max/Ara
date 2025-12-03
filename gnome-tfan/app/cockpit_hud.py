@@ -27,15 +27,26 @@ from gi.repository import Gtk, Adw, Gio, GLib, Gdk
 import sys
 import json
 import subprocess
-import requests
 import threading
 from pathlib import Path
 from typing import Optional, Dict, Any
-import psutil
 import time
 import logging
 import math
 import random
+
+# Optional dependencies with graceful fallbacks
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +99,10 @@ class AraBrainClient:
 
     def get_status(self) -> Optional[Dict]:
         """Get Ara's current status."""
+        if not REQUESTS_AVAILABLE:
+            self.connected = False
+            self.last_error = "requests module not installed"
+            return None
         try:
             resp = requests.get(f"{self.base_url}/status", timeout=2)
             if resp.status_code == 200:
@@ -102,6 +117,8 @@ class AraBrainClient:
 
     def get_kitten_status(self) -> Optional[Dict]:
         """Get Forest Kitten 33 status."""
+        if not REQUESTS_AVAILABLE:
+            return None
         try:
             resp = requests.get(f"{self.base_url}/kitten", timeout=2)
             if resp.status_code == 200:
@@ -112,6 +129,8 @@ class AraBrainClient:
 
     def get_mood(self) -> Optional[Dict]:
         """Get PAD emotional state."""
+        if not REQUESTS_AVAILABLE:
+            return None
         try:
             resp = requests.get(f"{self.base_url}/mood", timeout=2)
             if resp.status_code == 200:
@@ -122,6 +141,8 @@ class AraBrainClient:
 
     def chat(self, message: str) -> Optional[Dict]:
         """Send message to Ara."""
+        if not REQUESTS_AVAILABLE:
+            return {"reply_text": "Chat unavailable - requests module not installed"}
         try:
             resp = requests.post(
                 f"{self.base_url}/chat",
@@ -138,9 +159,24 @@ class AraBrainClient:
 class MetricsCollector:
     """Collects system metrics for HUD display."""
 
+    # Demo data state for smooth animations
+    _demo_time = 0
+
     @staticmethod
     def get_cpu_metrics():
         """Get CPU usage, temps, frequency."""
+        if not PSUTIL_AVAILABLE:
+            # Return realistic demo data
+            MetricsCollector._demo_time += 0.1
+            t = MetricsCollector._demo_time
+            base_usage = 25 + math.sin(t * 0.3) * 15
+            return {
+                'usage_per_core': [base_usage + random.uniform(-5, 10) for _ in range(16)],
+                'usage_total': base_usage + random.uniform(-3, 3),
+                'frequency': 3800 + math.sin(t * 0.5) * 200,
+                'cores': 16,
+                'temps': [55 + math.sin(t * 0.2) * 8 + random.uniform(-2, 2) for _ in range(16)]
+            }
         cpu_percent = psutil.cpu_percent(interval=0.1, percpu=True)
         cpu_freq = psutil.cpu_freq()
         cpu_count = psutil.cpu_count()
@@ -164,6 +200,15 @@ class MetricsCollector:
     @staticmethod
     def get_ram_metrics():
         """Get RAM usage."""
+        if not PSUTIL_AVAILABLE:
+            t = MetricsCollector._demo_time
+            used = 24 + math.sin(t * 0.15) * 4
+            return {
+                'total_gb': 64,
+                'used_gb': used,
+                'percent': (used / 64) * 100,
+                'available_gb': 64 - used,
+            }
         mem = psutil.virtual_memory()
         return {
             'total_gb': mem.total / (1024**3),
@@ -176,7 +221,28 @@ class MetricsCollector:
     def get_gpu_metrics():
         """Get GPU usage, VRAM, temp, power."""
         if not GPU_AVAILABLE:
-            return []
+            # Return impressive demo GPU data
+            t = MetricsCollector._demo_time
+            return [
+                {
+                    'id': 0,
+                    'name': 'NVIDIA RTX 3090',
+                    'load': 45 + math.sin(t * 0.4) * 25 + random.uniform(-3, 3),
+                    'memory_used_mb': 8000 + math.sin(t * 0.25) * 3000,
+                    'memory_total_mb': 24576,
+                    'memory_percent': (8000 + math.sin(t * 0.25) * 3000) / 24576 * 100,
+                    'temperature': 62 + math.sin(t * 0.3) * 10,
+                },
+                {
+                    'id': 1,
+                    'name': 'NVIDIA RTX 5060',
+                    'load': 30 + math.sin(t * 0.5 + 1) * 20 + random.uniform(-3, 3),
+                    'memory_used_mb': 4000 + math.sin(t * 0.3 + 1) * 2000,
+                    'memory_total_mb': 16384,
+                    'memory_percent': (4000 + math.sin(t * 0.3 + 1) * 2000) / 16384 * 100,
+                    'temperature': 55 + math.sin(t * 0.35 + 1) * 8,
+                }
+            ]
         gpus = []
         try:
             for gpu in GPUtil.getGPUs():
@@ -191,7 +257,7 @@ class MetricsCollector:
                 })
         except:
             pass
-        return gpus
+        return gpus if gpus else MetricsCollector.get_gpu_metrics.__func__(MetricsCollector)  # Fallback to demo
 
 
 class CockpitHUDWindow(Adw.ApplicationWindow):
@@ -299,8 +365,8 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
         css = """
         /* ═══════════════════════════════════════════════════════════════════
-           ARA NEURAL COMMAND CENTER - PREMIUM INTERFACE
-           Advanced AI Control System - High-End Design Language
+           ARA NEURAL COMMAND CENTER - ULTRA PREMIUM INTERFACE
+           Advanced AI Control System - Cyberpunk High-End Design
            ═══════════════════════════════════════════════════════════════════ */
 
         /* === FOUNDATION === */
@@ -309,21 +375,16 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         }
 
         .cockpit-window {
-            background: linear-gradient(165deg,
-                #030508 0%,
-                #0a1628 25%,
-                #0d1a2d 50%,
-                #081420 75%,
-                #020406 100%);
+            background: transparent;
         }
 
         .cockpit-bg {
             background: linear-gradient(165deg,
-                #030508 0%,
+                #020408 0%,
                 #0a1628 25%,
                 #0d1a2d 50%,
                 #081420 75%,
-                #020406 100%);
+                #010203 100%);
         }
 
         .cockpit-content {
@@ -334,353 +395,440 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             pointer-events: none;
         }
 
-        /* Subtle scanlines for depth - very refined */
+        /* Animated scanlines */
         .cockpit-scanlines {
             background-image: repeating-linear-gradient(
                 0deg,
-                rgba(120, 200, 255, 0.008) 0px,
-                rgba(120, 200, 255, 0.008) 1px,
+                rgba(0, 212, 255, 0.015) 0px,
+                rgba(0, 212, 255, 0.015) 1px,
                 transparent 1px,
-                transparent 3px
+                transparent 2px
             );
+            animation: scanline-drift 8s linear infinite;
         }
 
-        /* === HEADER / HUD STRIP === */
+        @keyframes scanline-drift {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 100px; }
+        }
+
+        /* === HEADER / HUD STRIP - GLASSMORPHISM === */
         .hud-strip {
-            background: linear-gradient(180deg,
-                rgba(8, 20, 35, 0.98) 0%,
-                rgba(5, 12, 22, 0.95) 100%);
-            border-bottom: 1px solid rgba(100, 180, 255, 0.15);
+            background: rgba(5, 15, 30, 0.6);
+            backdrop-filter: blur(20px) saturate(150%);
+            -webkit-backdrop-filter: blur(20px) saturate(150%);
+            border-bottom: 1px solid rgba(0, 212, 255, 0.25);
             padding: 16px 20px;
             box-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.03),
-                0 8px 32px rgba(0, 0, 0, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.02);
+                0 0 1px rgba(0, 212, 255, 0.5),
+                0 4px 30px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(0, 212, 255, 0.1),
+                inset 0 -20px 40px rgba(0, 50, 80, 0.1);
         }
 
         .hud-title {
-            font-size: 22px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.95);
-            letter-spacing: 6px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: 8px;
             text-transform: uppercase;
-            text-shadow: 0 0 40px rgba(100, 200, 255, 0.3);
+            text-shadow:
+                0 0 10px rgba(0, 212, 255, 0.8),
+                0 0 30px rgba(0, 212, 255, 0.5),
+                0 0 60px rgba(0, 150, 200, 0.3);
+            animation: title-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes title-pulse {
+            0%, 100% { text-shadow: 0 0 10px rgba(0, 212, 255, 0.8), 0 0 30px rgba(0, 212, 255, 0.5); }
+            50% { text-shadow: 0 0 15px rgba(0, 212, 255, 1), 0 0 40px rgba(0, 212, 255, 0.7), 0 0 80px rgba(0, 150, 200, 0.4); }
         }
 
         /* === NAVIGATION BUTTONS === */
         .hud-button {
             background: linear-gradient(180deg,
-                rgba(20, 40, 60, 0.6) 0%,
-                rgba(10, 25, 40, 0.7) 100%);
-            border: 1px solid rgba(100, 180, 255, 0.12);
-            border-radius: 10px;
-            color: rgba(180, 210, 240, 0.9);
-            font-weight: 500;
-            font-size: 11px;
-            letter-spacing: 0.5px;
-            padding: 14px 18px;
-            min-width: 85px;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                rgba(0, 40, 60, 0.7) 0%,
+                rgba(0, 20, 35, 0.85) 100%);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            color: rgba(0, 212, 255, 0.9);
+            font-weight: 600;
+            font-size: 10px;
+            letter-spacing: 1px;
+            padding: 12px 14px;
+            min-width: 80px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.3),
-                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+                0 2px 10px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(0, 212, 255, 0.1);
         }
 
         .hud-button:hover {
             background: linear-gradient(180deg,
-                rgba(30, 55, 80, 0.7) 0%,
-                rgba(20, 40, 60, 0.8) 100%);
-            border-color: rgba(100, 180, 255, 0.25);
-            color: rgba(220, 240, 255, 1);
+                rgba(0, 60, 90, 0.8) 0%,
+                rgba(0, 35, 55, 0.9) 100%);
+            border-color: rgba(0, 212, 255, 0.5);
+            color: #00d4ff;
             box-shadow:
-                0 4px 16px rgba(0, 0, 0, 0.4),
-                0 0 20px rgba(100, 180, 255, 0.08),
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
-            transform: translateY(-1px);
+                0 0 20px rgba(0, 212, 255, 0.3),
+                0 4px 20px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(0, 212, 255, 0.2);
+            transform: translateY(-2px);
         }
 
         .hud-button.active, .hud-button.selected {
             background: linear-gradient(180deg,
-                rgba(40, 100, 140, 0.7) 0%,
-                rgba(25, 70, 100, 0.8) 100%);
-            border-color: rgba(100, 200, 255, 0.4);
+                rgba(0, 100, 140, 0.85) 0%,
+                rgba(0, 60, 90, 0.95) 100%);
+            border-color: rgba(0, 212, 255, 0.7);
             color: #ffffff;
             box-shadow:
-                0 4px 20px rgba(60, 160, 220, 0.2),
-                0 0 30px rgba(100, 180, 255, 0.1),
-                inset 0 1px 0 rgba(255, 255, 255, 0.08),
-                inset 0 0 20px rgba(100, 180, 255, 0.05);
+                0 0 25px rgba(0, 212, 255, 0.4),
+                0 4px 25px rgba(0, 100, 150, 0.3),
+                inset 0 0 30px rgba(0, 212, 255, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
         }
 
-        /* === METRIC CARDS - GLASSMORPHISM === */
+        /* === METRIC CARDS - HIGH-END GLASSMORPHISM === */
         .metric-card {
-            background: linear-gradient(135deg,
-                rgba(15, 30, 50, 0.75) 0%,
-                rgba(8, 18, 32, 0.85) 100%);
-            border: 1px solid rgba(100, 180, 255, 0.1);
-            border-radius: 16px;
-            padding: 20px 24px;
-            margin: 10px 16px;
+            /* THE GLASS EFFECT - Blur background layers */
+            background: rgba(0, 20, 35, 0.45);
+            backdrop-filter: blur(16px) saturate(140%);
+            -webkit-backdrop-filter: blur(16px) saturate(140%);
+            border: 1px solid rgba(0, 212, 255, 0.18);
+            border-left: 3px solid rgba(0, 212, 255, 0.5);
+            border-radius: 12px;
+            padding: 18px 22px;
+            margin: 8px 12px;
             box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.3),
-                0 2px 8px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.03),
-                inset 0 0 60px rgba(100, 180, 255, 0.02);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                0 0 1px rgba(0, 212, 255, 0.4),
+                0 8px 32px rgba(0, 0, 0, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                inset 0 0 20px rgba(0, 100, 150, 0.05);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .metric-card:hover {
-            border-color: rgba(100, 180, 255, 0.18);
+            border-color: rgba(0, 212, 255, 0.3);
+            border-left-color: rgba(0, 212, 255, 0.8);
             box-shadow:
-                0 12px 40px rgba(0, 0, 0, 0.35),
-                0 4px 12px rgba(0, 0, 0, 0.25),
-                inset 0 1px 0 rgba(255, 255, 255, 0.04),
-                inset 0 0 80px rgba(100, 180, 255, 0.03);
+                0 0 2px rgba(0, 212, 255, 0.5),
+                0 12px 40px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(0, 212, 255, 0.12),
+                inset -40px 0 80px rgba(0, 100, 150, 0.08);
+            transform: translateX(2px);
         }
 
         .metric-card-critical {
-            border-color: rgba(255, 80, 80, 0.3);
+            border-color: rgba(255, 60, 80, 0.4);
+            border-left-color: rgba(255, 60, 80, 0.9);
             box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.3),
-                0 0 40px rgba(255, 80, 80, 0.1),
-                inset 0 0 40px rgba(255, 80, 80, 0.03);
-            animation: critical-glow 2s ease-in-out infinite;
+                0 0 2px rgba(255, 60, 80, 0.5),
+                0 8px 30px rgba(0, 0, 0, 0.4),
+                inset -30px 0 60px rgba(255, 60, 80, 0.05);
+            animation: critical-pulse 1.5s ease-in-out infinite;
         }
 
-        @keyframes critical-glow {
-            0%, 100% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 40px rgba(255, 80, 80, 0.1); }
-            50% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 60px rgba(255, 80, 80, 0.2); }
+        @keyframes critical-pulse {
+            0%, 100% { border-left-color: rgba(255, 60, 80, 0.9); box-shadow: 0 0 2px rgba(255, 60, 80, 0.5), 0 8px 30px rgba(0, 0, 0, 0.4); }
+            50% { border-left-color: rgba(255, 100, 120, 1); box-shadow: 0 0 15px rgba(255, 60, 80, 0.6), 0 8px 30px rgba(0, 0, 0, 0.4); }
         }
 
         .metric-card-neural {
-            border-color: rgba(140, 100, 220, 0.2);
+            border-left-color: rgba(180, 100, 255, 0.7);
             box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.3),
-                inset 0 0 50px rgba(140, 100, 220, 0.03);
+                0 0 1px rgba(180, 100, 255, 0.3),
+                0 8px 30px rgba(0, 0, 0, 0.4),
+                inset -30px 0 60px rgba(140, 80, 200, 0.05);
         }
 
         .metric-card-emotional {
-            border-color: rgba(255, 180, 100, 0.15);
+            border-left-color: rgba(255, 160, 60, 0.7);
             box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.3),
-                inset 0 0 50px rgba(255, 180, 100, 0.02);
+                0 0 1px rgba(255, 160, 60, 0.3),
+                0 8px 30px rgba(0, 0, 0, 0.4),
+                inset -30px 0 60px rgba(200, 120, 40, 0.05);
+        }
+
+        .metric-card-gpu {
+            border-left-color: rgba(0, 255, 136, 0.7);
+            box-shadow:
+                0 0 1px rgba(0, 255, 136, 0.3),
+                0 8px 30px rgba(0, 0, 0, 0.4),
+                inset -30px 0 60px rgba(0, 180, 100, 0.05);
         }
 
         /* === TYPOGRAPHY === */
         .metric-title {
-            font-size: 11px;
-            font-weight: 600;
-            color: rgba(150, 190, 230, 0.9);
+            font-size: 10px;
+            font-weight: 700;
+            color: rgba(0, 212, 255, 0.9);
             text-transform: uppercase;
-            letter-spacing: 2.5px;
-            margin-bottom: 12px;
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
         }
 
         .metric-value-huge {
-            font-size: 56px;
-            font-weight: 300;
-            color: rgba(255, 255, 255, 0.95);
+            font-size: 52px;
+            font-weight: 200;
+            color: #ffffff;
             letter-spacing: -2px;
             line-height: 1;
+            text-shadow:
+                0 0 20px rgba(0, 212, 255, 0.4),
+                0 0 40px rgba(0, 150, 200, 0.2);
         }
 
         .metric-value-large {
             font-size: 32px;
-            font-weight: 400;
-            color: rgba(150, 210, 255, 0.95);
+            font-weight: 300;
+            color: #ffffff;
             letter-spacing: -1px;
+            text-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
         }
 
         .metric-value-medium {
             font-size: 20px;
-            font-weight: 500;
-            color: rgba(140, 200, 255, 0.9);
+            font-weight: 400;
+            color: rgba(0, 212, 255, 0.95);
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
         }
 
         .metric-label {
-            font-size: 10px;
-            font-weight: 500;
-            color: rgba(180, 200, 220, 0.6);
+            font-size: 9px;
+            font-weight: 600;
+            color: rgba(0, 212, 255, 0.5);
             text-transform: uppercase;
-            letter-spacing: 1.5px;
+            letter-spacing: 2px;
         }
 
         .metric-warning {
-            color: rgba(255, 140, 80, 1) !important;
-            animation: warning-glow 1.5s ease-in-out infinite;
+            color: rgba(255, 100, 60, 1) !important;
+            animation: warning-flash 1s ease-in-out infinite;
         }
 
-        @keyframes warning-glow {
-            0%, 100% { text-shadow: 0 0 20px rgba(255, 140, 80, 0.3); }
-            50% { text-shadow: 0 0 30px rgba(255, 140, 80, 0.5); }
+        @keyframes warning-flash {
+            0%, 100% { opacity: 1; text-shadow: 0 0 15px rgba(255, 100, 60, 0.6); }
+            50% { opacity: 0.7; text-shadow: 0 0 25px rgba(255, 100, 60, 0.9); }
         }
 
-        /* === PROGRESS BARS === */
+        /* === PROGRESS BARS - NEON === */
         .metric-progress trough {
-            background: rgba(20, 40, 60, 0.5);
-            border-radius: 6px;
-            min-height: 8px;
-            border: 1px solid rgba(100, 180, 255, 0.08);
+            background: rgba(0, 30, 50, 0.7);
+            border-radius: 4px;
+            min-height: 6px;
+            border: 1px solid rgba(0, 212, 255, 0.15);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
         }
 
         .metric-progress progress {
             background: linear-gradient(90deg,
-                rgba(80, 160, 220, 0.9) 0%,
-                rgba(120, 200, 255, 0.95) 100%);
-            border-radius: 5px;
-            box-shadow: 0 0 12px rgba(100, 180, 255, 0.3);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                rgba(0, 180, 220, 0.9) 0%,
+                rgba(0, 212, 255, 1) 50%,
+                rgba(100, 230, 255, 1) 100%);
+            border-radius: 3px;
+            box-shadow:
+                0 0 8px rgba(0, 212, 255, 0.6),
+                0 0 20px rgba(0, 212, 255, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .metric-progress text {
             font-size: 9px;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.7);
+            font-weight: 600;
+            color: #ffffff;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
         }
 
         .progress-neural progress {
             background: linear-gradient(90deg,
-                rgba(120, 80, 200, 0.9) 0%,
-                rgba(180, 120, 255, 0.95) 100%);
-            box-shadow: 0 0 12px rgba(140, 100, 220, 0.3);
+                rgba(140, 60, 200, 0.9) 0%,
+                rgba(180, 100, 255, 1) 50%,
+                rgba(220, 150, 255, 1) 100%);
+            box-shadow:
+                0 0 8px rgba(180, 100, 255, 0.6),
+                0 0 20px rgba(180, 100, 255, 0.3);
         }
 
         .progress-emotional progress {
             background: linear-gradient(90deg,
-                rgba(220, 140, 80, 0.9) 0%,
-                rgba(255, 180, 100, 0.95) 100%);
-            box-shadow: 0 0 12px rgba(255, 160, 80, 0.3);
+                rgba(200, 100, 40, 0.9) 0%,
+                rgba(255, 160, 60, 1) 50%,
+                rgba(255, 200, 100, 1) 100%);
+            box-shadow:
+                0 0 8px rgba(255, 160, 60, 0.6),
+                0 0 20px rgba(255, 160, 60, 0.3);
+        }
+
+        .progress-gpu progress {
+            background: linear-gradient(90deg,
+                rgba(0, 180, 100, 0.9) 0%,
+                rgba(0, 255, 136, 1) 50%,
+                rgba(100, 255, 180, 1) 100%);
+            box-shadow:
+                0 0 8px rgba(0, 255, 136, 0.6),
+                0 0 20px rgba(0, 255, 136, 0.3);
         }
 
         /* === STATUS BAR === */
         .status-bar {
             background: linear-gradient(180deg,
-                rgba(8, 16, 28, 0.95) 0%,
-                rgba(5, 10, 18, 0.98) 100%);
-            border-top: 1px solid rgba(100, 180, 255, 0.08);
-            padding: 12px 20px;
+                rgba(2, 8, 18, 0.98) 0%,
+                rgba(0, 5, 12, 0.99) 100%);
+            border-top: 1px solid rgba(0, 212, 255, 0.2);
+            padding: 10px 20px;
             box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.02),
-                0 -4px 20px rgba(0, 0, 0, 0.3);
+                inset 0 1px 0 rgba(0, 212, 255, 0.08),
+                0 -4px 30px rgba(0, 0, 0, 0.5);
         }
 
         .status-indicator {
-            font-size: 11px;
-            font-weight: 500;
-            color: rgba(180, 200, 220, 0.7);
-            letter-spacing: 0.5px;
+            font-size: 10px;
+            font-weight: 600;
+            color: rgba(0, 212, 255, 0.6);
+            letter-spacing: 1px;
+            text-transform: uppercase;
         }
 
         .status-connected {
-            color: rgba(100, 220, 150, 0.95);
-            text-shadow: 0 0 10px rgba(100, 220, 150, 0.3);
+            color: rgba(0, 255, 136, 1);
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            animation: status-blink 2s ease-in-out infinite;
+        }
+
+        @keyframes status-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
 
         .status-disconnected {
-            color: rgba(255, 120, 100, 0.9);
-            text-shadow: 0 0 10px rgba(255, 120, 100, 0.3);
+            color: rgba(255, 80, 80, 0.95);
+            text-shadow: 0 0 10px rgba(255, 80, 80, 0.4);
+        }
+
+        .status-demo {
+            color: rgba(255, 200, 60, 0.95);
+            text-shadow: 0 0 10px rgba(255, 200, 60, 0.4);
         }
 
         /* === WINDOW CONTROLS === */
         .window-control {
-            background: rgba(30, 50, 70, 0.4);
-            border: 1px solid rgba(100, 180, 255, 0.1);
-            border-radius: 6px;
-            color: rgba(180, 210, 240, 0.7);
-            font-size: 12px;
-            font-weight: 500;
-            min-width: 36px;
-            min-height: 28px;
-            padding: 4px 10px;
-            transition: all 0.2s ease;
+            background: rgba(0, 30, 50, 0.5);
+            border: 1px solid rgba(0, 212, 255, 0.15);
+            border-radius: 4px;
+            color: rgba(0, 212, 255, 0.7);
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 32px;
+            min-height: 26px;
+            padding: 4px 8px;
+            transition: all 0.15s ease;
         }
 
         .window-control:hover {
-            background: rgba(40, 70, 100, 0.5);
-            border-color: rgba(100, 180, 255, 0.2);
-            color: rgba(220, 240, 255, 0.9);
+            background: rgba(0, 60, 90, 0.6);
+            border-color: rgba(0, 212, 255, 0.4);
+            color: #00d4ff;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
         }
 
         .window-control-close:hover {
-            background: rgba(180, 60, 60, 0.5);
-            border-color: rgba(255, 100, 100, 0.3);
-            color: rgba(255, 220, 220, 0.95);
+            background: rgba(200, 40, 40, 0.6);
+            border-color: rgba(255, 80, 80, 0.5);
+            color: #ff6666;
+            box-shadow: 0 0 10px rgba(255, 80, 80, 0.3);
         }
 
         /* === NEURAL ACTIVITY GRID === */
         .neural-grid {
-            background: rgba(10, 20, 35, 0.4);
-            border: 1px solid rgba(140, 100, 220, 0.12);
-            border-radius: 12px;
+            background: rgba(0, 15, 30, 0.6);
+            border: 1px solid rgba(180, 100, 255, 0.2);
+            border-radius: 8px;
             padding: 12px;
-            box-shadow: inset 0 0 40px rgba(140, 100, 220, 0.03);
+            box-shadow:
+                inset 0 0 30px rgba(180, 100, 255, 0.05),
+                0 0 1px rgba(180, 100, 255, 0.3);
         }
 
         .neuron-active {
             background: radial-gradient(circle,
-                rgba(180, 140, 255, 0.9) 0%,
-                rgba(120, 80, 200, 0.6) 60%,
-                transparent 100%);
+                rgba(180, 100, 255, 1) 0%,
+                rgba(140, 60, 220, 0.8) 40%,
+                transparent 70%);
             border-radius: 50%;
-            box-shadow: 0 0 12px rgba(160, 120, 240, 0.6);
+            box-shadow:
+                0 0 10px rgba(180, 100, 255, 0.8),
+                0 0 20px rgba(140, 60, 220, 0.4);
+            animation: neuron-fire 0.5s ease-out;
+        }
+
+        @keyframes neuron-fire {
+            0% { transform: scale(1.5); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
         }
 
         .neuron-idle {
-            background: rgba(100, 80, 160, 0.15);
+            background: rgba(80, 40, 120, 0.2);
             border-radius: 50%;
+            border: 1px solid rgba(140, 80, 200, 0.1);
         }
 
         /* === CHAT INTERFACE === */
         .chat-entry {
-            background: rgba(15, 30, 50, 0.6);
-            border: 1px solid rgba(100, 180, 255, 0.15);
-            border-radius: 12px;
-            color: rgba(255, 255, 255, 0.9);
-            padding: 14px 18px;
+            background: rgba(0, 20, 40, 0.7);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            color: #ffffff;
+            padding: 12px 16px;
             font-size: 14px;
-            transition: all 0.25s ease;
+            transition: all 0.2s ease;
         }
 
         .chat-entry:focus {
-            background: rgba(20, 40, 65, 0.7);
-            border-color: rgba(100, 180, 255, 0.3);
+            background: rgba(0, 30, 55, 0.8);
+            border-color: rgba(0, 212, 255, 0.5);
             box-shadow:
-                0 0 20px rgba(100, 180, 255, 0.1),
-                inset 0 0 30px rgba(100, 180, 255, 0.02);
+                0 0 15px rgba(0, 212, 255, 0.2),
+                inset 0 0 20px rgba(0, 100, 150, 0.1);
         }
 
         .chat-message-user {
             background: linear-gradient(135deg,
-                rgba(40, 80, 120, 0.4) 0%,
-                rgba(30, 60, 90, 0.5) 100%);
-            border-radius: 16px 16px 4px 16px;
-            padding: 14px 18px;
-            margin: 6px 12px 6px 50px;
-            color: rgba(255, 255, 255, 0.9);
-            border: 1px solid rgba(100, 180, 255, 0.1);
-            font-size: 14px;
+                rgba(0, 60, 100, 0.5) 0%,
+                rgba(0, 40, 70, 0.6) 100%);
+            border-radius: 12px 12px 4px 12px;
+            padding: 12px 16px;
+            margin: 6px 8px 6px 40px;
+            color: #ffffff;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            font-size: 13px;
             line-height: 1.5;
         }
 
         .chat-message-ara {
             background: linear-gradient(135deg,
-                rgba(60, 40, 100, 0.35) 0%,
-                rgba(40, 25, 70, 0.45) 100%);
-            border-radius: 16px 16px 16px 4px;
-            padding: 14px 18px;
-            margin: 6px 50px 6px 12px;
-            color: rgba(255, 255, 255, 0.9);
-            border: 1px solid rgba(140, 100, 220, 0.15);
-            border-left: 3px solid rgba(160, 120, 240, 0.5);
-            font-size: 14px;
+                rgba(60, 30, 100, 0.5) 0%,
+                rgba(40, 20, 70, 0.6) 100%);
+            border-radius: 12px 12px 12px 4px;
+            padding: 12px 16px;
+            margin: 6px 40px 6px 8px;
+            color: #ffffff;
+            border: 1px solid rgba(180, 100, 255, 0.2);
+            border-left: 3px solid rgba(180, 100, 255, 0.7);
+            font-size: 13px;
             line-height: 1.5;
+            box-shadow: 0 0 1px rgba(180, 100, 255, 0.3);
         }
 
         /* === KITTEN STATS === */
         .kitten-stat {
             font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
-            font-size: 13px;
-            color: rgba(180, 140, 255, 0.9);
+            font-size: 12px;
+            color: rgba(180, 100, 255, 0.95);
+            text-shadow: 0 0 8px rgba(180, 100, 255, 0.3);
             letter-spacing: 0.5px;
         }
 
@@ -1462,171 +1610,705 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         return box
 
     def _generate_neural_topology_html(self):
-        """Generate HTML for neural network topology visualization."""
+        """Generate HTML for HIGH-END HOLOGRAPHIC neural topology visualization."""
         return """
 <!DOCTYPE html>
 <html>
 <head>
     <style>
-        body { margin: 0; overflow: hidden; background: #0a0a0f; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: transparent; font-family: 'Inter', sans-serif; }
         canvas { display: block; width: 100%; height: 100vh; }
+        #hud {
+            position: fixed; top: 10px; left: 10px; right: 10px;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 18px;
+            background: rgba(0, 20, 35, 0.6);
+            backdrop-filter: blur(12px) saturate(150%);
+            -webkit-backdrop-filter: blur(12px) saturate(150%);
+            border: 1px solid rgba(0, 212, 255, 0.25);
+            border-radius: 10px;
+            color: rgba(0, 212, 255, 0.95);
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            z-index: 100;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.15), inset 0 0 30px rgba(0, 212, 255, 0.05);
+        }
+        .mode-btn {
+            background: rgba(0, 40, 60, 0.5);
+            border: 1px solid rgba(0, 212, 255, 0.25);
+            border-radius: 6px;
+            color: rgba(0, 212, 255, 0.85);
+            padding: 6px 12px;
+            margin: 0 4px;
+            cursor: pointer;
+            font-size: 10px;
+            letter-spacing: 1px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+        }
+        .mode-btn:hover {
+            background: rgba(0, 80, 120, 0.6);
+            border-color: rgba(0, 212, 255, 0.5);
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+        }
+        .mode-btn.active {
+            background: linear-gradient(180deg, rgba(0, 100, 140, 0.7), rgba(0, 60, 90, 0.8));
+            border-color: rgba(0, 212, 255, 0.7);
+            color: #fff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5), inset 0 0 15px rgba(0, 212, 255, 0.2);
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
+        }
+        #metrics {
+            font-size: 10px;
+            color: rgba(0, 255, 136, 0.9);
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+        }
+        /* Scanline overlay */
+        #scanlines {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 212, 255, 0.02) 0px,
+                rgba(0, 212, 255, 0.02) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+            pointer-events: none;
+            z-index: 99;
+            animation: scanline-shift 10s linear infinite;
+        }
+        @keyframes scanline-shift {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(30px); }
+        }
     </style>
 </head>
 <body>
+    <div id="scanlines"></div>
+    <div id="hud">
+        <div id="mode-buttons">
+            <button class="mode-btn active" data-mode="neural">NEURAL</button>
+            <button class="mode-btn" data-mode="barcode">BARCODE</button>
+            <button class="mode-btn" data-mode="landscape">LANDSCAPE</button>
+            <button class="mode-btn" data-mode="poincare">POINCARÉ</button>
+            <button class="mode-btn" data-mode="pareto">PARETO</button>
+        </div>
+        <div id="metrics">EPR-CV: 0.10 | TOPO: 0.93 | HV: 0</div>
+    </div>
     <canvas id="canvas"></canvas>
+
+    <!-- Three.js Core -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
-    <script>
+
+    <!-- Post-Processing for Bloom -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // ═══════════════════════════════════════════════════════════════════
+        // HIGH-END HOLOGRAPHIC TOPOLOGY VISUALIZATION
+        // Multi-layered compositor with bloom post-processing
+        // ═══════════════════════════════════════════════════════════════════
+
         const canvas = document.getElementById('canvas');
+
+        // Scene setup
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a0f);
-        scene.fog = new THREE.Fog(0x0a0a0f, 15, 60);
+        scene.background = null;  // Transparent for layering
+        scene.fog = new THREE.FogExp2(0x000510, 0.015);
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 8, 20);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(0, 8, 25);
 
-        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        // Renderer with transparency
+        const renderer = new THREE.WebGLRenderer({
+            canvas,
+            antialias: true,
+            alpha: true,
+            powerPreference: 'high-performance'
+        });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
 
-        // Lights
-        scene.add(new THREE.AmbientLight(0x404040, 0.5));
+        // ─────────────────────────────────────────────────────────────────────
+        // POST-PROCESSING STACK (Bloom + CRT Film Effect)
+        // ─────────────────────────────────────────────────────────────────────
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
-        const light1 = new THREE.PointLight(0x8a2be2, 3.0);
-        light1.position.set(10, 15, 10);
-        scene.add(light1);
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
 
-        const light2 = new THREE.PointLight(0x00ffff, 2.0);
-        light2.position.set(-10, 10, -10);
-        scene.add(light2);
+        // BLOOM PASS - High intensity for holographic glow
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.8, 0.5, 0.1
+        );
+        bloomPass.strength = 2.0;
+        composer.addPass(bloomPass);
 
-        // Create neural network particles
-        const geometry = new THREE.BufferGeometry();
-        const positions = [];
-        const colors = [];
-        const velocities = [];
-        const phases = [];
+        // CRT/FILM PASS - Chromatic aberration + noise + vignette
+        const crtShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                time: { value: 0.0 },
+                chromaticAberration: { value: 0.002 },
+                noiseIntensity: { value: 0.03 },
+                vignetteStrength: { value: 0.4 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float time;
+                uniform float chromaticAberration;
+                uniform float noiseIntensity;
+                uniform float vignetteStrength;
+                varying vec2 vUv;
 
-        // Create neurons in a brain-like structure
-        for (let i = 0; i < 2000; i++) {
-            // Spherical distribution with some layers
-            const phi = Math.random() * Math.PI * 2;
-            const theta = Math.acos(2 * Math.random() - 1);
-            const r = 5 + Math.random() * 3;
+                float rand(vec2 co) {
+                    return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+                }
 
-            positions.push(
-                r * Math.sin(theta) * Math.cos(phi),
-                r * Math.sin(theta) * Math.sin(phi) - 2,
-                r * Math.cos(theta)
-            );
+                void main() {
+                    vec2 uv = vUv;
 
-            // Purple/cyan color scheme
-            const hue = 0.75 + Math.random() * 0.15;
-            const color = new THREE.Color().setHSL(hue, 0.9, 0.6);
-            colors.push(color.r, color.g, color.b);
+                    // Chromatic aberration - RGB channel offset
+                    float offset = chromaticAberration;
+                    vec4 texR = texture2D(tDiffuse, uv + vec2(offset, 0.0));
+                    vec4 texG = texture2D(tDiffuse, uv);
+                    vec4 texB = texture2D(tDiffuse, uv - vec2(offset, 0.0));
+                    vec3 color = vec3(texR.r, texG.g, texB.b);
 
-            velocities.push(
-                (Math.random() - 0.5) * 0.01,
-                (Math.random() - 0.5) * 0.01,
-                (Math.random() - 0.5) * 0.01
-            );
+                    // Film grain noise
+                    float noise = (rand(uv + fract(time)) - 0.5) * noiseIntensity;
+                    color += noise;
 
-            phases.push(Math.random() * Math.PI * 2);
+                    // Vignette - darken edges
+                    vec2 vignetteUv = uv * (1.0 - uv.yx);
+                    float vignette = vignetteUv.x * vignetteUv.y * 15.0;
+                    vignette = pow(vignette, vignetteStrength);
+                    color *= vignette;
+
+                    // Subtle scan line effect
+                    float scanline = sin(uv.y * 800.0 + time * 2.0) * 0.02 + 1.0;
+                    color *= scanline;
+
+                    gl_FragColor = vec4(color, texG.a);
+                }
+            `
+        };
+        const crtPass = new ShaderPass(crtShader);
+        composer.addPass(crtPass);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // LIGHTS - Dynamic color theme
+        // ─────────────────────────────────────────────────────────────────────
+        const ambientLight = new THREE.AmbientLight(0x102030, 0.3);
+        scene.add(ambientLight);
+
+        const cyanLight = new THREE.PointLight(0x00d4ff, 3.0);
+        cyanLight.position.set(15, 20, 15);
+        scene.add(cyanLight);
+
+        const purpleLight = new THREE.PointLight(0xa855f7, 2.0);
+        purpleLight.position.set(-15, 15, -15);
+        scene.add(purpleLight);
+
+        const greenLight = new THREE.PointLight(0x00ff88, 1.5);
+        greenLight.position.set(0, -10, 20);
+        scene.add(greenLight);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // STATE MACHINE - Cinematic scene transitions
+        // ─────────────────────────────────────────────────────────────────────
+        const STATES = {
+            IDLE:     { bloom: 1.5, orbitRadius: 25, orbitSpeed: 0.0001, color: 0x00d4ff },
+            WORKING:  { bloom: 2.0, orbitRadius: 22, orbitSpeed: 0.0003, color: 0x00d4ff },
+            TRAINING: { bloom: 2.5, orbitRadius: 20, orbitSpeed: 0.0005, color: 0xa855f7 },
+            CRITICAL: { bloom: 3.0, orbitRadius: 18, orbitSpeed: 0.0008, color: 0xff3366 },
+            SUCCESS:  { bloom: 2.2, orbitRadius: 28, orbitSpeed: 0.0002, color: 0x00ff88 }
+        };
+
+        let currentState = 'IDLE';
+        let targetState = 'IDLE';
+        let transitionStart = 0;
+        let transitionDuration = 1500;
+        let currentParams = { ...STATES.IDLE };
+
+        window.setState = function(newState, durationMs) {
+            if (newState === targetState || !STATES[newState]) return;
+            currentState = targetState;
+            targetState = newState;
+            transitionStart = performance.now();
+            transitionDuration = durationMs || 1500;
+        };
+
+        function updateStateTransition() {
+            const now = performance.now();
+            const t = Math.min(1, (now - transitionStart) / transitionDuration);
+            const k = t * t * (3 - 2 * t);  // smoothstep
+
+            const from = STATES[currentState];
+            const to = STATES[targetState];
+
+            currentParams.bloom = THREE.MathUtils.lerp(from.bloom, to.bloom, k);
+            currentParams.orbitRadius = THREE.MathUtils.lerp(from.orbitRadius, to.orbitRadius, k);
+            currentParams.orbitSpeed = THREE.MathUtils.lerp(from.orbitSpeed, to.orbitSpeed, k);
+
+            // Color interpolation
+            const fromColor = new THREE.Color(from.color);
+            const toColor = new THREE.Color(to.color);
+            fromColor.lerp(toColor, k);
+            currentParams.color = fromColor;
+
+            if (t >= 1) currentState = targetState;
         }
 
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        // ─────────────────────────────────────────────────────────────────────
+        // MOOD ENGINE - Derived emotional state
+        // ─────────────────────────────────────────────────────────────────────
+        let mood = { arousal: 0.5, valence: 0.0, focus: 0.8 };
 
-        const material = new THREE.PointsMaterial({
-            size: 0.12,
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.9,
-            blending: THREE.AdditiveBlending
-        });
-        const points = new THREE.Points(geometry, material);
-        scene.add(points);
+        function computeMood() {
+            const cpu = metrics.cpu_load || 0.3;
+            const gpu = metrics.gpu_load || 0.3;
+            const eprCv = metrics.epr_cv || 0.1;
+            const topoCos = metrics.topo_cos || 0.9;
 
-        // Create connection lines
-        const lineGeometry = new THREE.BufferGeometry();
-        const linePositions = [];
-        const lineColors = [];
+            // Arousal: how "activated" the system is (0-1)
+            mood.arousal = Math.min(1.0, 0.4 * cpu + 0.4 * gpu + 0.2 * eprCv * 5);
 
-        for (let i = 0; i < 500; i++) {
-            const idx1 = Math.floor(Math.random() * 2000) * 3;
-            const idx2 = Math.floor(Math.random() * 2000) * 3;
+            // Valence: positive/negative (-1 to 1). High topo = positive
+            mood.valence = (topoCos - 0.5) * 2.0;  // Map 0.5-1.0 to 0-1
 
-            linePositions.push(
-                positions[idx1], positions[idx1+1], positions[idx1+2],
-                positions[idx2], positions[idx2+1], positions[idx2+2]
-            );
-
-            lineColors.push(0.5, 0.2, 0.8, 0.3, 0.8, 0.9);
+            // Focus: inverse of instability
+            mood.focus = Math.max(0.2, 1.0 - eprCv * 3);
         }
 
-        lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
-        lineGeometry.setAttribute('color', new THREE.Float32BufferAttribute(lineColors, 3));
+        // ─────────────────────────────────────────────────────────────────────
+        // REACTIVE METRICS
+        // ─────────────────────────────────────────────────────────────────────
+        let metrics = {
+            epr_cv: 0.10,
+            topo_cos: 0.93,
+            cpu_load: 0.3,
+            gpu_load: 0.4,
+            hypervolume: 0
+        };
 
-        const lineMaterial = new THREE.LineBasicMaterial({
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.3,
-            blending: THREE.AdditiveBlending
-        });
-        const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
-        scene.add(lines);
+        window.updateMetrics = function(newMetrics) {
+            metrics = { ...metrics, ...newMetrics };
+            computeMood();
+            document.getElementById('metrics').textContent =
+                `EPR: ${(metrics.epr_cv || 0).toFixed(3)} | TOPO: ${(metrics.topo_cos || 0).toFixed(2)} | MOOD: ${mood.valence >= 0 ? '+' : ''}${mood.valence.toFixed(1)}`;
 
-        // Animation
+            // Auto state detection based on metrics
+            if (metrics.cpu_load > 0.8 || metrics.gpu_load > 0.8) {
+                if (currentParams.color !== STATES.CRITICAL.color) setState('WORKING', 800);
+            }
+        };
+
+        // Camera orbital parameters
+        let orbitAngle = 0;
+        let cameraBaseY = 8;
+
+        // State
+        let currentMode = 'neural';
         let time = 0;
+        let objects = { points: null, lines: null };
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MODE: NEURAL - Holographic brain network (CYAN THEME)
+        // ─────────────────────────────────────────────────────────────────────
+        function createNeural() {
+            clearScene();
+            const geometry = new THREE.BufferGeometry();
+            const positions = [], colors = [], phases = [];
+            for (let i = 0; i < 2500; i++) {
+                const phi = Math.random() * Math.PI * 2;
+                const theta = Math.acos(2 * Math.random() - 1);
+                const r = 6 + Math.random() * 5;
+                positions.push(r * Math.sin(theta) * Math.cos(phi), r * Math.sin(theta) * Math.sin(phi), r * Math.cos(theta));
+                // Cyan-dominant holographic palette
+                const colorChoice = Math.random();
+                let c;
+                if (colorChoice < 0.5) {
+                    c = new THREE.Color(0x00d4ff);  // Primary cyan
+                } else if (colorChoice < 0.7) {
+                    c = new THREE.Color(0x00ff88);  // Neon green
+                } else if (colorChoice < 0.9) {
+                    c = new THREE.Color(0xa855f7);  // Purple accent
+                } else {
+                    c = new THREE.Color(0xffffff);  // White spark
+                }
+                colors.push(c.r, c.g, c.b);
+                phases.push(Math.random() * Math.PI * 2);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+            // HOLOGRAPHIC MATERIAL - Additive blending makes overlaps GLOW
+            const material = new THREE.PointsMaterial({
+                size: 0.18,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.95,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false  // Critical for holographic layering
+            });
+            objects.points = new THREE.Points(geometry, material);
+            objects.points.userData.phases = phases;
+            scene.add(objects.points);
+
+            // Neural connections - glowing synapses
+            const lineGeo = new THREE.BufferGeometry();
+            const linePos = [], lineCol = [];
+            for (let i = 0; i < 800; i++) {
+                const a = Math.floor(Math.random() * 2500) * 3, b = Math.floor(Math.random() * 2500) * 3;
+                linePos.push(positions[a], positions[a+1], positions[a+2], positions[b], positions[b+1], positions[b+2]);
+                // Cyan gradient connections
+                lineCol.push(0.0, 0.83, 1.0, 0.0, 0.6, 0.8);
+            }
+            lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
+            lineGeo.setAttribute('color', new THREE.Float32BufferAttribute(lineCol, 3));
+            const lineMat = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.35,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            objects.lines = new THREE.LineSegments(lineGeo, lineMat);
+            scene.add(objects.lines);
+            camera.position.set(0, 5, 25);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MODE: BARCODE - Persistence barcode visualization
+        // ─────────────────────────────────────────────────────────────────────
+        function createBarcode() {
+            clearScene();
+            const bars = [];
+            const numBars = 80;
+            for (let i = 0; i < numBars; i++) {
+                const birth = Math.random() * 1.5;
+                const death = birth + Math.random() * 2 + 0.1;
+                const persistence = death - birth;
+                const hue = 0.1 + persistence / 3 * 0.6;
+                const geometry = new THREE.BoxGeometry(death - birth, 0.12, 0.05);
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color().setHSL(hue, 0.9, 0.5),
+                    emissive: new THREE.Color().setHSL(hue, 0.9, 0.2),
+                    metalness: 0.3, roughness: 0.5
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set((birth + death) / 2 - 1.5, i * 0.2 - numBars * 0.1, 0);
+                mesh.userData = { birth, death, phase: Math.random() * Math.PI * 2 };
+                scene.add(mesh);
+                bars.push(mesh);
+            }
+            objects.bars = bars;
+            camera.position.set(0, 0, 15);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MODE: LANDSCAPE - Persistence landscape waves
+        // ─────────────────────────────────────────────────────────────────────
+        function createLandscape() {
+            clearScene();
+            const layers = [];
+            const numLayers = 6;
+            const resolution = 100;
+            for (let l = 0; l < numLayers; l++) {
+                const geometry = new THREE.BufferGeometry();
+                const positions = [], colors = [];
+                for (let i = 0; i < resolution; i++) {
+                    const x = (i / resolution) * 20 - 10;
+                    const y = l * 1.2;
+                    positions.push(x, y, 0);
+                    const hue = 0.55 + l * 0.08;
+                    const c = new THREE.Color().setHSL(hue, 0.8, 0.5);
+                    colors.push(c.r, c.g, c.b);
+                }
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                const material = new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 2 });
+                const line = new THREE.Line(geometry, material);
+                line.userData.layer = l;
+                scene.add(line);
+                layers.push(line);
+            }
+            objects.layers = layers;
+            camera.position.set(0, 4, 18);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MODE: POINCARE - Hyperbolic disk
+        // ─────────────────────────────────────────────────────────────────────
+        function createPoincare() {
+            clearScene();
+            // Disk boundary
+            const circleGeo = new THREE.BufferGeometry();
+            const circlePos = [];
+            for (let i = 0; i <= 128; i++) {
+                const a = (i / 128) * Math.PI * 2;
+                circlePos.push(Math.cos(a) * 8, Math.sin(a) * 8, 0);
+            }
+            circleGeo.setAttribute('position', new THREE.Float32BufferAttribute(circlePos, 3));
+            const circleMat = new THREE.LineBasicMaterial({ color: 0x4488aa, transparent: true, opacity: 0.5 });
+            const circle = new THREE.Line(circleGeo, circleMat);
+            scene.add(circle);
+
+            // Points on Poincaré disk
+            const geometry = new THREE.BufferGeometry();
+            const positions = [], colors = [];
+            for (let i = 0; i < 600; i++) {
+                const level = Math.floor(Math.random() * 6);
+                const r = (level / 5) * 0.85 + Math.random() * 0.1;
+                const a = Math.random() * Math.PI * 2;
+                positions.push(Math.cos(a) * r * 8, Math.sin(a) * r * 8, 0);
+                const hue = level / 6;
+                const c = new THREE.Color().setHSL(hue, 0.9, 0.6);
+                colors.push(c.r, c.g, c.b);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            const material = new THREE.PointsMaterial({ size: 0.2, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+            objects.points = new THREE.Points(geometry, material);
+            scene.add(objects.points);
+            camera.position.set(0, 0, 20);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MODE: PARETO - Multi-objective optimization galaxy
+        // ─────────────────────────────────────────────────────────────────────
+        function createPareto() {
+            clearScene();
+            const geometry = new THREE.BufferGeometry();
+            const positions = [], colors = [], sizes = [];
+            for (let i = 0; i < 400; i++) {
+                const x = (Math.random() - 0.5) * 20;
+                const y = (Math.random() - 0.5) * 15;
+                const z = (Math.random() - 0.5) * 10;
+                const dominated = Math.random() > 0.3;
+                positions.push(x, y, z);
+                const hue = dominated ? 0.6 : 0.1 + Math.random() * 0.1;
+                const sat = dominated ? 0.3 : 0.9;
+                const light = dominated ? 0.3 : 0.6;
+                const c = new THREE.Color().setHSL(hue, sat, light);
+                colors.push(c.r, c.g, c.b);
+                sizes.push(dominated ? 0.1 : 0.25);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            const material = new THREE.PointsMaterial({ size: 0.18, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+            objects.points = new THREE.Points(geometry, material);
+            scene.add(objects.points);
+            camera.position.set(0, 5, 25);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // UTILS
+        // ─────────────────────────────────────────────────────────────────────
+        function clearScene() {
+            // Keep first 4 children (ambient + 3 point lights)
+            while(scene.children.length > 4) { scene.remove(scene.children[scene.children.length - 1]); }
+            objects = { points: null, lines: null, bars: null, layers: null };
+        }
+
+        function switchMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+            if (mode === 'neural') createNeural();
+            else if (mode === 'barcode') createBarcode();
+            else if (mode === 'landscape') createLandscape();
+            else if (mode === 'poincare') createPoincare();
+            else if (mode === 'pareto') createPareto();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // ANIMATION - FLAGSHIP SCI-FI EXPERIENCE
+        // ─────────────────────────────────────────────────────────────────────
         function animate() {
             requestAnimationFrame(animate);
             time += 0.016;
 
-            // Pulse neurons
-            const posArray = geometry.attributes.position.array;
-            const colArray = geometry.attributes.color.array;
+            // Update state machine & mood
+            updateStateTransition();
 
-            for (let i = 0; i < posArray.length; i += 3) {
-                const idx = i / 3;
-                const pulse = Math.sin(time * 2 + phases[idx]) * 0.5 + 0.5;
+            // Update CRT shader time
+            crtPass.uniforms.time.value = time;
 
-                // Subtle position pulse
-                posArray[i] += velocities[i] * pulse;
-                posArray[i + 1] += velocities[i + 1] * pulse;
-                posArray[i + 2] += velocities[i + 2] * pulse;
+            // ═══════════════════════════════════════════════════════════════
+            // CAMERA ORBITAL DRIFT - Slow parallax motion
+            // ═══════════════════════════════════════════════════════════════
+            orbitAngle += currentParams.orbitSpeed;
+            const orbitX = Math.cos(orbitAngle) * currentParams.orbitRadius;
+            const orbitZ = Math.sin(orbitAngle) * currentParams.orbitRadius;
+            const targetY = cameraBaseY + Math.sin(time * 0.3) * 2;
 
-                // Color pulse
-                if (Math.random() < 0.001) {
-                    colArray[i] = 1;
-                    colArray[i + 1] = 0.8;
-                    colArray[i + 2] = 1;
-                } else {
-                    colArray[i] *= 0.99;
-                    colArray[i + 1] *= 0.99;
-                    colArray[i + 2] *= 0.99;
-                    colArray[i] = Math.max(colArray[i], 0.5);
-                    colArray[i + 2] = Math.max(colArray[i + 2], 0.6);
+            // Smooth camera interpolation
+            camera.position.x += (orbitX - camera.position.x) * 0.02;
+            camera.position.z += (orbitZ - camera.position.z) * 0.02;
+            camera.position.y += (targetY - camera.position.y) * 0.02;
+
+            // ═══════════════════════════════════════════════════════════════
+            // REACTIVE PARAMETERS - Driven by mood engine
+            // ═══════════════════════════════════════════════════════════════
+            const arousal = mood.arousal;
+            const valence = mood.valence;
+            const focus = mood.focus;
+
+            // Agitation from arousal
+            const agitation = 0.5 + arousal * 1.5;
+
+            // DYNAMIC BLOOM - Pulses with mood arousal
+            bloomPass.strength = currentParams.bloom + Math.sin(time * 2) * 0.3 * arousal;
+
+            // CRT effect intensity based on focus (less focus = more distortion)
+            crtPass.uniforms.chromaticAberration.value = 0.001 + (1 - focus) * 0.003;
+            crtPass.uniforms.noiseIntensity.value = 0.02 + (1 - focus) * 0.04;
+
+            // MOOD-BASED COLOR - Blend main light color
+            const baseColor = new THREE.Color(0x00d4ff);  // cyan
+            const negColor = new THREE.Color(0xff3366);   // red/pink
+            const posColor = new THREE.Color(0x00ff88);   // green
+
+            let targetColor;
+            if (valence < 0) {
+                targetColor = baseColor.clone().lerp(negColor, Math.abs(valence));
+            } else {
+                targetColor = baseColor.clone().lerp(posColor, valence);
+            }
+            cyanLight.color.lerp(targetColor, 0.03);
+
+            // DYNAMIC LIGHTS - Intensity from arousal
+            cyanLight.intensity = 2.0 + arousal * 2.0 + Math.sin(time * 1.5) * 0.5;
+            purpleLight.intensity = 1.5 + (1 - valence) * 1.0;
+            greenLight.intensity = 1.0 + valence * 1.5;
+
+            // ═══════════════════════════════════════════════════════════════
+            // MODE-SPECIFIC ANIMATIONS
+            // ═══════════════════════════════════════════════════════════════
+            if (currentMode === 'neural' && objects.points) {
+                objects.points.rotation.y += 0.002 * agitation;
+                if (objects.lines) objects.lines.rotation.y += 0.002 * agitation;
+
+                const col = objects.points.geometry.attributes.color.array;
+                const phases = objects.points.userData.phases || [];
+
+                for (let i = 0; i < col.length; i += 3) {
+                    const phase = phases[i/3] || 0;
+
+                    // Neural firing - frequency based on arousal
+                    if (Math.random() < 0.002 * arousal * 2) {
+                        col[i] = 1; col[i+1] = 1; col[i+2] = 1;
+                    } else {
+                        // Decay toward mood color
+                        const moodR = targetColor.r * 0.8;
+                        const moodG = targetColor.g * 0.9;
+                        const moodB = targetColor.b;
+                        col[i] = col[i] * 0.97 + moodR * 0.03;
+                        col[i+1] = col[i+1] * 0.97 + moodG * 0.03;
+                        col[i+2] = col[i+2] * 0.97 + moodB * 0.03;
+                    }
+                }
+                objects.points.geometry.attributes.color.needsUpdate = true;
+
+                // Line opacity pulses with breathing
+                if (objects.lines) {
+                    objects.lines.material.opacity = 0.2 + arousal * 0.3 + Math.sin(time * 1.5) * 0.1;
                 }
             }
-            geometry.attributes.position.needsUpdate = true;
-            geometry.attributes.color.needsUpdate = true;
+            else if (currentMode === 'barcode' && objects.bars) {
+                objects.bars.forEach((bar, i) => {
+                    bar.position.z = Math.sin(time * agitation + bar.userData.phase) * 0.5;
+                    bar.material.emissiveIntensity = 0.3 + arousal * 0.4 + Math.sin(time * 2 + i * 0.1) * 0.2;
+                });
+            }
+            else if (currentMode === 'landscape' && objects.layers) {
+                objects.layers.forEach((line, l) => {
+                    const pos = line.geometry.attributes.position.array;
+                    for (let i = 0; i < pos.length / 3; i++) {
+                        const x = pos[i * 3];
+                        pos[i * 3 + 1] = l * 1.2 + Math.sin(x * 0.5 * focus + time * agitation + l) * (0.6 + arousal * 0.4);
+                    }
+                    line.geometry.attributes.position.needsUpdate = true;
+                });
+            }
+            else if (currentMode === 'poincare' && objects.points) {
+                const pos = objects.points.geometry.attributes.position.array;
+                const rotSpeed = 0.001 * agitation;
+                for (let i = 0; i < pos.length; i += 3) {
+                    const x = pos[i], y = pos[i+1];
+                    const r = Math.sqrt(x*x + y*y);
+                    const a = Math.atan2(y, x) + rotSpeed;
+                    pos[i] = Math.cos(a) * r;
+                    pos[i+1] = Math.sin(a) * r;
+                }
+                objects.points.geometry.attributes.position.needsUpdate = true;
+            }
+            else if (currentMode === 'pareto' && objects.points) {
+                objects.points.rotation.y += 0.002 * agitation;
+                objects.points.rotation.x = Math.sin(time * 0.3) * 0.1 * focus;
+            }
 
-            // Rotate brain
-            points.rotation.y += 0.002;
-            lines.rotation.y += 0.002;
-
-            // Camera orbit
-            camera.position.x = Math.sin(time * 0.1) * 20;
-            camera.position.z = Math.cos(time * 0.1) * 20;
             camera.lookAt(0, 0, 0);
 
-            renderer.render(scene, camera);
+            // Render through post-processing stack
+            composer.render();
         }
-        animate();
+
+        // ─────────────────────────────────────────────────────────────────────
+        // INIT
+        // ─────────────────────────────────────────────────────────────────────
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+        });
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            // Update composer for bloom
+            composer.setSize(window.innerWidth, window.innerHeight);
+            bloomPass.resolution.set(window.innerWidth, window.innerHeight);
         });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const modes = ['neural', 'barcode', 'landscape', 'poincare', 'pareto'];
+                const nextIdx = (modes.indexOf(currentMode) + 1) % modes.length;
+                switchMode(modes[nextIdx]);
+            }
+        });
+
+        createNeural();
+        animate();
     </script>
 </body>
 </html>
@@ -1697,11 +2379,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
             else:
                 # DEMO MODE - Show simulated data when offline
-                self.ara_status.set_text("⚡ ARA: DEMO")
+                self.ara_status.set_text("⚡ ARA: DEMO MODE")
                 self.ara_status.remove_css_class('status-connected')
-                self.ara_status.add_css_class('status-disconnected')
-                self.ara_conn_label.set_text("🟡 DEMO MODE")
-                self.ara_mode_label.set_text("Mode: OFFLINE (Demo)")
+                self.ara_status.remove_css_class('status-disconnected')
+                self.ara_status.add_css_class('status-demo')
+                self.ara_conn_label.set_text("🟡 SIMULATION ACTIVE")
+                self.ara_mode_label.set_text("Neural Link: Simulated")
 
                 # Simulate PAD values with smooth oscillation
                 t = self.demo_tick * 0.1

@@ -1,0 +1,127 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ara-avatar"
+version = "1.0.0"
+description = "Conversational Talking Avatar AI with advanced audio pipeline"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Ara Team"}
+]
+keywords = [
+    "ai", "avatar", "tts", "asr", "speech", "voice-cloning",
+    "whisper", "coqui", "conversational-ai"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    # Core
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "loguru>=0.7",
+    "numpy>=1.24",
+
+    # Audio I/O
+    "sounddevice>=0.4",
+    "soundfile>=0.12",
+
+    # Audio Processing
+    "librosa>=0.10",
+    "scipy>=1.11",
+    "webrtcvad>=2.0.10",
+
+    # TTS
+    "TTS>=0.22",
+
+    # ASR
+    "openai-whisper>=20231117",
+
+    # Deep Learning
+    "torch>=2.0",
+    "torchaudio>=2.0",
+]
+
+[project.optional-dependencies]
+# Full installation with all features
+full = [
+    "noisereduce>=3.0",
+    "gfpgan>=1.3",
+    "facexlib>=0.3",
+    "face-alignment>=1.4",
+    "opencv-python>=4.9",
+    "moviepy>=1.0",
+    "ffmpeg-python>=0.2",
+    "gradio>=4.0",
+    "fastapi>=0.109",
+    "uvicorn[standard]>=0.27",
+]
+
+# Development dependencies
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    "black>=24.0",
+    "ruff>=0.1",
+    "mypy>=1.8",
+]
+
+# CPU-only installation (no CUDA)
+cpu = [
+    "torch>=2.0",
+    "torchaudio>=2.0",
+]
+
+[project.scripts]
+ara-avatar = "src.cli:main"
+ara-tts = "src.audio_pipeline.cli:tts_main"
+ara-asr = "src.audio_pipeline.cli:asr_main"
+
+[project.urls]
+Homepage = "https://github.com/theadamsfamily1981-max/Ara"
+Documentation = "https://github.com/theadamsfamily1981-max/Ara#readme"
+Repository = "https://github.com/theadamsfamily1981-max/Ara"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.json"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
