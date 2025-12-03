@@ -20,6 +20,7 @@ gi.require_version('GstVideo', '1.0')
 from gi.repository import Gtk, Gst, GstVideo, GLib, Gio
 from pathlib import Path
 import logging
+import cairo
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +328,7 @@ class HolographicBackground(Gtk.DrawingArea):
         import math
 
         # Premium deep space background
-        pattern = cr.create_linear_gradient(0, 0, width * 0.3, height)
+        pattern = cairo.LinearGradient(0, 0, width * 0.3, height)
         pattern.add_color_stop_rgb(0, 0.012, 0.020, 0.032)
         pattern.add_color_stop_rgb(0.3, 0.039, 0.086, 0.110)
         pattern.add_color_stop_rgb(0.6, 0.051, 0.102, 0.141)
@@ -336,7 +337,7 @@ class HolographicBackground(Gtk.DrawingArea):
         cr.paint()
 
         # Subtle vignette effect
-        vignette = cr.create_radial_gradient(
+        vignette = cairo.RadialGradient(
             width / 2, height / 2, min(width, height) * 0.2,
             width / 2, height / 2, max(width, height) * 0.8
         )
@@ -382,7 +383,7 @@ class HolographicBackground(Gtk.DrawingArea):
             gx, gy = width * ox, height * oy
             radius = min(width, height) * osize * pulse
 
-            orb = cr.create_radial_gradient(gx, gy, 0, gx, gy, radius)
+            orb = cairo.RadialGradient(gx, gy, 0, gx, gy, radius)
             orb.add_color_stop_rgba(0, 0.3, 0.5, 0.8, 0.03 * pulse)
             orb.add_color_stop_rgba(0.5, 0.2, 0.4, 0.7, 0.015 * pulse)
             orb.add_color_stop_rgba(1, 0, 0, 0, 0)
@@ -421,7 +422,7 @@ class HolographicBackground(Gtk.DrawingArea):
         radius = min(width, height) * 0.35 * pulse
 
         # Outer halo
-        halo = cr.create_radial_gradient(cx, cy, 0, cx, cy, radius)
+        halo = cairo.RadialGradient(cx, cy, 0, cx, cy, radius)
         halo.add_color_stop_rgba(0, 0.4, 0.5, 0.8, 0.04)
         halo.add_color_stop_rgba(0.3, 0.3, 0.45, 0.7, 0.025)
         halo.add_color_stop_rgba(0.6, 0.2, 0.35, 0.6, 0.01)
