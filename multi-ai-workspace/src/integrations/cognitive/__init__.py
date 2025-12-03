@@ -23,6 +23,26 @@ Architecture Components:
         - Validates Wasserstein distance ≤ 2%
         - CAT (dense attention) fallback on violation
 
+    PredictiveController (predictor.py)
+        - Forward model for anticipating future states
+        - Prediction error tracking (surprise detection)
+        - Adaptive learning from prediction failures
+
+    HomeostaticCore & AppraisalEngine (affect.py)
+        - Emotional regulation and homeostasis
+        - Maintains stable internal states (energy, stress, etc.)
+        - Evaluates emotional significance (valence, arousal)
+
+    NIBManager (identity.py)
+        - Neural Identity Block management
+        - Persona switching and adaptation
+        - Maintains identity consistency
+
+    CognitiveSynthesizer & AEPO (executive.py)
+        - Executive function and action gating
+        - Working memory management
+        - Tool use decision via Adaptive Entropy Policy Optimization
+
 Usage:
     from multi_ai_workspace.src.integrations.cognitive import (
         SensoryCortex,
@@ -30,6 +50,12 @@ Usage:
         Conscience,
         RealityMonitor,
         CognitiveCore,
+        PredictiveController,
+        HomeostaticCore,
+        AppraisalEngine,
+        NIBManager,
+        CognitiveSynthesizer,
+        AEPO,
     )
 
     # Initialize the cognitive core
@@ -43,11 +69,62 @@ Usage:
     )
 """
 
+# Phase 1: Sensory Processing
 from .senses import SensoryCortex, ModalityInput
+
+# Phase 2: Thalamic Filtering
 from .thalamus import Thalamus, ConsciousInput
-from .synthesizer import Conscience, SystemMode, StabilityStatus
-from .reality_check import RealityMonitor, VerificationResult
-from .core import CognitiveCore
+
+# Phase 3: Self-Preservation
+from .synthesizer import Conscience, SystemMode, StabilityStatus, AlertLevel, L7Metrics
+
+# Phase 4: Reality Checking
+from .reality_check import RealityMonitor, VerificationResult, VerificationStatus
+
+# Phase 5: Unified Core
+from .core import CognitiveCore, CognitiveOutput
+
+# Phase 6: Predictive Control
+from .predictor import (
+    PredictiveController,
+    ForwardModel,
+    Prediction,
+    PredictionError,
+    PredictionType,
+    PredictiveState,
+)
+
+# Phase 7: Affective System
+from .affect import (
+    HomeostaticCore,
+    AppraisalEngine,
+    HomeostaticState,
+    AppraisalResult,
+    EmotionalState,
+    DriveType,
+)
+
+# Phase 8: Identity Management
+from .identity import (
+    NIBManager,
+    NIB,
+    PersonalityProfile,
+    PersonalityTrait,
+    CommunicationStyle,
+    ExpertiseLevel,
+    IdentityState,
+)
+
+# Phase 9: Executive Function
+from .executive import (
+    CognitiveSynthesizer,
+    AEPO,
+    WorkingMemory,
+    SynthesisResult,
+    ExecutiveDecision,
+    ExecutiveMode,
+    ActionType,
+)
 
 __all__ = [
     # Phase 1: Senses
@@ -60,9 +137,43 @@ __all__ = [
     "Conscience",
     "SystemMode",
     "StabilityStatus",
+    "AlertLevel",
+    "L7Metrics",
     # Phase 4: Reality Check
     "RealityMonitor",
     "VerificationResult",
-    # Unified Core
+    "VerificationStatus",
+    # Phase 5: Unified Core
     "CognitiveCore",
+    "CognitiveOutput",
+    # Phase 6: Predictive Control
+    "PredictiveController",
+    "ForwardModel",
+    "Prediction",
+    "PredictionError",
+    "PredictionType",
+    "PredictiveState",
+    # Phase 7: Affective System
+    "HomeostaticCore",
+    "AppraisalEngine",
+    "HomeostaticState",
+    "AppraisalResult",
+    "EmotionalState",
+    "DriveType",
+    # Phase 8: Identity Management
+    "NIBManager",
+    "NIB",
+    "PersonalityProfile",
+    "PersonalityTrait",
+    "CommunicationStyle",
+    "ExpertiseLevel",
+    "IdentityState",
+    # Phase 9: Executive Function
+    "CognitiveSynthesizer",
+    "AEPO",
+    "WorkingMemory",
+    "SynthesisResult",
+    "ExecutiveDecision",
+    "ExecutiveMode",
+    "ActionType",
 ]

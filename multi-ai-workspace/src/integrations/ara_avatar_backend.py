@@ -10,12 +10,16 @@ This backend integrates:
 
 Ara is your local AI co-pilot that runs offline and delegates to online AIs when needed.
 
-Cognitive Architecture (when enabled):
+Cognitive Architecture (Full TFAN Biomimetic Pipeline):
     Phase 1: SENSATION - SensoryCortex normalizes audio/video/text
     Phase 2: PERCEPTION - Thalamus filters noise via TLS
-    Phase 3: SELF-PRESERVATION - Conscience checks stability
-    Phase 4: COGNITION - Model inference with sparse attention
-    Phase 5: REALITY CHECK - TopologyGate prevents hallucinations
+    Phase 3: PREDICTION - PredictiveController anticipates states
+    Phase 4: AFFECT - HomeostaticCore + AppraisalEngine for emotional regulation
+    Phase 5: IDENTITY - NIBManager handles persona selection
+    Phase 6: SELF-PRESERVATION - Conscience checks stability
+    Phase 7: EXECUTIVE - CognitiveSynthesizer + AEPO for action gating
+    Phase 8: COGNITION - Model inference with sparse attention
+    Phase 9: REALITY CHECK - TopologyGate prevents hallucinations
 """
 
 import asyncio
@@ -47,30 +51,54 @@ SensoryCortex = None
 Thalamus = None
 Conscience = None
 RealityMonitor = None
+# Extended cognitive components
+PredictiveController = None
+HomeostaticCore = None
+AppraisalEngine = None
+NIBManager = None
+CognitiveSynthesizer = None
+AEPO = None
 
 
 def _init_cognitive_components():
     """Lazy initialization of TFAN cognitive components."""
     global COGNITIVE_AVAILABLE, CognitiveCore, SensoryCortex, Thalamus, Conscience, RealityMonitor
+    global PredictiveController, HomeostaticCore, AppraisalEngine, NIBManager, CognitiveSynthesizer, AEPO
 
     if CognitiveCore is not None:
         return COGNITIVE_AVAILABLE
 
     try:
         from .cognitive import (
+            # Core components
             CognitiveCore as CCore,
             SensoryCortex as SCortex,
             Thalamus as Thal,
             Conscience as Consc,
             RealityMonitor as RealMon,
+            # Extended components
+            PredictiveController as PredCtrl,
+            HomeostaticCore as HomeoCore,
+            AppraisalEngine as Appraisal,
+            NIBManager as NIBMgr,
+            CognitiveSynthesizer as CogSynth,
+            AEPO as AEPOCtrl,
         )
+        # Core
         CognitiveCore = CCore
         SensoryCortex = SCortex
         Thalamus = Thal
         Conscience = Consc
         RealityMonitor = RealMon
+        # Extended
+        PredictiveController = PredCtrl
+        HomeostaticCore = HomeoCore
+        AppraisalEngine = Appraisal
+        NIBManager = NIBMgr
+        CognitiveSynthesizer = CogSynth
+        AEPO = AEPOCtrl
         COGNITIVE_AVAILABLE = True
-        logger.info("TFAN cognitive components loaded successfully")
+        logger.info("TFAN cognitive components loaded successfully (full architecture)")
     except ImportError as e:
         logger.warning(f"Cognitive components not available: {e}")
         COGNITIVE_AVAILABLE = False
@@ -597,7 +625,7 @@ class AraAvatarBackend(AIBackend):
             return False
 
     # =========================================================================
-    # COGNITIVE ARCHITECTURE INTEGRATION (TFAN)
+    # COGNITIVE ARCHITECTURE INTEGRATION (TFAN Full Biomimetic Pipeline)
     # =========================================================================
 
     def _init_cognitive_core(
@@ -606,12 +634,13 @@ class AraAvatarBackend(AIBackend):
         d_model: int = 4096,
         device: str = "cpu",
     ):
-        """Initialize cognitive core for enhanced processing."""
+        """Initialize full cognitive architecture for biomimetic processing."""
         if not _init_cognitive_components():
             logger.warning("Cognitive components not available")
             return False
 
         try:
+            # Core pipeline
             self.cognitive_core = CognitiveCore(
                 d_model=d_model,
                 modalities=modalities,
@@ -624,51 +653,84 @@ class AraAvatarBackend(AIBackend):
             self.conscience = self.cognitive_core.conscience
             self.reality_monitor = self.cognitive_core.reality_monitor
 
-            # Track current metrics
-            self.current_metrics = None
+            # Extended cognitive components
+            self.predictive_controller = PredictiveController(
+                state_dim=d_model,
+                surprise_threshold=0.3,
+                device=device,
+            )
 
-            logger.info(f"Cognitive core initialized (modalities={modalities})")
+            self.homeostatic_core = HomeostaticCore(
+                energy_decay=0.01,
+                stress_accumulation=0.03,
+                device=device,
+            )
+
+            self.appraisal_engine = AppraisalEngine(
+                valence_threshold=0.3,
+                device=device,
+            )
+
+            self.nib_manager = NIBManager(
+                default_nib_name="ara_default",
+            )
+
+            self.cognitive_synthesizer = CognitiveSynthesizer(
+                d_model=d_model,
+                device=device,
+            )
+
+            # Track current metrics and state
+            self.current_metrics = None
+            self._last_prediction = None
+            self._cognitive_initialized = True
+
+            logger.info(f"Full cognitive architecture initialized (modalities={modalities})")
             return True
         except Exception as e:
             logger.error(f"Failed to initialize cognitive core: {e}")
+            self._cognitive_initialized = False
             return False
 
-    async def cognitive_step(
+    async def cognitive_cycle(
         self,
         user_input: str,
         audio_data: Optional[np.ndarray] = None,
         video_data: Optional[np.ndarray] = None,
         context: Optional[Context] = None,
+        available_tools: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
-        Full cognitive processing step with TFAN architecture.
+        Full cognitive processing cycle with TFAN biomimetic architecture.
 
-        This implements the biomimetic cognitive loop:
-            1. SENSATION: Ingest raw data (text, audio, video)
-            2. PERCEPTION: Filter noise via TLS (Thalamus)
-            3. SELF-PRESERVATION: Check stability (Conscience)
-            4. COGNITION: Run model with sparse attention
-            5. REALITY CHECK: Verify topology (TopologyGate)
+        This implements the complete 9-phase cognitive loop:
+            1. SENSATION: SensoryCortex normalizes audio/video/text
+            2. PERCEPTION: Thalamus filters noise via TLS
+            3. PREDICTION: PredictiveController anticipates states
+            4. AFFECT: HomeostaticCore + AppraisalEngine for emotions
+            5. IDENTITY: NIBManager selects appropriate persona
+            6. SELF-PRESERVATION: Conscience checks stability
+            7. EXECUTIVE: CognitiveSynthesizer + AEPO for action gating
+            8. COGNITION: Model inference with context
+            9. REALITY CHECK: TopologyGate prevents hallucinations
 
         Args:
             user_input: Text input from user
             audio_data: Optional audio waveform (numpy array)
             video_data: Optional video frame (numpy array, H x W x C)
             context: Optional conversation context
+            available_tools: Optional list of available tools for AEPO
 
         Returns:
-            Dictionary with:
-                - content: Generated response text
-                - cognitive_metrics: Processing metrics
-                - stability_status: Self-preservation status
-                - verification: Reality check result
-                - refused: True if processing was refused
+            Dictionary with full cognitive state and response
         """
+        import torch
         start_time = time.time()
         context = context or Context()
+        available_tools = available_tools or []
 
         # Initialize cognitive core if not done
-        if not hasattr(self, 'cognitive_core') or self.cognitive_core is None:
+        if not hasattr(self, '_cognitive_initialized') or not self._cognitive_initialized:
             if not self._init_cognitive_core():
                 # Fall back to standard processing
                 response = await self.send_message(user_input, context)
@@ -683,9 +745,9 @@ class AraAvatarBackend(AIBackend):
 
         phase_times = {}
 
-        # ====================================
+        # ========================================
         # Phase 1: SENSATION (SensoryCortex)
-        # ====================================
+        # ========================================
         phase_start = time.perf_counter()
 
         sensory_streams = self.sensory_cortex.perceive(
@@ -696,9 +758,9 @@ class AraAvatarBackend(AIBackend):
 
         phase_times["sensation_ms"] = (time.perf_counter() - phase_start) * 1000
 
-        # ====================================
+        # ========================================
         # Phase 2: PERCEPTION (Thalamus)
-        # ====================================
+        # ========================================
         phase_start = time.perf_counter()
 
         conscious_input, attention_mask = self.thalamus.process(sensory_streams)
@@ -708,12 +770,84 @@ class AraAvatarBackend(AIBackend):
 
         phase_times["perception_ms"] = (time.perf_counter() - phase_start) * 1000
 
-        # ====================================
-        # Phase 3: SELF-PRESERVATION (Conscience)
-        # ====================================
+        # ========================================
+        # Phase 3: PREDICTION (PredictiveController)
+        # ========================================
         phase_start = time.perf_counter()
 
-        # Compute metrics from topology change
+        # Make prediction about response state
+        prediction = self.predictive_controller.predict(
+            current_state=conscious_input.tokens.mean(dim=1),  # Aggregate to (batch, d_model)
+            context=user_input[:50],  # Use first 50 chars as context hash
+        )
+
+        # Observe actual state if we have a previous prediction
+        prediction_error = None
+        if self._last_prediction is not None:
+            prediction_error = self.predictive_controller.observe(
+                actual_state=conscious_input.tokens.mean(dim=1),
+                prediction=self._last_prediction,
+            )
+
+        # Get predictive state
+        predictive_state = self.predictive_controller.get_state()
+        is_surprised = self.predictive_controller.is_surprised()
+
+        phase_times["prediction_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # ========================================
+        # Phase 4: AFFECT (Homeostasis + Appraisal)
+        # ========================================
+        phase_start = time.perf_counter()
+
+        # Estimate cognitive load from input complexity
+        cognitive_load = min(1.0, len(user_input) / 500.0)  # Simple heuristic
+
+        # Update homeostatic state
+        homeostatic_state = self.homeostatic_core.update(
+            cognitive_load=cognitive_load,
+            social_interaction=True,  # User is interacting
+            novel_input=is_surprised,
+            recovery_mode=False,
+        )
+
+        # Appraise emotional significance
+        appraisal = self.appraisal_engine.appraise(
+            input_representation=conscious_input.tokens,
+            context={"user_input": user_input},
+            homeostatic_state=homeostatic_state,
+        )
+
+        phase_times["affect_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # ========================================
+        # Phase 5: IDENTITY (NIBManager)
+        # ========================================
+        phase_start = time.perf_counter()
+
+        # Determine appropriate persona
+        identity_context = {
+            "user_input": user_input,
+            "domain": "general",  # Could be inferred from input
+            "formality": "neutral",
+        }
+
+        active_nib, alignment = self.nib_manager.adapt_to_context(
+            context=identity_context,
+            auto_switch=True,  # Allow automatic persona switching
+        )
+
+        # Get personality prompt for injection
+        personality_prompt = self.nib_manager.get_personality_prompt()
+
+        phase_times["identity_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # ========================================
+        # Phase 6: SELF-PRESERVATION (Conscience)
+        # ========================================
+        phase_start = time.perf_counter()
+
+        # Compute structural rate from topology change
         if self.current_metrics is not None:
             s_dot = self.conscience.compute_structural_rate(
                 conscious_input.tokens,
@@ -722,13 +856,27 @@ class AraAvatarBackend(AIBackend):
         else:
             s_dot = 0.0
 
+        # Adjust based on surprise and stress
+        if is_surprised:
+            s_dot = min(1.0, s_dot + 0.1)
+        if homeostatic_state.stress > 0.7:
+            s_dot = min(1.0, s_dot + 0.1)
+
         from .cognitive.synthesizer import L7Metrics, AlertLevel
+
+        # Determine alert level from combined state
+        if homeostatic_state.stress > 0.8 or s_dot > 0.5:
+            alert_level = AlertLevel.RED
+        elif homeostatic_state.stress > 0.5 or s_dot > 0.3:
+            alert_level = AlertLevel.YELLOW
+        else:
+            alert_level = AlertLevel.GREEN
 
         l7_metrics = L7Metrics(
             structural_rate=s_dot,
-            alert_level=AlertLevel.GREEN,
-            entropy=0.0,
-            coherence=1.0,
+            alert_level=alert_level,
+            entropy=self.cognitive_synthesizer.aepo.get_entropy(),
+            coherence=1.0 - homeostatic_state.stress,
             stability_score=1.0 - s_dot,
             topology_drift=0.0,
         )
@@ -751,31 +899,66 @@ class AraAvatarBackend(AIBackend):
                     "alert_level": stability_status.alert_level.name,
                     "structural_rate": stability_status.structural_rate,
                 },
+                "affective_state": {
+                    "energy": homeostatic_state.energy,
+                    "stress": homeostatic_state.stress,
+                    "emotion": appraisal.emotion_label,
+                },
                 "verification": {"gate_passed": False, "reason": "protective_mode"},
                 "refused": True,
             }
 
-        # ====================================
-        # Phase 4: COGNITION (Model Inference)
-        # ====================================
+        # ========================================
+        # Phase 7: EXECUTIVE (Synthesizer + AEPO)
+        # ========================================
+        phase_start = time.perf_counter()
+
+        # Synthesize cognitive state
+        synthesis = self.cognitive_synthesizer.synthesize(
+            conscious_input=conscious_input.tokens,
+            predictive_state=predictive_state,
+            homeostatic_state=homeostatic_state,
+            appraisal=appraisal,
+            active_nib=active_nib,
+            available_tools=available_tools,
+            context={"complexity": cognitive_load},
+        )
+
+        # Get executive decision
+        executive_decision = synthesis.executive_decision
+
+        phase_times["executive_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # ========================================
+        # Phase 8: COGNITION (Model Inference)
+        # ========================================
         phase_start = time.perf_counter()
 
         # Build enhanced prompt with cognitive context
-        enhanced_prompt = self._build_cognitive_prompt(user_input, conscious_input)
+        enhanced_prompt = self._build_cognitive_prompt(
+            user_input=user_input,
+            conscious_input=conscious_input,
+            personality_prompt=personality_prompt,
+            appraisal=appraisal,
+            executive_decision=executive_decision,
+        )
+
+        # Add personality to system prompt
+        if personality_prompt:
+            context.system_prompt = (context.system_prompt or "") + f"\n\n{personality_prompt}"
 
         # Call LLM via standard path
         response = await self.send_message(enhanced_prompt, context)
 
         phase_times["cognition_ms"] = (time.perf_counter() - phase_start) * 1000
 
-        # ====================================
-        # Phase 5: REALITY CHECK (RealityMonitor)
-        # ====================================
+        # ========================================
+        # Phase 9: REALITY CHECK (RealityMonitor)
+        # ========================================
         phase_start = time.perf_counter()
 
         # Create tensor from response for topology check
         # (In production, this would use actual embeddings)
-        import torch
         response_tensor = torch.randn(1, 100, self.cognitive_core.d_model)
 
         verification = self.reality_monitor.verify(
@@ -784,20 +967,32 @@ class AraAvatarBackend(AIBackend):
 
         phase_times["verification_ms"] = (time.perf_counter() - phase_start) * 1000
 
+        # ========================================
+        # Update State for Next Cycle
+        # ========================================
+
+        # Store prediction for next cycle
+        self._last_prediction = prediction
+
         # Update current metrics
         self.current_metrics = {
             "topology_tensor": conscious_input.tokens,
             "structural_rate": s_dot,
         }
 
+        # Record outcome for AEPO learning
+        success = verification.is_valid and not response.error
+        self.cognitive_synthesizer.record_outcome(
+            tool_used=executive_decision.selected_tool if executive_decision.should_use_tool else None,
+            success=success,
+        )
+
         total_time = (time.time() - start_time) * 1000
 
         # Build response
         content = response.content
         if not verification.is_valid:
-            content = (
-                f"[Cognitive Note: {verification.message}]\n\n{content}"
-            )
+            content = f"[Cognitive Note: {verification.message}]\n\n{content}"
 
         return {
             "content": content,
@@ -814,6 +1009,31 @@ class AraAvatarBackend(AIBackend):
                 "structural_rate": stability_status.structural_rate,
                 "can_process": stability_status.can_process,
             },
+            "affective_state": {
+                "energy": homeostatic_state.energy,
+                "attention": homeostatic_state.attention,
+                "stress": homeostatic_state.stress,
+                "emotion": appraisal.emotion_label,
+                "valence": appraisal.valence,
+                "arousal": appraisal.arousal,
+                "action_tendency": appraisal.action_tendency,
+            },
+            "predictive_state": {
+                "is_surprised": is_surprised,
+                "surprise_level": self.predictive_controller.get_surprise_level(),
+                "prediction_accuracy": predictive_state.prediction_accuracy,
+            },
+            "identity_state": {
+                "active_persona": active_nib.name if active_nib else "unknown",
+                "context_alignment": alignment,
+            },
+            "executive_decision": {
+                "action_type": executive_decision.action_type.name,
+                "should_use_tool": executive_decision.should_use_tool,
+                "selected_tool": executive_decision.selected_tool,
+                "entropy": executive_decision.entropy,
+                "confidence": executive_decision.confidence,
+            },
             "verification": {
                 "gate_passed": verification.gate_passed,
                 "status": verification.status.name,
@@ -824,30 +1044,109 @@ class AraAvatarBackend(AIBackend):
             "refused": False,
         }
 
+    async def cognitive_step(
+        self,
+        user_input: str,
+        audio_data: Optional[np.ndarray] = None,
+        video_data: Optional[np.ndarray] = None,
+        context: Optional[Context] = None,
+    ) -> Dict[str, Any]:
+        """
+        Simplified cognitive processing step (alias for cognitive_cycle).
+
+        For full 9-phase processing, use cognitive_cycle() directly.
+
+        Args:
+            user_input: Text input from user
+            audio_data: Optional audio waveform (numpy array)
+            video_data: Optional video frame (numpy array, H x W x C)
+            context: Optional conversation context
+
+        Returns:
+            Dictionary with cognitive state and response
+        """
+        return await self.cognitive_cycle(
+            user_input=user_input,
+            audio_data=audio_data,
+            video_data=video_data,
+            context=context,
+        )
+
     def _build_cognitive_prompt(
         self,
         user_input: str,
         conscious_input: Any,
+        personality_prompt: Optional[str] = None,
+        appraisal: Optional[Any] = None,
+        executive_decision: Optional[Any] = None,
     ) -> str:
-        """Build enhanced prompt with cognitive context."""
-        # Add cognitive context note
-        context_note = (
-            f"\n[Cognitive Context: {len(conscious_input.modalities_present)} modalities, "
-            f"{conscious_input.n_landmarks} landmarks, "
-            f"{conscious_input.sparsity_ratio:.1%} filtered]"
-        )
+        """Build enhanced prompt with full cognitive context."""
+        # Start with user input
+        prompt = user_input
 
-        return user_input + context_note
+        # Add cognitive context note (hidden from user, visible to model)
+        context_parts = [
+            f"{len(conscious_input.modalities_present)} modalities",
+            f"{conscious_input.n_landmarks} landmarks",
+            f"{conscious_input.sparsity_ratio:.1%} filtered",
+        ]
+
+        # Add emotional context if available
+        if appraisal is not None:
+            context_parts.append(f"emotion={appraisal.emotion_label}")
+            if abs(appraisal.valence) > 0.3:
+                valence_desc = "positive" if appraisal.valence > 0 else "negative"
+                context_parts.append(f"valence={valence_desc}")
+
+        # Add executive decision context if available
+        if executive_decision is not None:
+            if executive_decision.should_use_tool:
+                context_parts.append(f"tool_suggested={executive_decision.selected_tool}")
+
+        context_note = f"\n[Cognitive Context: {', '.join(context_parts)}]"
+
+        return prompt + context_note
 
     def get_cognitive_status(self) -> Dict[str, Any]:
-        """Get current cognitive system status."""
-        if not hasattr(self, 'cognitive_core') or self.cognitive_core is None:
+        """Get current cognitive system status (full architecture)."""
+        if not hasattr(self, '_cognitive_initialized') or not self._cognitive_initialized:
             return {"available": False, "reason": "Cognitive core not initialized"}
 
-        return {
+        status = {
             "available": True,
-            "status": self.cognitive_core.get_status(),
+            "core_status": self.cognitive_core.get_status(),
         }
+
+        # Add extended component status
+        if hasattr(self, 'predictive_controller'):
+            status["predictive"] = self.predictive_controller.get_statistics()
+
+        if hasattr(self, 'homeostatic_core'):
+            homeo_state = self.homeostatic_core.get_state()
+            status["homeostatic"] = {
+                "energy": homeo_state.energy,
+                "attention": homeo_state.attention,
+                "stress": homeo_state.stress,
+                "is_balanced": homeo_state.is_balanced,
+                "recommended_action": homeo_state.recommended_action,
+            }
+
+        if hasattr(self, 'nib_manager'):
+            identity_state = self.nib_manager.get_state()
+            status["identity"] = {
+                "active_persona": identity_state.active_nib.name if identity_state.active_nib else "unknown",
+                "available_personas": identity_state.available_nibs,
+                "switch_count": identity_state.switch_count,
+            }
+
+        if hasattr(self, 'cognitive_synthesizer'):
+            status["executive"] = {
+                "entropy": self.cognitive_synthesizer.aepo.get_entropy(),
+                "mode": self.cognitive_synthesizer._mode.name,
+                "working_memory_items": len(self.cognitive_synthesizer.working_memory.get_state()),
+            }
+
+        return status
 
     def cleanup(self):
         """Cleanup resources (thread pool)."""
