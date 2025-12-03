@@ -480,17 +480,19 @@ def create_background(video_path: str = None) -> tuple:
     if video_path and Path(video_path).exists():
         bg = VideoBackground(video_path)
         if bg.player:
+            logger.info(f"[Video] Using video background: {video_path}")
             return bg.get_widget(), bg
 
     # Check default video locations
     bg = VideoBackground()
     if bg.player:
+        logger.info(f"[Video] Using default video background: {bg.video_path}")
         return bg.get_widget(), bg
 
-    # Fall back to animated CSS background
-    logger.info("[Video] Using animated CSS background")
-    bg = AnimatedBackground()
-    return bg.get_widget(), bg
+    # Fall back to HolographicBackground (animated Cairo drawing)
+    logger.info("[Video] Using holographic animated background")
+    holo_bg = HolographicBackground()
+    return holo_bg, holo_bg
 
 
 # Example usage / testing

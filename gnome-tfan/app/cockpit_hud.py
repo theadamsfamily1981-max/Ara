@@ -231,13 +231,18 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         root_overlay.add_css_class('cockpit-window')
         self.set_content(root_overlay)
 
-        # Layer 0: Video background (optional)
+        # Layer 0: Background (video or holographic)
         if VIDEO_AVAILABLE:
             video_widget, self.video_bg = create_background()
             video_widget.set_hexpand(True)
             video_widget.set_vexpand(True)
             root_overlay.set_child(video_widget)
+
+            # Start video/animation background
+            if self.video_bg and hasattr(self.video_bg, 'play'):
+                GLib.idle_add(self.video_bg.play)
         else:
+            # Fallback: simple gradient background
             bg = Gtk.Box()
             bg.add_css_class('cockpit-bg')
             root_overlay.set_child(bg)
@@ -285,10 +290,6 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
         # Start monitoring
         self._start_monitoring()
-
-        # Start video background
-        if self.video_bg and hasattr(self.video_bg, 'play'):
-            self.video_bg.play()
 
         logger.info("[COCKPIT] Ara Neural Command Center initialized")
 
@@ -1523,8 +1524,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
     def _start_monitoring(self):
         """Start background monitoring."""
 
+        # Demo mode counter for simulated data when offline
+        self.demo_tick = 0
+
         def update_ara_status():
             """Update Ara connection and status."""
+            self.demo_tick += 1
             status = self.ara_client.get_status()
 
             if status:
@@ -1580,10 +1585,48 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 self.clv_structural_bar.set_text(f"{struct:.1%}")
 
             else:
-                self.ara_status.set_text("⚠ ARA: OFFLINE")
+                # DEMO MODE - Show simulated data when offline
+                self.ara_status.set_text("⚡ ARA: DEMO")
                 self.ara_status.remove_css_class('status-connected')
                 self.ara_status.add_css_class('status-disconnected')
-                self.ara_conn_label.set_text("🔴 NEURAL LINK DOWN")
+                self.ara_conn_label.set_text("🟡 DEMO MODE")
+                self.ara_mode_label.set_text("Mode: OFFLINE (Demo)")
+
+                # Simulate PAD values with smooth oscillation
+                t = self.demo_tick * 0.1
+                v = math.sin(t * 0.3) * 0.5
+                a = math.sin(t * 0.5 + 1) * 0.4
+                d = math.sin(t * 0.2 + 2) * 0.3
+
+                self.pad_v_bar.set_fraction((v + 1) / 2)
+                self.pad_v_bar.set_text("Valence")
+                self.pad_v_value.set_text(f"{v:.2f}")
+
+                self.pad_a_bar.set_fraction((a + 1) / 2)
+                self.pad_a_bar.set_text("Arousal")
+                self.pad_a_value.set_text(f"{a:.2f}")
+
+                self.pad_d_bar.set_fraction((d + 1) / 2)
+                self.pad_d_bar.set_text("Dominance")
+                self.pad_d_value.set_text(f"{d:.2f}")
+
+                emotion = self._get_emotion_label(v, a, d)
+                self.emotion_label.set_text(emotion)
+
+                # Simulate CLV values
+                inst = abs(math.sin(t * 0.4)) * 0.3
+                res = abs(math.sin(t * 0.6 + 1)) * 0.25
+                struct = abs(math.sin(t * 0.35 + 2)) * 0.2
+
+                self.clv_risk_label.set_text("RISK: LOW")
+                self.clv_risk_label.remove_css_class('metric-warning')
+
+                self.clv_instability_bar.set_fraction(inst)
+                self.clv_instability_bar.set_text(f"{inst:.1%}")
+                self.clv_resource_bar.set_fraction(res)
+                self.clv_resource_bar.set_text(f"{res:.1%}")
+                self.clv_structural_bar.set_fraction(struct)
+                self.clv_structural_bar.set_text(f"{struct:.1%}")
 
             return GLib.SOURCE_CONTINUE
 
@@ -1623,7 +1666,29 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 # Update neural grid visualization
                 self._update_neural_grid(spike_rate)
             else:
-                self.kitten_status.set_text("🐱 KITTEN: OFFLINE")
+                # DEMO MODE for kitten
+                self.kitten_status.set_text("🐱 KITTEN: DEMO")
+                self.kitten_type_label.set_text("EMULATED")
+                self.kitten_type_label.remove_css_class('kitten-hardware')
+                self.kitten_type_label.add_css_class('kitten-emulated')
+                self.kitten_device_label.set_text("/dev/fk33_demo")
+                self.kitten_neurons_label.set_text("14,336")
+
+                # Simulated step count incrementing
+                demo_steps = self.demo_tick * 100
+                self.kitten_steps_label.set_text(f"{demo_steps:,}")
+
+                # Simulated spike rate with variation
+                t = self.demo_tick * 0.1
+                spike_rate = 5 + math.sin(t * 0.7) * 3 + random.uniform(-0.5, 0.5)
+                spike_rate = max(0, min(spike_rate, 20))
+                self.spike_rate = spike_rate
+                self.kitten_spike_label.set_text(f"{spike_rate:.2f}%")
+                self.kitten_spike_bar.set_fraction(min(spike_rate / 100, 1.0))
+                self.kitten_spike_bar.set_text(f"{spike_rate:.1f}%")
+
+                # Update neural grid visualization
+                self._update_neural_grid(spike_rate)
 
             return GLib.SOURCE_CONTINUE
 
