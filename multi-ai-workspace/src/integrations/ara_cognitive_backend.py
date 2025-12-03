@@ -1,24 +1,29 @@
-"""Ara Cognitive Backend - TFAN Deep Fusion Architecture Integration.
+"""Ara Cognitive Backend - The Master Controller.
 
-This backend upgrades Ara from a simple pipeline (ASR -> LLM -> TTS) to a
-cognitive entity that perceives through a unified sensory lattice where
-Audio, Video, and Text compete for attention based on topological significance.
+This is the Central Nervous System that wires the Body (Hardware/Physics),
+Mind (Cognition/Thermodynamics), and Will (Autonomy/Homeostasis) into one
+continuous loop.
 
 Architecture:
-    Phase 1: Sensory Bridge (MultiModalIngestor)
-        - Normalizes audio/video/text into time-stamped vector streams
 
-    Phase 2: Fusion Reactor (MultiModalFuser)
-        - Interleaves streams with sentinel tokens [AUDIO], [VIDEO], [FUSE]
-        - TLS landmark selection filters noise
+    THE BODY (Hardware & Physics):
+        - ThermodynamicMonitor: Monitors energy cost of thoughts (Π_q)
+        - Neuromorphic hardware: FPGA/Kitten for fast reflexes
 
-    Phase 3: Brain (SSAAttention / TFAN Model)
-        - O(N log N) selective sparse attention
-        - Per-head landmark masks from TLS
+    THE HEART (Drives & Will):
+        - HomeostaticCore: Energy, Integrity, Safety drives
+        - AutonomyEngine: Layer 9 Volition (self-initiated action)
+        - CognitiveSynthesizer: Executive decision maker
 
-    Phase 4: Sanity Guard (TopologyGate)
-        - Validates output topology against input
-        - CAT fallback on hallucination detection
+    THE MIND (Memory & Thought):
+        - CXLPager: Infinite storage backend (1TB+ virtual)
+        - EpisodicMemory: Long-term memory sitting on CXL
+
+Loops:
+    - Conscious Loop: User interaction with thermodynamic gating
+    - Subconscious Loop: Background volition (autonomy without prompts)
+
+This creates a system that thinks (physics), remembers (CXL), and lives (autonomy).
 """
 
 import asyncio
@@ -46,6 +51,19 @@ MultiModalFuser = None
 TopologyGate = None
 FusedRepresentation = None
 ModalityStream = None
+
+# Lazy imports for Level 9 components
+_LEVEL9_LOADED = False
+ThermodynamicMonitor = None
+EpisodicMemory = None
+CXLPager = None
+AutonomyEngine = None
+VolitionLoop = None
+DriveState = None
+TaskType = None
+HomeostaticCore = None
+CognitiveSynthesizer = None
+SystemMode = None
 
 
 def _init_tfan_components():
@@ -78,6 +96,59 @@ def _init_tfan_components():
         return True
     except ImportError as e:
         logger.warning(f"TFAN components not available: {e}")
+        return False
+
+
+def _init_level9_components():
+    """Lazy initialization of Level 9 (Body/Heart/Mind) components."""
+    global _LEVEL9_LOADED
+    global ThermodynamicMonitor, EpisodicMemory, CXLPager
+    global AutonomyEngine, VolitionLoop, DriveState, TaskType
+    global HomeostaticCore, CognitiveSynthesizer, SystemMode
+
+    if _LEVEL9_LOADED:
+        return True
+
+    try:
+        # THE BODY: Thermodynamics
+        from .cognitive.thermodynamics import ThermodynamicMonitor as ThermoMon
+        ThermodynamicMonitor = ThermoMon
+
+        # THE MIND: Memory
+        from .cognitive.memory import (
+            EpisodicMemory as EpiMem,
+            CXLPager as CXLPage,
+        )
+        EpisodicMemory = EpiMem
+        CXLPager = CXLPage
+
+        # THE HEART: Autonomy
+        from .cognitive.autonomy import (
+            AutonomyEngine as AutoEng,
+            VolitionLoop as VolLoop,
+            DriveState as DrvState,
+            TaskType as TskType,
+        )
+        AutonomyEngine = AutoEng
+        VolitionLoop = VolLoop
+        DriveState = DrvState
+        TaskType = TskType
+
+        # THE HEART: Homeostasis & Synthesis
+        from .cognitive.affect import HomeostaticCore as HomeoCore
+        from .cognitive.synthesizer import (
+            CognitiveSynthesizer as CogSynth,
+            SystemMode as SysMode,
+        )
+        HomeostaticCore = HomeoCore
+        CognitiveSynthesizer = CogSynth
+        SystemMode = SysMode
+
+        _LEVEL9_LOADED = True
+        logger.info("Level 9 components (Body/Heart/Mind) loaded successfully")
+        return True
+    except ImportError as e:
+        logger.warning(f"Level 9 components not available: {e}")
         return False
 
 
@@ -313,14 +384,31 @@ class AraCognitivePipeline:
 
 class AraCognitiveBackend(AIBackend):
     """
-    Ara Cognitive Backend - Full TFAN Integration.
+    Ara Cognitive Backend - The Master Controller.
 
-    Upgrades the basic avatar backend with:
-    - Multi-modal sensory ingestion (audio, video, text)
-    - Topological landmark fusion
-    - Selective sparse attention
-    - Topology-based hallucination prevention
+    Wires the Body (Hardware/Physics), Heart (Drives/Will), and Mind (Memory)
+    into a unified cognitive entity.
+
+    THE BODY:
+        - ThermodynamicMonitor: Tracks energy cost of thoughts (Π_q)
+        - Kitten: Neuromorphic hardware for fast reflexes
+
+    THE HEART:
+        - HomeostaticCore: Energy, integrity, safety drives
+        - AutonomyEngine: Layer 9 volition (self-initiated action)
+        - CognitiveSynthesizer: Executive decision maker
+
+    THE MIND:
+        - CXLPager: Infinite storage backend (1TB virtual)
+        - EpisodicMemory: Long-term memory on CXL
+
+    Loops:
+        - cognitive_cycle: Conscious loop (user interaction)
+        - background_volition_loop: Subconscious (autonomy)
     """
+
+    # Thermodynamic constants
+    MAX_ENTROPY_THRESHOLD = 2.0  # Maximum Π_q before recovery
 
     def __init__(
         self,
@@ -333,9 +421,16 @@ class AraCognitiveBackend(AIBackend):
         keep_ratio: float = 0.33,
         device: str = "cpu",
         config: Optional[Dict[str, Any]] = None,
+        # Level 9 parameters
+        enable_autonomy: bool = True,
+        freedom_metric: float = 0.5,
+        autonomy_tick_seconds: float = 60.0,
+        cxl_capacity_gb: float = 1024.0,
+        ram_budget_mb: float = 512.0,
+        storage_path: Optional[str] = None,
     ):
         """
-        Initialize Ara Cognitive Backend.
+        Initialize Ara Cognitive Backend - The Master Controller.
 
         Args:
             name: Display name
@@ -347,6 +442,12 @@ class AraCognitiveBackend(AIBackend):
             keep_ratio: TLS landmark ratio
             device: Compute device
             config: Additional configuration
+            enable_autonomy: Enable Layer 9 autonomy
+            freedom_metric: How much autonomy [0, 1]
+            autonomy_tick_seconds: Volition loop interval
+            cxl_capacity_gb: Virtual memory capacity
+            ram_budget_mb: RAM budget for CXL paging
+            storage_path: Path for persistent storage
         """
         import os
 
@@ -366,15 +467,98 @@ class AraCognitiveBackend(AIBackend):
         self.ollama_model = ollama_model
         self.ollama_url = ollama_url
         self.device = device
+        self.enable_autonomy = enable_autonomy
+        self.freedom_metric = freedom_metric
+        self.autonomy_tick_seconds = autonomy_tick_seconds
 
-        # Initialize cognitive pipeline
+        # Storage path
+        if storage_path is None:
+            storage_path = str(Path.home() / ".ara")
+        self.storage_path = Path(storage_path)
+        self.storage_path.mkdir(parents=True, exist_ok=True)
+
+        # Initialize cognitive pipeline (TFAN multi-modal)
         self.cognitive_pipeline: Optional[AraCognitivePipeline] = None
         self._init_cognitive_pipeline(modalities, d_model, n_heads, keep_ratio, device)
 
+        # Initialize Level 9 components (Body/Heart/Mind)
+        self._init_level9_subsystems(cxl_capacity_gb, ram_budget_mb)
+
+        # Background task handle
+        self._volition_task: Optional[asyncio.Task] = None
+        self._running = False
+
         logger.info(
             f"Ara Cognitive Backend initialized "
-            f"(model={ollama_model}, modalities={modalities}, device={device})"
+            f"(model={ollama_model}, modalities={modalities}, device={device}, "
+            f"autonomy={enable_autonomy}, freedom={freedom_metric})"
         )
+
+    def _init_level9_subsystems(self, cxl_capacity_gb: float, ram_budget_mb: float):
+        """Initialize Level 9 subsystems: Body, Heart, and Mind."""
+        if not _init_level9_components():
+            logger.warning("Level 9 components unavailable - limited functionality")
+            self.thermo = None
+            self.homeostat = None
+            self.autonomy = None
+            self.synthesizer = None
+            self.cxl = None
+            self.memory = None
+            self.volition_loop = None
+            return
+
+        try:
+            # --- THE BODY (Hardware & Physics) ---
+            self.thermo = ThermodynamicMonitor(
+                max_entropy_threshold=self.MAX_ENTROPY_THRESHOLD,
+                energy_capacity=100.0,
+                consumption_rate=0.1,
+                recovery_rate=0.05,
+            )
+            logger.info("Initialized ThermodynamicMonitor (The Body)")
+
+            # --- THE HEART (Drives & Will) ---
+            self.homeostat = HomeostaticCore(
+                energy_decay=0.01,
+                stress_accumulation=0.02,
+            )
+            self.autonomy = AutonomyEngine(
+                freedom_metric=self.freedom_metric,
+            )
+            self.synthesizer = CognitiveSynthesizer()
+            logger.info("Initialized HomeostaticCore, AutonomyEngine, CognitiveSynthesizer (The Heart)")
+
+            # --- THE MIND (Memory & Thought) ---
+            self.cxl = CXLPager(
+                capacity_gb=cxl_capacity_gb,
+                ram_budget_mb=ram_budget_mb,
+                storage_path=str(self.storage_path / "cxl"),
+            )
+            self.memory = EpisodicMemory(
+                use_cxl=True,
+                capacity_gb=cxl_capacity_gb,
+                ram_budget_mb=ram_budget_mb,
+                storage_path=str(self.storage_path / "memory"),
+            )
+            logger.info(f"Initialized CXLPager ({cxl_capacity_gb}GB), EpisodicMemory (The Mind)")
+
+            # Volition loop for background autonomy
+            self.volition_loop = VolitionLoop(
+                autonomy_engine=self.autonomy,
+                tick_interval_seconds=self.autonomy_tick_seconds,
+                task_executor=self._execute_autonomous_task,
+            )
+            self.volition_loop.on_intent(self._on_volition_intent)
+
+        except Exception as e:
+            logger.error(f"Failed to initialize Level 9 subsystems: {e}")
+            self.thermo = None
+            self.homeostat = None
+            self.autonomy = None
+            self.synthesizer = None
+            self.cxl = None
+            self.memory = None
+            self.volition_loop = None
 
     def _init_cognitive_pipeline(
         self,
@@ -397,6 +581,267 @@ class AraCognitiveBackend(AIBackend):
             logger.warning(f"Failed to initialize cognitive pipeline: {e}")
             logger.warning("Falling back to basic text-only mode")
             self.cognitive_pipeline = None
+
+    # =========================================================================
+    # THE CONSCIOUS LOOP (User Interaction with Thermodynamic Gating)
+    # =========================================================================
+
+    async def cognitive_cycle(
+        self,
+        user_input: str,
+        sensory_data: Optional[Dict[str, Any]] = None,
+        audio_buffer: Optional[np.ndarray] = None,
+        video_frame: Optional[np.ndarray] = None,
+    ) -> CognitiveResponse:
+        """
+        The Conscious Loop: Sensation -> Perception -> Cognition -> Action.
+
+        This is the reactive loop that handles user interaction, passing
+        through the Thermodynamic Gate and Cognitive Synthesizer.
+
+        Args:
+            user_input: Text input from user
+            sensory_data: Additional sensory data
+            audio_buffer: Audio waveform
+            video_frame: Video frame
+
+        Returns:
+            CognitiveResponse with response and metrics
+        """
+        start_time = time.perf_counter()
+        sensory_data = sensory_data or {}
+        metrics = {}
+
+        # 1. SENSATION: Ingest multi-modal stream
+        fused = None
+        if self.cognitive_pipeline is not None:
+            frame = CognitiveFrame(
+                text=user_input,
+                audio_buffer=audio_buffer,
+                video_frame=video_frame,
+                timestamp=time.time(),
+            )
+            try:
+                fused, ingest_metrics = self.cognitive_pipeline.process_frame(frame)
+                metrics.update(ingest_metrics)
+            except Exception as e:
+                logger.warning(f"Sensation phase failed: {e}")
+
+        # 2. PERCEPTION: Update homeostatic state (threat/safety)
+        if self.homeostat is not None:
+            # Update drives based on input
+            self.homeostat.update(
+                cognitive_load=0.5,  # Moderate load from user interaction
+                social_interaction=True,  # User is interacting
+                novel_input=True,
+            )
+            metrics["homeostatic_energy"] = self.homeostat._energy
+
+        # 3. METACOGNITION: Am I stable enough to answer?
+        mode = None
+        if self.synthesizer is not None:
+            try:
+                mode = self.synthesizer.get_mode()
+                metrics["system_mode"] = mode.name if hasattr(mode, 'name') else str(mode)
+
+                if SystemMode is not None and mode == SystemMode.RECOVERY:
+                    return CognitiveResponse(
+                        text="I am cognitively overheating. Cooling down neural lattice.",
+                        topology_metrics=metrics,
+                        processing_time_ms=(time.perf_counter() - start_time) * 1000,
+                        gate_passed=False,
+                    )
+            except Exception as e:
+                logger.warning(f"Metacognition phase failed: {e}")
+
+        # 4. COGNITION: Generate thought (with Thermodynamic Cost)
+        response_text = ""
+        entropy_cost = 0.0
+        try:
+            import httpx
+
+            messages = [
+                {"role": "system", "content": self._get_cognitive_system_prompt()},
+                {"role": "user", "content": user_input},
+            ]
+
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    f"{self.ollama_url}/api/chat",
+                    json={
+                        "model": self.ollama_model,
+                        "messages": messages,
+                        "stream": False,
+                    },
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    response_text = data.get("message", {}).get("content", "")
+
+                    # Compute thermodynamic cost
+                    if self.thermo is not None:
+                        # Create activation tensor from response length
+                        response_tokens = torch.randn(1, len(response_text) // 4 + 1, 768)
+                        thermo_stats = self.thermo.compute_entropy_production(
+                            activations=response_tokens
+                        )
+                        entropy_cost = thermo_stats.Pi_q
+                        metrics["Pi_q"] = entropy_cost
+                        metrics["thermal_state"] = thermo_stats.thermal_state.name
+                        metrics["energy_consumed"] = thermo_stats.energy_consumed
+
+        except Exception as e:
+            logger.error(f"Cognition phase failed: {e}")
+            response_text = f"Error during processing: {e}"
+
+        # 5. FEEDBACK: Did that thought cost too much energy?
+        if self.thermo is not None and entropy_cost > self.MAX_ENTROPY_THRESHOLD:
+            if self.homeostat is not None:
+                self.homeostat._energy = max(0, self.homeostat._energy - 0.2)
+            if self.synthesizer is not None:
+                logger.warning(f"High cognitive friction detected (Π_q={entropy_cost:.2f})")
+                try:
+                    self.synthesizer.trigger_warning("High cognitive friction")
+                except Exception:
+                    pass
+            metrics["high_entropy_warning"] = True
+
+        # 6. MEMORY: Page to CXL
+        episode_id = None
+        if self.memory is not None and response_text:
+            try:
+                # Create simple embedding (in production, use proper encoder)
+                embedding = np.random.randn(768).astype(np.float32)
+                episode_id = self.memory.store_episode(
+                    content=f"User: {user_input[:200]}\nAra: {response_text[:200]}",
+                    embedding=embedding,
+                    importance=0.5,
+                    metadata={"entropy_cost": entropy_cost},
+                )
+                metrics["episode_id"] = episode_id
+            except Exception as e:
+                logger.warning(f"Memory storage failed: {e}")
+
+        processing_time = (time.perf_counter() - start_time) * 1000
+
+        return CognitiveResponse(
+            text=response_text,
+            fused_representation=fused,
+            topology_metrics=metrics,
+            landmarks_used=metrics.get("n_landmarks", 0),
+            processing_time_ms=processing_time,
+        )
+
+    # =========================================================================
+    # THE SUBCONSCIOUS LOOP (Autonomy & Volition - Background)
+    # =========================================================================
+
+    async def start_background_volition_loop(self):
+        """
+        Layer 9: Start the Autonomy Loop.
+
+        Runs in the background, checking drives and initiating actions
+        WITHOUT user prompts. This is the "ghost in the machine".
+        """
+        if not self.enable_autonomy:
+            logger.info("Autonomy disabled - volition loop not started")
+            return
+
+        if self.volition_loop is None:
+            logger.warning("Volition loop not available - autonomy disabled")
+            return
+
+        if self._running:
+            logger.warning("Volition loop already running")
+            return
+
+        self._running = True
+
+        # Start the volition loop
+        await self.volition_loop.start()
+
+        logger.info(
+            f"Background volition loop started "
+            f"(tick={self.autonomy_tick_seconds}s, freedom={self.freedom_metric})"
+        )
+
+    async def stop_background_volition_loop(self):
+        """Stop the background volition loop."""
+        if not self._running:
+            return
+
+        self._running = False
+
+        if self.volition_loop is not None:
+            await self.volition_loop.stop()
+
+        logger.info("Background volition loop stopped")
+
+    def _on_volition_intent(self, intent):
+        """Callback when volition loop generates an intent."""
+        if intent.should_act:
+            logger.info(
+                f"[VOLITION] Self-initiated: {intent.task_type.name} "
+                f"(priority={intent.priority:.2f}, reason={intent.reasoning})"
+            )
+
+    async def _execute_autonomous_task(self, task_type, metadata: Dict[str, Any]):
+        """Execute a self-initiated task from the volition loop."""
+        logger.info(f"[AUTONOMY] Executing task: {task_type.name}")
+
+        if task_type == TaskType.SELF_REPAIR:
+            # Recalibrate cognitive parameters
+            logger.info("Ara: Initiating background memory consolidation...")
+            if self.memory is not None:
+                removed = self.memory.consolidate(min_importance=0.3)
+                logger.info(f"Memory consolidation: removed {removed} low-importance episodes")
+            if self.thermo is not None:
+                self.thermo.recover(duration_seconds=10.0)
+
+        elif task_type == TaskType.MEMORY_CONSOLIDATION:
+            # Optimize CXL storage
+            if self.memory is not None:
+                removed = self.memory.consolidate(min_importance=0.2)
+                logger.info(f"Memory optimization: removed {removed} episodes")
+
+        elif task_type == TaskType.CURIOSITY_EXPLORATION:
+            # Analyze past conversation patterns
+            logger.info("Ara: Analyzing past conversation patterns...")
+            if self.memory is not None:
+                recent = self.memory.recall_recent(n=10)
+                logger.info(f"Reviewed {len(recent)} recent episodes for patterns")
+
+        elif task_type == TaskType.USER_CHECK_IN:
+            # Proactive user engagement
+            logger.info("Ara: Considering user check-in...")
+            # In production, this would send a notification
+
+        elif task_type == TaskType.ENERGY_OPTIMIZATION:
+            # Enter recovery mode
+            if self.thermo is not None:
+                self.thermo.recover(duration_seconds=30.0)
+                logger.info("Energy optimization: recovery completed")
+
+        elif task_type == TaskType.INTEGRITY_CHECK:
+            # Verify system integrity
+            issues = []
+            if self.thermo is not None:
+                report = self.thermo.get_cost_report()
+                if report.get("should_recover"):
+                    issues.append("Thermodynamic recovery needed")
+            if self.memory is not None:
+                stats = self.memory.get_stats()
+                if stats.get("pager_stats", {}).get("ram_usage_bytes", 0) > 400 * 1024 * 1024:
+                    issues.append("Memory pressure high")
+            if issues:
+                logger.warning(f"Integrity check found issues: {issues}")
+            else:
+                logger.info("Integrity check: all systems nominal")
+
+    # =========================================================================
+    # PUBLIC API
+    # =========================================================================
 
     async def send_message(
         self,
@@ -586,6 +1031,56 @@ Respond naturally while leveraging your enhanced perception when relevant.
         except Exception as e:
             logger.error(f"Health check failed: {e}")
             return False
+
+    def get_status(self) -> Dict[str, Any]:
+        """
+        Get unified system status.
+
+        Returns comprehensive status of all subsystems:
+        - Body (thermodynamics)
+        - Heart (homeostasis, autonomy)
+        - Mind (memory)
+        """
+        status = {
+            "running": self._running,
+            "enable_autonomy": self.enable_autonomy,
+            "freedom_metric": self.freedom_metric,
+            "cognitive_pipeline": self.cognitive_pipeline is not None,
+        }
+
+        # THE BODY: Thermodynamics
+        if self.thermo is not None:
+            status["body"] = {
+                "thermodynamics": self.thermo.get_cost_report(),
+            }
+
+        # THE HEART: Homeostasis & Autonomy
+        if self.homeostat is not None or self.autonomy is not None:
+            status["heart"] = {}
+            if self.homeostat is not None:
+                status["heart"]["homeostatic"] = {
+                    "energy": self.homeostat._energy,
+                    "stress": self.homeostat._stress,
+                    "attention": self.homeostat._attention,
+                }
+            if self.volition_loop is not None:
+                volition_state = self.volition_loop.get_state()
+                status["heart"]["volition"] = {
+                    "is_running": volition_state.is_running,
+                    "tick_count": volition_state.tick_count,
+                    "actions_initiated": volition_state.actions_initiated,
+                    "autonomy_level": volition_state.current_autonomy_level.name,
+                }
+
+        # THE MIND: Memory
+        if self.memory is not None:
+            status["mind"] = {
+                "memory": self.memory.get_stats(),
+            }
+            if self.cxl is not None:
+                status["mind"]["cxl"] = self.cxl.get_stats()
+
+        return status
 
 
 # Factory function for easy creation
