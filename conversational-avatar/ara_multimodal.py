@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
-Ara - Multimodal Voice & Vision Assistant (Improved)
+Ara - Multimodal Voice & Vision Assistant
 
-Improvements:
-- Better TTS voice selection and settings
-- Smoother webcam (lower fps, less CPU)
-- Better speech recognition with longer calibration
-- Option to use typing if speech isn't working well
+Features:
+- Neural TTS using Coqui XTTS-v2 (falls back to pyttsx3 if unavailable)
+- Speech recognition via Google Speech API
+- Webcam vision using Ollama's llava model
+- Voice cloning support with reference audio file
+
+Requirements:
+    Python 3.10 (required for Coqui TTS)
+    pip install -r requirements-coqui.txt
+
+    OR use the setup script:
+    ./setup_conda.sh
 """
 import sys
 import threading
@@ -14,8 +21,9 @@ import time
 import base64
 import io
 import os
+import tempfile
 
-# Suppress ALSA warnings
+# Suppress ALSA warnings on Linux
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
 try:
     from ctypes import *
@@ -31,31 +39,153 @@ try:
 except:
     pass
 
+# Core imports
 try:
     import ollama
-    import pyttsx3
     import speech_recognition as sr
     import cv2
     from PIL import Image
 except ImportError as e:
     print(f"Missing: {e}")
-    print("pip install ollama pyttsx3 SpeechRecognition opencv-python pillow")
+    print("pip install ollama SpeechRecognition opencv-python pillow")
+    sys.exit(1)
+
+# Try to import Coqui TTS (requires Python 3.10)
+COQUI_AVAILABLE = False
+try:
+    from TTS.api import TTS
+    import torch
+    import sounddevice as sd
+    import numpy as np
+    COQUI_AVAILABLE = True
+except ImportError:
+    pass
+
+# Fallback to pyttsx3 if Coqui not available
+PYTTSX3_AVAILABLE = False
+if not COQUI_AVAILABLE:
+    try:
+        import pyttsx3
+        PYTTSX3_AVAILABLE = True
+    except ImportError:
+        pass
+
+if not COQUI_AVAILABLE and not PYTTSX3_AVAILABLE:
+    print("ERROR: No TTS engine available!")
+    print("Install Coqui TTS (recommended, requires Python 3.10):")
+    print("  pip install TTS torch torchaudio sounddevice")
+    print("OR install pyttsx3 (fallback):")
+    print("  pip install pyttsx3")
     sys.exit(1)
 
 SYSTEM_PROMPT = """You are Ara, a warm and friendly AI assistant with vision.
 Keep responses brief (1-2 sentences) since they're spoken aloud.
 Be natural, helpful, and conversational."""
 
+# Voice reference file for cloning (create this for best quality)
+VOICE_REFERENCE = os.environ.get(
+    'ARA_VOICE_REFERENCE',
+    'assets/voices/ara_reference.wav'
+)
+
+
+class CoquiTTSEngine:
+    """High-quality neural TTS using Coqui XTTS-v2."""
+
+    def __init__(self, voice_reference=None):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"  Loading Coqui XTTS-v2 on {self.device}...")
+
+        # Accept TOS automatically
+        os.environ['COQUI_TOS_AGREED'] = '1'
+
+        self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(self.device)
+        self.voice_reference = voice_reference
+        self.sample_rate = 24000  # XTTS outputs at 24kHz
+
+        if voice_reference and os.path.exists(voice_reference):
+            print(f"  Using voice reference: {voice_reference}")
+        else:
+            print("  No voice reference - using default voice")
+            print(f"  (Add a 3-10 second WAV file at {VOICE_REFERENCE} for voice cloning)")
+
+    def speak(self, text):
+        """Synthesize and play speech."""
+        print(f"\nAra: {text}\n")
+
+        try:
+            if self.voice_reference and os.path.exists(self.voice_reference):
+                # Voice cloning mode
+                audio = self.tts.tts(
+                    text=text,
+                    speaker_wav=self.voice_reference,
+                    language="en"
+                )
+            else:
+                # Default voice mode
+                audio = self.tts.tts(text=text, language="en")
+
+            # Play audio
+            audio_np = np.array(audio, dtype=np.float32)
+            sd.play(audio_np, self.sample_rate)
+            sd.wait()
+
+        except Exception as e:
+            print(f"  [TTS Error: {e}]")
+
+
+class Pyttsx3TTSEngine:
+    """Fallback TTS using pyttsx3 (works with Python 3.13)."""
+
+    def __init__(self):
+        self.engine = pyttsx3.init()
+        self._setup_voice()
+
+    def _setup_voice(self):
+        """Configure for best available voice."""
+        self.engine.setProperty('rate', 145)
+        self.engine.setProperty('volume', 0.9)
+
+        voices = self.engine.getProperty('voices')
+        preferred = ['samantha', 'zira', 'female', 'eva', 'victoria', 'karen']
+
+        for pref in preferred:
+            for voice in voices:
+                if pref in voice.name.lower() or pref in voice.id.lower():
+                    self.engine.setProperty('voice', voice.id)
+                    print(f"  Using voice: {voice.name}")
+                    return
+
+        if len(voices) > 1:
+            self.engine.setProperty('voice', voices[1].id)
+            print(f"  Using voice: {voices[1].name}")
+        else:
+            print("  Using default voice")
+
+    def speak(self, text):
+        """Speak text aloud."""
+        print(f"\nAra: {text}\n")
+        self.engine.say(text)
+        self.engine.runAndWait()
+
 
 class Ara:
-    def __init__(self):
-        # TTS with better settings
-        self.tts = pyttsx3.init()
-        self._setup_voice()
+    def __init__(self, use_coqui=True):
+        # Initialize TTS engine
+        if use_coqui and COQUI_AVAILABLE:
+            print("  Initializing Coqui TTS (neural voice)...")
+            self.tts_engine = CoquiTTSEngine(voice_reference=VOICE_REFERENCE)
+            self.tts_type = "coqui"
+        elif PYTTSX3_AVAILABLE:
+            print("  Initializing pyttsx3 TTS (fallback)...")
+            self.tts_engine = Pyttsx3TTSEngine()
+            self.tts_type = "pyttsx3"
+        else:
+            raise RuntimeError("No TTS engine available!")
 
         # Speech recognition
         self.recognizer = sr.Recognizer()
-        self.recognizer.energy_threshold = 300  # Adjust for your mic
+        self.recognizer.energy_threshold = 300
         self.recognizer.dynamic_energy_threshold = True
         self.recognizer.pause_threshold = 0.8
         self.mic = sr.Microphone()
@@ -75,35 +205,9 @@ class Ara:
         # Chat history
         self.history = []
 
-    def _setup_voice(self):
-        """Configure TTS for best available voice."""
-        self.tts.setProperty('rate', 145)  # Slightly slower for clarity
-        self.tts.setProperty('volume', 0.9)
-
-        voices = self.tts.getProperty('voices')
-
-        # Try to find a good voice (prefer female voices as they're often clearer)
-        preferred = ['samantha', 'zira', 'female', 'eva', 'victoria', 'karen']
-
-        for pref in preferred:
-            for voice in voices:
-                if pref in voice.name.lower() or pref in voice.id.lower():
-                    self.tts.setProperty('voice', voice.id)
-                    print(f"  Using voice: {voice.name}")
-                    return
-
-        # Fallback: use second voice if available (often female)
-        if len(voices) > 1:
-            self.tts.setProperty('voice', voices[1].id)
-            print(f"  Using voice: {voices[1].name}")
-        else:
-            print(f"  Using default voice")
-
     def speak(self, text):
-        """Speak text aloud."""
-        print(f"\nAra: {text}\n")
-        self.tts.say(text)
-        self.tts.runAndWait()
+        """Speak text aloud using the configured TTS engine."""
+        self.tts_engine.speak(text)
 
     def listen(self, timeout=7):
         """Listen for speech and convert to text."""
@@ -251,9 +355,18 @@ class Ara:
 
 def main():
     print()
-    print("=" * 55)
+    print("=" * 60)
     print("  ARA - Voice & Vision Assistant")
-    print("=" * 55)
+    print("=" * 60)
+
+    # Show TTS status
+    if COQUI_AVAILABLE:
+        print("  TTS Engine: Coqui XTTS-v2 (neural voice)")
+    elif PYTTSX3_AVAILABLE:
+        print("  TTS Engine: pyttsx3 (basic)")
+        print("  Note: For better voice quality, use Python 3.10:")
+        print("        ./setup_conda.sh")
+
     print()
     print("  Voice Commands:")
     print("    'camera on/off' - Toggle webcam")
@@ -262,10 +375,12 @@ def main():
     print("    'quit/exit'     - Exit")
     print()
     print("  Say 'look at this' or 'what do you see' for vision")
-    print("=" * 55)
+    print("=" * 60)
     print()
 
     ara = Ara()
+    print(f"  Using TTS: {ara.tts_type}")
+    print()
     voice_mode = True
 
     # Greeting
