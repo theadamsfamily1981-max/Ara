@@ -265,13 +265,14 @@ class Particle:
         self.size = random.uniform(0.8, 2.0)
         self.alpha = random.uniform(0.15, 0.45)
         self.phase = random.uniform(0, 6.28)
-        # Premium color palette - soft blues and purples
+        # Cyberpunk color palette - cyan/neon theme
         self.color = random.choice([
-            (0.4, 0.7, 1.0),    # Soft blue
-            (0.5, 0.6, 0.9),    # Lavender blue
-            (0.6, 0.5, 0.85),   # Soft purple
-            (0.35, 0.65, 0.9),  # Sky blue
-            (0.45, 0.55, 0.95), # Periwinkle
+            (0.0, 0.83, 1.0),   # Primary cyan (#00d4ff)
+            (0.0, 0.9, 0.95),   # Bright cyan
+            (0.2, 0.7, 1.0),    # Electric blue
+            (0.0, 1.0, 0.53),   # Neon green (#00ff88)
+            (0.4, 0.6, 1.0),    # Soft electric blue
+            (0.66, 0.33, 0.97), # Purple accent (#a855f7)
         ])
 
     def update(self, width, height, dt, time):
@@ -327,12 +328,12 @@ class HolographicBackground(Gtk.DrawingArea):
     def _draw(self, area, cr, width, height):
         import math
 
-        # Premium deep space background
+        # Cyberpunk deep space background with cyan tint
         pattern = cairo.LinearGradient(0, 0, width * 0.3, height)
-        pattern.add_color_stop_rgb(0, 0.012, 0.020, 0.032)
-        pattern.add_color_stop_rgb(0.3, 0.039, 0.086, 0.110)
-        pattern.add_color_stop_rgb(0.6, 0.051, 0.102, 0.141)
-        pattern.add_color_stop_rgb(1, 0.020, 0.050, 0.080)
+        pattern.add_color_stop_rgb(0, 0.008, 0.016, 0.035)
+        pattern.add_color_stop_rgb(0.3, 0.015, 0.055, 0.085)
+        pattern.add_color_stop_rgb(0.6, 0.020, 0.070, 0.110)
+        pattern.add_color_stop_rgb(1, 0.010, 0.040, 0.070)
         cr.set_source(pattern)
         cr.paint()
 
@@ -351,30 +352,30 @@ class HolographicBackground(Gtk.DrawingArea):
         horizon = height * 0.35
         center_x = width / 2
 
-        # Horizontal grid lines (fading with distance)
+        # Horizontal grid lines (fading with distance) - CYAN
         for i in range(20):
             y = horizon + (i * i * 2.5)
             if y > height: break
-            alpha = max(0, 0.08 - i * 0.003)
+            alpha = max(0, 0.10 - i * 0.004)
             pulse = math.sin(self.grid_phase + i * 0.15) * 0.3 + 0.7
-            cr.set_source_rgba(0.4, 0.7, 1.0, alpha * pulse)
+            cr.set_source_rgba(0.0, 0.83, 1.0, alpha * pulse)
             cr.move_to(0, y)
             cr.line_to(width, y)
             cr.stroke()
 
-        # Vertical perspective lines (converging to horizon)
+        # Vertical perspective lines (converging to horizon) - CYAN
         for i in range(-8, 9):
             if i == 0: continue
             x_bottom = center_x + i * 120
             x_top = center_x + i * 20
-            alpha = 0.04 - abs(i) * 0.003
+            alpha = 0.06 - abs(i) * 0.004
             if alpha > 0:
-                cr.set_source_rgba(0.4, 0.7, 1.0, alpha)
+                cr.set_source_rgba(0.0, 0.83, 1.0, alpha)
                 cr.move_to(x_top, horizon)
                 cr.line_to(x_bottom, height)
                 cr.stroke()
 
-        # Ambient glow orbs (very subtle)
+        # Ambient glow orbs - CYAN themed
         for i, (ox, oy, osize, ophase) in enumerate([
             (0.2, 0.3, 0.15, 0), (0.8, 0.4, 0.12, 2), (0.5, 0.7, 0.18, 4),
             (0.3, 0.8, 0.1, 1), (0.7, 0.2, 0.08, 3)
@@ -384,8 +385,8 @@ class HolographicBackground(Gtk.DrawingArea):
             radius = min(width, height) * osize * pulse
 
             orb = cairo.RadialGradient(gx, gy, 0, gx, gy, radius)
-            orb.add_color_stop_rgba(0, 0.3, 0.5, 0.8, 0.03 * pulse)
-            orb.add_color_stop_rgba(0.5, 0.2, 0.4, 0.7, 0.015 * pulse)
+            orb.add_color_stop_rgba(0, 0.0, 0.6, 0.8, 0.04 * pulse)
+            orb.add_color_stop_rgba(0.5, 0.0, 0.4, 0.6, 0.02 * pulse)
             orb.add_color_stop_rgba(1, 0, 0, 0, 0)
             cr.set_source(orb)
             cr.arc(gx, gy, radius, 0, 2 * math.pi)
@@ -416,23 +417,23 @@ class HolographicBackground(Gtk.DrawingArea):
             cr.arc(p.x, p.y, size * 0.6, 0, 2 * math.pi)
             cr.fill()
 
-        # Central neural glow (subtle breathing)
+        # Central neural glow (subtle breathing) - CYAN
         cx, cy = width / 2, height * 0.45
         pulse = math.sin(self.time * 0.8) * 0.15 + 0.85
         radius = min(width, height) * 0.35 * pulse
 
-        # Outer halo
+        # Outer halo - CYAN
         halo = cairo.RadialGradient(cx, cy, 0, cx, cy, radius)
-        halo.add_color_stop_rgba(0, 0.4, 0.5, 0.8, 0.04)
-        halo.add_color_stop_rgba(0.3, 0.3, 0.45, 0.7, 0.025)
-        halo.add_color_stop_rgba(0.6, 0.2, 0.35, 0.6, 0.01)
+        halo.add_color_stop_rgba(0, 0.0, 0.65, 0.85, 0.05)
+        halo.add_color_stop_rgba(0.3, 0.0, 0.5, 0.7, 0.03)
+        halo.add_color_stop_rgba(0.6, 0.0, 0.35, 0.55, 0.015)
         halo.add_color_stop_rgba(1, 0, 0, 0, 0)
         cr.set_source(halo)
         cr.arc(cx, cy, radius, 0, 2 * math.pi)
         cr.fill()
 
-        # Very subtle scanlines
-        cr.set_source_rgba(0.5, 0.7, 1.0, 0.008)
+        # Very subtle scanlines - CYAN
+        cr.set_source_rgba(0.0, 0.83, 1.0, 0.012)
         for y in range(0, int(height), 4):
             cr.move_to(0, y)
             cr.line_to(width, y)
