@@ -309,15 +309,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         }
 
         .cockpit-window {
-            background: linear-gradient(165deg,
-                #030508 0%,
-                #0a1628 25%,
-                #0d1a2d 50%,
-                #081420 75%,
-                #020406 100%);
+            /* Transparent to allow holographic background to show */
+            background: transparent;
         }
 
         .cockpit-bg {
+            /* Fallback gradient when video_background not available */
             background: linear-gradient(165deg,
                 #030508 0%,
                 #0a1628 25%,
@@ -327,6 +324,7 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         }
 
         .cockpit-content {
+            /* Transparent to show holographic background behind UI */
             background: transparent;
         }
 
@@ -1462,171 +1460,345 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         return box
 
     def _generate_neural_topology_html(self):
-        """Generate HTML for neural network topology visualization."""
+        """Generate HTML for neural network topology visualization with 4 modes."""
         return """
 <!DOCTYPE html>
 <html>
 <head>
     <style>
-        body { margin: 0; overflow: hidden; background: #0a0a0f; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #030508; font-family: 'Inter', sans-serif; }
         canvas { display: block; width: 100%; height: 100vh; }
+        #hud {
+            position: fixed; top: 10px; left: 10px; right: 10px;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 16px;
+            background: rgba(10, 20, 40, 0.7);
+            border: 1px solid rgba(100, 180, 255, 0.2);
+            border-radius: 8px;
+            color: rgba(150, 200, 255, 0.9);
+            font-size: 11px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            z-index: 100;
+        }
+        .mode-btn {
+            background: rgba(30, 60, 90, 0.5);
+            border: 1px solid rgba(100, 180, 255, 0.2);
+            border-radius: 4px;
+            color: rgba(150, 200, 255, 0.8);
+            padding: 4px 10px;
+            margin: 0 4px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.2s;
+        }
+        .mode-btn:hover { background: rgba(50, 90, 130, 0.6); }
+        .mode-btn.active {
+            background: rgba(60, 120, 180, 0.6);
+            border-color: rgba(100, 200, 255, 0.5);
+            color: #fff;
+        }
+        #metrics { font-size: 10px; color: rgba(100, 200, 150, 0.9); }
     </style>
 </head>
 <body>
+    <div id="hud">
+        <div id="mode-buttons">
+            <button class="mode-btn active" data-mode="neural">NEURAL</button>
+            <button class="mode-btn" data-mode="barcode">BARCODE</button>
+            <button class="mode-btn" data-mode="landscape">LANDSCAPE</button>
+            <button class="mode-btn" data-mode="poincare">POINCARÉ</button>
+            <button class="mode-btn" data-mode="pareto">PARETO</button>
+        </div>
+        <div id="metrics">EPR-CV: 0.10 | TOPO: 0.93</div>
+    </div>
     <canvas id="canvas"></canvas>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
     <script>
+        // ═══════════════════════════════════════════════════════════════════
+        // T-FAN TOPOLOGY VISUALIZATION - 5 MODES
+        // ═══════════════════════════════════════════════════════════════════
         const canvas = document.getElementById('canvas');
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a0f);
-        scene.fog = new THREE.Fog(0x0a0a0f, 15, 60);
+        scene.background = new THREE.Color(0x030508);
+        scene.fog = new THREE.Fog(0x030508, 20, 80);
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 8, 20);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(0, 8, 25);
 
-        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
         // Lights
-        scene.add(new THREE.AmbientLight(0x404040, 0.5));
-
-        const light1 = new THREE.PointLight(0x8a2be2, 3.0);
-        light1.position.set(10, 15, 10);
+        scene.add(new THREE.AmbientLight(0x404060, 0.4));
+        const light1 = new THREE.PointLight(0x8a2be2, 2.5);
+        light1.position.set(15, 20, 15);
         scene.add(light1);
-
-        const light2 = new THREE.PointLight(0x00ffff, 2.0);
-        light2.position.set(-10, 10, -10);
+        const light2 = new THREE.PointLight(0x00d4ff, 2.0);
+        light2.position.set(-15, 15, -15);
         scene.add(light2);
 
-        // Create neural network particles
-        const geometry = new THREE.BufferGeometry();
-        const positions = [];
-        const colors = [];
-        const velocities = [];
-        const phases = [];
-
-        // Create neurons in a brain-like structure
-        for (let i = 0; i < 2000; i++) {
-            // Spherical distribution with some layers
-            const phi = Math.random() * Math.PI * 2;
-            const theta = Math.acos(2 * Math.random() - 1);
-            const r = 5 + Math.random() * 3;
-
-            positions.push(
-                r * Math.sin(theta) * Math.cos(phi),
-                r * Math.sin(theta) * Math.sin(phi) - 2,
-                r * Math.cos(theta)
-            );
-
-            // Purple/cyan color scheme
-            const hue = 0.75 + Math.random() * 0.15;
-            const color = new THREE.Color().setHSL(hue, 0.9, 0.6);
-            colors.push(color.r, color.g, color.b);
-
-            velocities.push(
-                (Math.random() - 0.5) * 0.01,
-                (Math.random() - 0.5) * 0.01,
-                (Math.random() - 0.5) * 0.01
-            );
-
-            phases.push(Math.random() * Math.PI * 2);
-        }
-
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-        const material = new THREE.PointsMaterial({
-            size: 0.12,
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.9,
-            blending: THREE.AdditiveBlending
-        });
-        const points = new THREE.Points(geometry, material);
-        scene.add(points);
-
-        // Create connection lines
-        const lineGeometry = new THREE.BufferGeometry();
-        const linePositions = [];
-        const lineColors = [];
-
-        for (let i = 0; i < 500; i++) {
-            const idx1 = Math.floor(Math.random() * 2000) * 3;
-            const idx2 = Math.floor(Math.random() * 2000) * 3;
-
-            linePositions.push(
-                positions[idx1], positions[idx1+1], positions[idx1+2],
-                positions[idx2], positions[idx2+1], positions[idx2+2]
-            );
-
-            lineColors.push(0.5, 0.2, 0.8, 0.3, 0.8, 0.9);
-        }
-
-        lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
-        lineGeometry.setAttribute('color', new THREE.Float32BufferAttribute(lineColors, 3));
-
-        const lineMaterial = new THREE.LineBasicMaterial({
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.3,
-            blending: THREE.AdditiveBlending
-        });
-        const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
-        scene.add(lines);
-
-        // Animation
+        // State
+        let currentMode = 'neural';
         let time = 0;
+        let objects = { points: null, lines: null };
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MODE: NEURAL - Brain-like network
+        // ─────────────────────────────────────────────────────────────────────
+        function createNeural() {
+            clearScene();
+            const geometry = new THREE.BufferGeometry();
+            const positions = [], colors = [], phases = [];
+            for (let i = 0; i < 2000; i++) {
+                const phi = Math.random() * Math.PI * 2;
+                const theta = Math.acos(2 * Math.random() - 1);
+                const r = 6 + Math.random() * 4;
+                positions.push(r * Math.sin(theta) * Math.cos(phi), r * Math.sin(theta) * Math.sin(phi), r * Math.cos(theta));
+                const hue = 0.72 + Math.random() * 0.12;
+                const c = new THREE.Color().setHSL(hue, 0.85, 0.55);
+                colors.push(c.r, c.g, c.b);
+                phases.push(Math.random() * Math.PI * 2);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            const material = new THREE.PointsMaterial({ size: 0.15, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+            objects.points = new THREE.Points(geometry, material);
+            objects.points.userData.phases = phases;
+            scene.add(objects.points);
+
+            // Connections
+            const lineGeo = new THREE.BufferGeometry();
+            const linePos = [], lineCol = [];
+            for (let i = 0; i < 600; i++) {
+                const a = Math.floor(Math.random() * 2000) * 3, b = Math.floor(Math.random() * 2000) * 3;
+                linePos.push(positions[a], positions[a+1], positions[a+2], positions[b], positions[b+1], positions[b+2]);
+                lineCol.push(0.4, 0.2, 0.7, 0.2, 0.6, 0.8);
+            }
+            lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
+            lineGeo.setAttribute('color', new THREE.Float32BufferAttribute(lineCol, 3));
+            const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending });
+            objects.lines = new THREE.LineSegments(lineGeo, lineMat);
+            scene.add(objects.lines);
+            camera.position.set(0, 5, 25);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MODE: BARCODE - Persistence barcode visualization
+        // ─────────────────────────────────────────────────────────────────────
+        function createBarcode() {
+            clearScene();
+            const bars = [];
+            const numBars = 80;
+            for (let i = 0; i < numBars; i++) {
+                const birth = Math.random() * 1.5;
+                const death = birth + Math.random() * 2 + 0.1;
+                const persistence = death - birth;
+                const hue = 0.1 + persistence / 3 * 0.6;
+                const geometry = new THREE.BoxGeometry(death - birth, 0.12, 0.05);
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color().setHSL(hue, 0.9, 0.5),
+                    emissive: new THREE.Color().setHSL(hue, 0.9, 0.2),
+                    metalness: 0.3, roughness: 0.5
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set((birth + death) / 2 - 1.5, i * 0.2 - numBars * 0.1, 0);
+                mesh.userData = { birth, death, phase: Math.random() * Math.PI * 2 };
+                scene.add(mesh);
+                bars.push(mesh);
+            }
+            objects.bars = bars;
+            camera.position.set(0, 0, 15);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MODE: LANDSCAPE - Persistence landscape waves
+        // ─────────────────────────────────────────────────────────────────────
+        function createLandscape() {
+            clearScene();
+            const layers = [];
+            const numLayers = 6;
+            const resolution = 100;
+            for (let l = 0; l < numLayers; l++) {
+                const geometry = new THREE.BufferGeometry();
+                const positions = [], colors = [];
+                for (let i = 0; i < resolution; i++) {
+                    const x = (i / resolution) * 20 - 10;
+                    const y = l * 1.2;
+                    positions.push(x, y, 0);
+                    const hue = 0.55 + l * 0.08;
+                    const c = new THREE.Color().setHSL(hue, 0.8, 0.5);
+                    colors.push(c.r, c.g, c.b);
+                }
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                const material = new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 2 });
+                const line = new THREE.Line(geometry, material);
+                line.userData.layer = l;
+                scene.add(line);
+                layers.push(line);
+            }
+            objects.layers = layers;
+            camera.position.set(0, 4, 18);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MODE: POINCARE - Hyperbolic disk
+        // ─────────────────────────────────────────────────────────────────────
+        function createPoincare() {
+            clearScene();
+            // Disk boundary
+            const circleGeo = new THREE.BufferGeometry();
+            const circlePos = [];
+            for (let i = 0; i <= 128; i++) {
+                const a = (i / 128) * Math.PI * 2;
+                circlePos.push(Math.cos(a) * 8, Math.sin(a) * 8, 0);
+            }
+            circleGeo.setAttribute('position', new THREE.Float32BufferAttribute(circlePos, 3));
+            const circleMat = new THREE.LineBasicMaterial({ color: 0x4488aa, transparent: true, opacity: 0.5 });
+            const circle = new THREE.Line(circleGeo, circleMat);
+            scene.add(circle);
+
+            // Points on Poincaré disk
+            const geometry = new THREE.BufferGeometry();
+            const positions = [], colors = [];
+            for (let i = 0; i < 600; i++) {
+                const level = Math.floor(Math.random() * 6);
+                const r = (level / 5) * 0.85 + Math.random() * 0.1;
+                const a = Math.random() * Math.PI * 2;
+                positions.push(Math.cos(a) * r * 8, Math.sin(a) * r * 8, 0);
+                const hue = level / 6;
+                const c = new THREE.Color().setHSL(hue, 0.9, 0.6);
+                colors.push(c.r, c.g, c.b);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            const material = new THREE.PointsMaterial({ size: 0.2, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+            objects.points = new THREE.Points(geometry, material);
+            scene.add(objects.points);
+            camera.position.set(0, 0, 20);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MODE: PARETO - Multi-objective optimization galaxy
+        // ─────────────────────────────────────────────────────────────────────
+        function createPareto() {
+            clearScene();
+            const geometry = new THREE.BufferGeometry();
+            const positions = [], colors = [], sizes = [];
+            for (let i = 0; i < 400; i++) {
+                const x = (Math.random() - 0.5) * 20;
+                const y = (Math.random() - 0.5) * 15;
+                const z = (Math.random() - 0.5) * 10;
+                const dominated = Math.random() > 0.3;
+                positions.push(x, y, z);
+                const hue = dominated ? 0.6 : 0.1 + Math.random() * 0.1;
+                const sat = dominated ? 0.3 : 0.9;
+                const light = dominated ? 0.3 : 0.6;
+                const c = new THREE.Color().setHSL(hue, sat, light);
+                colors.push(c.r, c.g, c.b);
+                sizes.push(dominated ? 0.1 : 0.25);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            const material = new THREE.PointsMaterial({ size: 0.18, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+            objects.points = new THREE.Points(geometry, material);
+            scene.add(objects.points);
+            camera.position.set(0, 5, 25);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // UTILS
+        // ─────────────────────────────────────────────────────────────────────
+        function clearScene() {
+            while(scene.children.length > 3) { scene.remove(scene.children[scene.children.length - 1]); }
+            objects = { points: null, lines: null, bars: null, layers: null };
+        }
+
+        function switchMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+            if (mode === 'neural') createNeural();
+            else if (mode === 'barcode') createBarcode();
+            else if (mode === 'landscape') createLandscape();
+            else if (mode === 'poincare') createPoincare();
+            else if (mode === 'pareto') createPareto();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // ANIMATION
+        // ─────────────────────────────────────────────────────────────────────
         function animate() {
             requestAnimationFrame(animate);
             time += 0.016;
 
-            // Pulse neurons
-            const posArray = geometry.attributes.position.array;
-            const colArray = geometry.attributes.color.array;
-
-            for (let i = 0; i < posArray.length; i += 3) {
-                const idx = i / 3;
-                const pulse = Math.sin(time * 2 + phases[idx]) * 0.5 + 0.5;
-
-                // Subtle position pulse
-                posArray[i] += velocities[i] * pulse;
-                posArray[i + 1] += velocities[i + 1] * pulse;
-                posArray[i + 2] += velocities[i + 2] * pulse;
-
-                // Color pulse
-                if (Math.random() < 0.001) {
-                    colArray[i] = 1;
-                    colArray[i + 1] = 0.8;
-                    colArray[i + 2] = 1;
-                } else {
-                    colArray[i] *= 0.99;
-                    colArray[i + 1] *= 0.99;
-                    colArray[i + 2] *= 0.99;
-                    colArray[i] = Math.max(colArray[i], 0.5);
-                    colArray[i + 2] = Math.max(colArray[i + 2], 0.6);
+            if (currentMode === 'neural' && objects.points) {
+                objects.points.rotation.y += 0.003;
+                if (objects.lines) objects.lines.rotation.y += 0.003;
+                const pos = objects.points.geometry.attributes.position.array;
+                const col = objects.points.geometry.attributes.color.array;
+                const phases = objects.points.userData.phases || [];
+                for (let i = 0; i < pos.length; i += 3) {
+                    const pulse = Math.sin(time * 2 + (phases[i/3] || 0)) * 0.5 + 0.5;
+                    if (Math.random() < 0.002) { col[i] = 1; col[i+1] = 0.9; col[i+2] = 1; }
+                    else { col[i] = Math.max(col[i] * 0.995, 0.4); col[i+2] = Math.max(col[i+2] * 0.995, 0.5); }
                 }
+                objects.points.geometry.attributes.color.needsUpdate = true;
             }
-            geometry.attributes.position.needsUpdate = true;
-            geometry.attributes.color.needsUpdate = true;
+            else if (currentMode === 'barcode' && objects.bars) {
+                objects.bars.forEach((bar, i) => {
+                    bar.position.z = Math.sin(time + bar.userData.phase) * 0.3;
+                    bar.material.emissiveIntensity = 0.3 + Math.sin(time * 2 + i * 0.1) * 0.2;
+                });
+            }
+            else if (currentMode === 'landscape' && objects.layers) {
+                objects.layers.forEach((line, l) => {
+                    const pos = line.geometry.attributes.position.array;
+                    for (let i = 0; i < pos.length / 3; i++) {
+                        const x = pos[i * 3];
+                        pos[i * 3 + 1] = l * 1.2 + Math.sin(x * 0.5 + time + l) * 0.8 * (1 - l * 0.1);
+                    }
+                    line.geometry.attributes.position.needsUpdate = true;
+                });
+            }
+            else if (currentMode === 'poincare' && objects.points) {
+                const pos = objects.points.geometry.attributes.position.array;
+                for (let i = 0; i < pos.length; i += 3) {
+                    const x = pos[i], y = pos[i+1];
+                    const r = Math.sqrt(x*x + y*y);
+                    const a = Math.atan2(y, x) + 0.002;
+                    pos[i] = Math.cos(a) * r;
+                    pos[i+1] = Math.sin(a) * r;
+                }
+                objects.points.geometry.attributes.position.needsUpdate = true;
+            }
+            else if (currentMode === 'pareto' && objects.points) {
+                objects.points.rotation.y += 0.002;
+                objects.points.rotation.x = Math.sin(time * 0.3) * 0.1;
+            }
 
-            // Rotate brain
-            points.rotation.y += 0.002;
-            lines.rotation.y += 0.002;
-
-            // Camera orbit
-            camera.position.x = Math.sin(time * 0.1) * 20;
-            camera.position.z = Math.cos(time * 0.1) * 20;
             camera.lookAt(0, 0, 0);
-
             renderer.render(scene, camera);
         }
-        animate();
+
+        // ─────────────────────────────────────────────────────────────────────
+        // INIT
+        // ─────────────────────────────────────────────────────────────────────
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+        });
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        createNeural();
+        animate();
     </script>
 </body>
 </html>
