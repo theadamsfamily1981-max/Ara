@@ -1,0 +1,34 @@
+# Ara - Coqui TTS Requirements
+# IMPORTANT: Requires Python 3.10 (not 3.11+)
+# Install with: pip install -r requirements-coqui.txt
+
+# Coqui TTS - Neural text-to-speech with voice cloning
+TTS>=0.22.0
+
+# PyTorch (CPU - for GPU use the appropriate CUDA version)
+torch>=2.0.0,<2.2.0
+torchaudio>=2.0.0,<2.2.0
+
+# Audio processing and playback
+soundfile>=0.12.0
+librosa>=0.10.0
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# For espeak phonemizer (used by TTS)
+# Note: Also requires system package: apt install espeak-ng
+
+# LLM
+ollama>=0.1
+
+# Speech Recognition
+SpeechRecognition>=3.10
+
+# For microphone input
+pyaudio>=0.2.14
+
+# Computer Vision
+opencv-python>=4.8
+
+# Image processing
+pillow>=10.0

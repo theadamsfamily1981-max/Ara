@@ -1,0 +1,60 @@
+# Ara - Conda Environment Configuration
+# Creates a Python 3.10 environment with all dependencies
+#
+# Usage:
+#   conda env create -f environment.yml
+#   conda activate ara_env
+#
+# For GPU support, after activation run:
+#   pip uninstall torch torchaudio
+#   pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu121
+
+name: ara_env
+
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Python version (required for Coqui TTS)
+  - python=3.10
+
+  # System-level audio/video libraries
+  - ffmpeg
+  - portaudio
+
+  # Build tools (for packages that need compilation)
+  - pip
+  - setuptools
+  - wheel
+
+  # Install remaining packages via pip
+  - pip:
+      # PyTorch (CPU version - see header for GPU)
+      - torch==2.1.0
+      - torchaudio==2.1.0
+
+      # Coqui TTS - Neural voice synthesis
+      - TTS>=0.22.0
+
+      # Audio processing
+      - soundfile>=0.12.0
+      - librosa>=0.10.0
+      - sounddevice>=0.4.6
+      - numpy>=1.24.0
+
+      # Speech recognition
+      - SpeechRecognition>=3.10
+      - pyaudio>=0.2.14
+
+      # LLM
+      - ollama>=0.1
+
+      # Computer vision
+      - opencv-python>=4.8
+      - pillow>=10.0
+
+      # Utilities
+      - pyyaml>=6.0
+      - loguru>=0.7

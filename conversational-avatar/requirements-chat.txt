@@ -1,0 +1,4 @@
+# Ara Text Chat - Minimal Requirements
+# Install with: pip install -r requirements-chat.txt
+
+ollama>=0.1
