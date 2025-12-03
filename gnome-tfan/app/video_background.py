@@ -66,35 +66,47 @@ class VideoBackground:
         self._setup_player()
 
     def _setup_player(self):
-        """Set up GStreamer playbin pipeline."""
+        """Set up GStreamer pipeline with hardware acceleration."""
         if not self.video_path or not Path(self.video_path).exists():
             logger.warning(f"[Video] No video file found at: {self.video_path}")
             self._create_placeholder()
             return
 
         try:
-            # Create playbin
-            self.player = Gst.ElementFactory.make("playbin", "video-player")
+            # Try optimized pipeline first (hardware accelerated)
+            # uridecodebin handles format detection and hw accel automatically
+            pipeline_str = (
+                f'uridecodebin uri=file://{self.video_path} name=src ! '
+                f'videoconvert ! '
+                f'gtk4paintablesink name=sink'
+            )
+
+            try:
+                self.player = Gst.parse_launch(pipeline_str)
+                self.sink = self.player.get_by_name('sink')
+                logger.info("[Video] Using optimized uridecodebin pipeline")
+            except Exception as e:
+                logger.warning(f"[Video] Optimized pipeline failed: {e}, falling back to playbin")
+                self.player = None
+
+            # Fallback to playbin if optimized pipeline fails
             if not self.player:
-                logger.error("[Video] Failed to create playbin")
-                self._create_placeholder()
-                return
+                self.player = Gst.ElementFactory.make("playbin", "video-player")
+                if not self.player:
+                    logger.error("[Video] Failed to create playbin")
+                    self._create_placeholder()
+                    return
 
-            # Set video file
-            self.player.set_property("uri", f"file://{self.video_path}")
+                self.player.set_property("uri", f"file://{self.video_path}")
+                self.player.set_property("mute", True)
 
-            # Mute audio
-            self.player.set_property("mute", True)
+                self.sink = Gst.ElementFactory.make("gtk4paintablesink", "video-sink")
+                if not self.sink:
+                    logger.warning("[Video] gtk4paintablesink not available, using fallback")
+                    self._create_placeholder()
+                    return
 
-            # Create GTK4 paintable sink
-            self.sink = Gst.ElementFactory.make("gtk4paintablesink", "video-sink")
-            if not self.sink:
-                # Fallback to autovideosink
-                logger.warning("[Video] gtk4paintablesink not available, using fallback")
-                self._create_placeholder()
-                return
-
-            self.player.set_property("video-sink", self.sink)
+                self.player.set_property("video-sink", self.sink)
 
             # Create picture widget
             self.picture = Gtk.Picture()

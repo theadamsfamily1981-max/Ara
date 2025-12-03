@@ -412,18 +412,18 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             100% { background-position: 0 100px; }
         }
 
-        /* === HEADER / HUD STRIP === */
+        /* === HEADER / HUD STRIP - GLASSMORPHISM === */
         .hud-strip {
-            background: linear-gradient(180deg,
-                rgba(5, 15, 30, 0.95) 0%,
-                rgba(2, 8, 18, 0.98) 100%);
+            background: rgba(5, 15, 30, 0.6);
+            backdrop-filter: blur(20px) saturate(150%);
+            -webkit-backdrop-filter: blur(20px) saturate(150%);
             border-bottom: 1px solid rgba(0, 212, 255, 0.25);
             padding: 16px 20px;
             box-shadow:
                 0 0 1px rgba(0, 212, 255, 0.5),
-                0 4px 30px rgba(0, 0, 0, 0.6),
+                0 4px 30px rgba(0, 0, 0, 0.5),
                 inset 0 1px 0 rgba(0, 212, 255, 0.1),
-                inset 0 -20px 40px rgba(0, 50, 80, 0.15);
+                inset 0 -20px 40px rgba(0, 50, 80, 0.1);
         }
 
         .hud-title {
@@ -490,21 +490,22 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             text-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
         }
 
-        /* === METRIC CARDS - CYBERPUNK GLASSMORPHISM === */
+        /* === METRIC CARDS - HIGH-END GLASSMORPHISM === */
         .metric-card {
-            background: linear-gradient(145deg,
-                rgba(0, 30, 50, 0.85) 0%,
-                rgba(0, 15, 30, 0.92) 100%);
-            border: 1px solid rgba(0, 212, 255, 0.15);
+            /* THE GLASS EFFECT - Blur background layers */
+            background: rgba(0, 20, 35, 0.45);
+            backdrop-filter: blur(16px) saturate(140%);
+            -webkit-backdrop-filter: blur(16px) saturate(140%);
+            border: 1px solid rgba(0, 212, 255, 0.18);
             border-left: 3px solid rgba(0, 212, 255, 0.5);
             border-radius: 12px;
             padding: 18px 22px;
             margin: 8px 12px;
             box-shadow:
-                0 0 1px rgba(0, 212, 255, 0.3),
-                0 8px 30px rgba(0, 0, 0, 0.4),
-                inset 0 1px 0 rgba(0, 212, 255, 0.08),
-                inset -30px 0 60px rgba(0, 100, 150, 0.05);
+                0 0 1px rgba(0, 212, 255, 0.4),
+                0 8px 32px rgba(0, 0, 0, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                inset 0 0 20px rgba(0, 100, 150, 0.05);
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
@@ -1609,49 +1610,83 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         return box
 
     def _generate_neural_topology_html(self):
-        """Generate HTML for neural network topology visualization with 4 modes."""
+        """Generate HTML for HIGH-END HOLOGRAPHIC neural topology visualization."""
         return """
 <!DOCTYPE html>
 <html>
 <head>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { overflow: hidden; background: #030508; font-family: 'Inter', sans-serif; }
+        body { overflow: hidden; background: transparent; font-family: 'Inter', sans-serif; }
         canvas { display: block; width: 100%; height: 100vh; }
         #hud {
             position: fixed; top: 10px; left: 10px; right: 10px;
             display: flex; justify-content: space-between; align-items: center;
-            padding: 8px 16px;
-            background: rgba(10, 20, 40, 0.7);
-            border: 1px solid rgba(100, 180, 255, 0.2);
-            border-radius: 8px;
-            color: rgba(150, 200, 255, 0.9);
+            padding: 10px 18px;
+            background: rgba(0, 20, 35, 0.6);
+            backdrop-filter: blur(12px) saturate(150%);
+            -webkit-backdrop-filter: blur(12px) saturate(150%);
+            border: 1px solid rgba(0, 212, 255, 0.25);
+            border-radius: 10px;
+            color: rgba(0, 212, 255, 0.95);
             font-size: 11px;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
             text-transform: uppercase;
             z-index: 100;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.15), inset 0 0 30px rgba(0, 212, 255, 0.05);
         }
         .mode-btn {
-            background: rgba(30, 60, 90, 0.5);
-            border: 1px solid rgba(100, 180, 255, 0.2);
-            border-radius: 4px;
-            color: rgba(150, 200, 255, 0.8);
-            padding: 4px 10px;
+            background: rgba(0, 40, 60, 0.5);
+            border: 1px solid rgba(0, 212, 255, 0.25);
+            border-radius: 6px;
+            color: rgba(0, 212, 255, 0.85);
+            padding: 6px 12px;
             margin: 0 4px;
             cursor: pointer;
             font-size: 10px;
-            transition: all 0.2s;
+            letter-spacing: 1px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
         }
-        .mode-btn:hover { background: rgba(50, 90, 130, 0.6); }
+        .mode-btn:hover {
+            background: rgba(0, 80, 120, 0.6);
+            border-color: rgba(0, 212, 255, 0.5);
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+        }
         .mode-btn.active {
-            background: rgba(60, 120, 180, 0.6);
-            border-color: rgba(100, 200, 255, 0.5);
+            background: linear-gradient(180deg, rgba(0, 100, 140, 0.7), rgba(0, 60, 90, 0.8));
+            border-color: rgba(0, 212, 255, 0.7);
             color: #fff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5), inset 0 0 15px rgba(0, 212, 255, 0.2);
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
         }
-        #metrics { font-size: 10px; color: rgba(100, 200, 150, 0.9); }
+        #metrics {
+            font-size: 10px;
+            color: rgba(0, 255, 136, 0.9);
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+        }
+        /* Scanline overlay */
+        #scanlines {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 212, 255, 0.02) 0px,
+                rgba(0, 212, 255, 0.02) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+            pointer-events: none;
+            z-index: 99;
+            animation: scanline-shift 10s linear infinite;
+        }
+        @keyframes scanline-shift {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(30px); }
+        }
     </style>
 </head>
 <body>
+    <div id="scanlines"></div>
     <div id="hud">
         <div id="mode-buttons">
             <button class="mode-btn active" data-mode="neural">NEURAL</button>
@@ -1660,34 +1695,105 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             <button class="mode-btn" data-mode="poincare">POINCARÉ</button>
             <button class="mode-btn" data-mode="pareto">PARETO</button>
         </div>
-        <div id="metrics">EPR-CV: 0.10 | TOPO: 0.93</div>
+        <div id="metrics">EPR-CV: 0.10 | TOPO: 0.93 | HV: 0</div>
     </div>
     <canvas id="canvas"></canvas>
+
+    <!-- Three.js Core -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
-    <script>
+
+    <!-- Post-Processing for Bloom -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
         // ═══════════════════════════════════════════════════════════════════
-        // T-FAN TOPOLOGY VISUALIZATION - 5 MODES
+        // HIGH-END HOLOGRAPHIC TOPOLOGY VISUALIZATION
+        // Multi-layered compositor with bloom post-processing
         // ═══════════════════════════════════════════════════════════════════
+
         const canvas = document.getElementById('canvas');
+
+        // Scene setup
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x030508);
-        scene.fog = new THREE.Fog(0x030508, 20, 80);
+        scene.background = null;  // Transparent for layering
+        scene.fog = new THREE.FogExp2(0x000510, 0.015);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
         camera.position.set(0, 8, 25);
 
-        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        // Renderer with transparency
+        const renderer = new THREE.WebGLRenderer({
+            canvas,
+            antialias: true,
+            alpha: true,
+            powerPreference: 'high-performance'
+        });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
 
-        // Lights
-        scene.add(new THREE.AmbientLight(0x404060, 0.4));
-        const light1 = new THREE.PointLight(0x8a2be2, 2.5);
-        light1.position.set(15, 20, 15);
-        scene.add(light1);
-        const light2 = new THREE.PointLight(0x00d4ff, 2.0);
-        light2.position.set(-15, 15, -15);
-        scene.add(light2);
+        // ─────────────────────────────────────────────────────────────────────
+        // BLOOM POST-PROCESSING (The Glow Effect)
+        // ─────────────────────────────────────────────────────────────────────
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.8,   // strength - high for holographic effect
+            0.5,   // radius
+            0.1    // threshold - low to bloom more
+        );
+        bloomPass.strength = 2.0;
+        composer.addPass(bloomPass);
+
+        // Lights - Cyan theme
+        const ambientLight = new THREE.AmbientLight(0x102030, 0.3);
+        scene.add(ambientLight);
+
+        const cyanLight = new THREE.PointLight(0x00d4ff, 3.0);
+        cyanLight.position.set(15, 20, 15);
+        scene.add(cyanLight);
+
+        const purpleLight = new THREE.PointLight(0xa855f7, 2.0);
+        purpleLight.position.set(-15, 15, -15);
+        scene.add(purpleLight);
+
+        const greenLight = new THREE.PointLight(0x00ff88, 1.5);
+        greenLight.position.set(0, -10, 20);
+        scene.add(greenLight);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // REACTIVE METRICS (Drive animations from system state)
+        // ─────────────────────────────────────────────────────────────────────
+        let metrics = {
+            epr_cv: 0.10,
+            topo_cos: 0.93,
+            cpu_load: 0.3,
+            gpu_load: 0.4,
+            hypervolume: 0
+        };
+
+        // Update metrics from parent (Python will call this)
+        window.updateMetrics = function(newMetrics) {
+            metrics = { ...metrics, ...newMetrics };
+            document.getElementById('metrics').textContent =
+                `EPR-CV: ${(metrics.epr_cv || 0).toFixed(3)} | TOPO: ${(metrics.topo_cos || 0).toFixed(2)} | HV: ${(metrics.hypervolume || 0).toFixed(0)}`;
+        };
 
         // State
         let currentMode = 'neural';
@@ -1695,40 +1801,66 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         let objects = { points: null, lines: null };
 
         // ─────────────────────────────────────────────────────────────────────
-        // MODE: NEURAL - Brain-like network
+        // MODE: NEURAL - Holographic brain network (CYAN THEME)
         // ─────────────────────────────────────────────────────────────────────
         function createNeural() {
             clearScene();
             const geometry = new THREE.BufferGeometry();
             const positions = [], colors = [], phases = [];
-            for (let i = 0; i < 2000; i++) {
+            for (let i = 0; i < 2500; i++) {
                 const phi = Math.random() * Math.PI * 2;
                 const theta = Math.acos(2 * Math.random() - 1);
-                const r = 6 + Math.random() * 4;
+                const r = 6 + Math.random() * 5;
                 positions.push(r * Math.sin(theta) * Math.cos(phi), r * Math.sin(theta) * Math.sin(phi), r * Math.cos(theta));
-                const hue = 0.72 + Math.random() * 0.12;
-                const c = new THREE.Color().setHSL(hue, 0.85, 0.55);
+                // Cyan-dominant holographic palette
+                const colorChoice = Math.random();
+                let c;
+                if (colorChoice < 0.5) {
+                    c = new THREE.Color(0x00d4ff);  // Primary cyan
+                } else if (colorChoice < 0.7) {
+                    c = new THREE.Color(0x00ff88);  // Neon green
+                } else if (colorChoice < 0.9) {
+                    c = new THREE.Color(0xa855f7);  // Purple accent
+                } else {
+                    c = new THREE.Color(0xffffff);  // White spark
+                }
                 colors.push(c.r, c.g, c.b);
                 phases.push(Math.random() * Math.PI * 2);
             }
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
             geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-            const material = new THREE.PointsMaterial({ size: 0.15, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+
+            // HOLOGRAPHIC MATERIAL - Additive blending makes overlaps GLOW
+            const material = new THREE.PointsMaterial({
+                size: 0.18,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.95,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false  // Critical for holographic layering
+            });
             objects.points = new THREE.Points(geometry, material);
             objects.points.userData.phases = phases;
             scene.add(objects.points);
 
-            // Connections
+            // Neural connections - glowing synapses
             const lineGeo = new THREE.BufferGeometry();
             const linePos = [], lineCol = [];
-            for (let i = 0; i < 600; i++) {
-                const a = Math.floor(Math.random() * 2000) * 3, b = Math.floor(Math.random() * 2000) * 3;
+            for (let i = 0; i < 800; i++) {
+                const a = Math.floor(Math.random() * 2500) * 3, b = Math.floor(Math.random() * 2500) * 3;
                 linePos.push(positions[a], positions[a+1], positions[a+2], positions[b], positions[b+1], positions[b+2]);
-                lineCol.push(0.4, 0.2, 0.7, 0.2, 0.6, 0.8);
+                // Cyan gradient connections
+                lineCol.push(0.0, 0.83, 1.0, 0.0, 0.6, 0.8);
             }
             lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
             lineGeo.setAttribute('color', new THREE.Float32BufferAttribute(lineCol, 3));
-            const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending });
+            const lineMat = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.35,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
             objects.lines = new THREE.LineSegments(lineGeo, lineMat);
             scene.add(objects.lines);
             camera.position.set(0, 5, 25);
@@ -1862,7 +1994,8 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         // UTILS
         // ─────────────────────────────────────────────────────────────────────
         function clearScene() {
-            while(scene.children.length > 3) { scene.remove(scene.children[scene.children.length - 1]); }
+            // Keep first 4 children (ambient + 3 point lights)
+            while(scene.children.length > 4) { scene.remove(scene.children[scene.children.length - 1]); }
             objects = { points: null, lines: null, bars: null, layers: null };
         }
 
@@ -1878,29 +2011,69 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // ANIMATION
+        // ANIMATION - REACTIVE TO SYSTEM METRICS
         // ─────────────────────────────────────────────────────────────────────
         function animate() {
             requestAnimationFrame(animate);
             time += 0.016;
 
+            // ═══════════════════════════════════════════════════════════════
+            // REACTIVE PARAMETERS - Driven by system state
+            // ═══════════════════════════════════════════════════════════════
+            // Higher EPR_CV = more "agitated" animation
+            const agitation = Math.max(0.5, Math.min(2.0, 1.0 + (metrics.epr_cv || 0.1) * 5));
+            // Lower topology coherence = warmer colors (shift toward red)
+            const topoStability = metrics.topo_cos || 0.9;
+            // CPU/GPU load affects bloom intensity
+            const systemLoad = Math.max(metrics.cpu_load || 0.3, metrics.gpu_load || 0.4);
+
+            // DYNAMIC BLOOM - Pulses with system heartbeat
+            bloomPass.strength = 1.5 + Math.sin(time * 2) * 0.4 * systemLoad + systemLoad * 0.8;
+
+            // DYNAMIC LIGHTS - React to topology stability
+            if (topoStability > 0.8) {
+                cyanLight.intensity = 2.5 + Math.sin(time) * 0.5;
+                purpleLight.intensity = 1.5;
+            } else {
+                // Unstable - more purple/red
+                cyanLight.intensity = 1.5;
+                purpleLight.intensity = 2.5 + Math.sin(time * 2) * 0.8;
+            }
+
             if (currentMode === 'neural' && objects.points) {
-                objects.points.rotation.y += 0.003;
-                if (objects.lines) objects.lines.rotation.y += 0.003;
-                const pos = objects.points.geometry.attributes.position.array;
+                // ROTATION SPEED tied to agitation
+                objects.points.rotation.y += 0.002 * agitation;
+                if (objects.lines) objects.lines.rotation.y += 0.002 * agitation;
+
                 const col = objects.points.geometry.attributes.color.array;
                 const phases = objects.points.userData.phases || [];
-                for (let i = 0; i < pos.length; i += 3) {
-                    const pulse = Math.sin(time * 2 + (phases[i/3] || 0)) * 0.5 + 0.5;
-                    if (Math.random() < 0.002) { col[i] = 1; col[i+1] = 0.9; col[i+2] = 1; }
-                    else { col[i] = Math.max(col[i] * 0.995, 0.4); col[i+2] = Math.max(col[i+2] * 0.995, 0.5); }
+
+                for (let i = 0; i < col.length; i += 3) {
+                    const phase = phases[i/3] || 0;
+                    const pulse = Math.sin(time * 2 * agitation + phase) * 0.5 + 0.5;
+
+                    // Neural firing - more frequent when agitated
+                    if (Math.random() < 0.003 * agitation) {
+                        // Fire! Bright white flash
+                        col[i] = 1; col[i+1] = 1; col[i+2] = 1;
+                    } else {
+                        // Decay back to base color (cyan-dominant)
+                        col[i] = Math.max(col[i] * 0.98, 0.0);
+                        col[i+1] = Math.max(col[i+1] * 0.98, 0.6);
+                        col[i+2] = Math.max(col[i+2] * 0.98, 0.8);
+                    }
                 }
                 objects.points.geometry.attributes.color.needsUpdate = true;
+
+                // Line opacity pulses
+                if (objects.lines) {
+                    objects.lines.material.opacity = 0.25 + Math.sin(time * 1.5) * 0.1 * agitation;
+                }
             }
             else if (currentMode === 'barcode' && objects.bars) {
                 objects.bars.forEach((bar, i) => {
-                    bar.position.z = Math.sin(time + bar.userData.phase) * 0.3;
-                    bar.material.emissiveIntensity = 0.3 + Math.sin(time * 2 + i * 0.1) * 0.2;
+                    bar.position.z = Math.sin(time * agitation + bar.userData.phase) * 0.4;
+                    bar.material.emissiveIntensity = 0.4 + Math.sin(time * 2 * agitation + i * 0.1) * 0.3;
                 });
             }
             else if (currentMode === 'landscape' && objects.layers) {
@@ -1908,29 +2081,32 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                     const pos = line.geometry.attributes.position.array;
                     for (let i = 0; i < pos.length / 3; i++) {
                         const x = pos[i * 3];
-                        pos[i * 3 + 1] = l * 1.2 + Math.sin(x * 0.5 + time + l) * 0.8 * (1 - l * 0.1);
+                        pos[i * 3 + 1] = l * 1.2 + Math.sin(x * 0.5 * agitation + time + l) * 0.9 * (1 - l * 0.1);
                     }
                     line.geometry.attributes.position.needsUpdate = true;
                 });
             }
             else if (currentMode === 'poincare' && objects.points) {
                 const pos = objects.points.geometry.attributes.position.array;
+                const rotSpeed = 0.002 * agitation;
                 for (let i = 0; i < pos.length; i += 3) {
                     const x = pos[i], y = pos[i+1];
                     const r = Math.sqrt(x*x + y*y);
-                    const a = Math.atan2(y, x) + 0.002;
+                    const a = Math.atan2(y, x) + rotSpeed;
                     pos[i] = Math.cos(a) * r;
                     pos[i+1] = Math.sin(a) * r;
                 }
                 objects.points.geometry.attributes.position.needsUpdate = true;
             }
             else if (currentMode === 'pareto' && objects.points) {
-                objects.points.rotation.y += 0.002;
-                objects.points.rotation.x = Math.sin(time * 0.3) * 0.1;
+                objects.points.rotation.y += 0.002 * agitation;
+                objects.points.rotation.x = Math.sin(time * 0.3 * agitation) * 0.15;
             }
 
             camera.lookAt(0, 0, 0);
-            renderer.render(scene, camera);
+
+            // Use COMPOSER for bloom post-processing (not direct renderer)
+            composer.render();
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -1944,6 +2120,19 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            // Update composer for bloom
+            composer.setSize(window.innerWidth, window.innerHeight);
+            bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const modes = ['neural', 'barcode', 'landscape', 'poincare', 'pareto'];
+                const nextIdx = (modes.indexOf(currentMode) + 1) % modes.length;
+                switchMode(modes[nextIdx]);
+            }
         });
 
         createNeural();
