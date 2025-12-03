@@ -1746,22 +1746,84 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         renderer.toneMappingExposure = 1.2;
 
         // ─────────────────────────────────────────────────────────────────────
-        // BLOOM POST-PROCESSING (The Glow Effect)
+        // POST-PROCESSING STACK (Bloom + CRT Film Effect)
         // ─────────────────────────────────────────────────────────────────────
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
         const composer = new EffectComposer(renderer);
         const renderPass = new RenderPass(scene, camera);
         composer.addPass(renderPass);
 
+        // BLOOM PASS - High intensity for holographic glow
         const bloomPass = new UnrealBloomPass(
             new THREE.Vector2(window.innerWidth, window.innerHeight),
-            1.8,   // strength - high for holographic effect
-            0.5,   // radius
-            0.1    // threshold - low to bloom more
+            1.8, 0.5, 0.1
         );
         bloomPass.strength = 2.0;
         composer.addPass(bloomPass);
 
-        // Lights - Cyan theme
+        // CRT/FILM PASS - Chromatic aberration + noise + vignette
+        const crtShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                time: { value: 0.0 },
+                chromaticAberration: { value: 0.002 },
+                noiseIntensity: { value: 0.03 },
+                vignetteStrength: { value: 0.4 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float time;
+                uniform float chromaticAberration;
+                uniform float noiseIntensity;
+                uniform float vignetteStrength;
+                varying vec2 vUv;
+
+                float rand(vec2 co) {
+                    return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+                }
+
+                void main() {
+                    vec2 uv = vUv;
+
+                    // Chromatic aberration - RGB channel offset
+                    float offset = chromaticAberration;
+                    vec4 texR = texture2D(tDiffuse, uv + vec2(offset, 0.0));
+                    vec4 texG = texture2D(tDiffuse, uv);
+                    vec4 texB = texture2D(tDiffuse, uv - vec2(offset, 0.0));
+                    vec3 color = vec3(texR.r, texG.g, texB.b);
+
+                    // Film grain noise
+                    float noise = (rand(uv + fract(time)) - 0.5) * noiseIntensity;
+                    color += noise;
+
+                    // Vignette - darken edges
+                    vec2 vignetteUv = uv * (1.0 - uv.yx);
+                    float vignette = vignetteUv.x * vignetteUv.y * 15.0;
+                    vignette = pow(vignette, vignetteStrength);
+                    color *= vignette;
+
+                    // Subtle scan line effect
+                    float scanline = sin(uv.y * 800.0 + time * 2.0) * 0.02 + 1.0;
+                    color *= scanline;
+
+                    gl_FragColor = vec4(color, texG.a);
+                }
+            `
+        };
+        const crtPass = new ShaderPass(crtShader);
+        composer.addPass(crtPass);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // LIGHTS - Dynamic color theme
+        // ─────────────────────────────────────────────────────────────────────
         const ambientLight = new THREE.AmbientLight(0x102030, 0.3);
         scene.add(ambientLight);
 
@@ -1778,7 +1840,74 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         scene.add(greenLight);
 
         // ─────────────────────────────────────────────────────────────────────
-        // REACTIVE METRICS (Drive animations from system state)
+        // STATE MACHINE - Cinematic scene transitions
+        // ─────────────────────────────────────────────────────────────────────
+        const STATES = {
+            IDLE:     { bloom: 1.5, orbitRadius: 25, orbitSpeed: 0.0001, color: 0x00d4ff },
+            WORKING:  { bloom: 2.0, orbitRadius: 22, orbitSpeed: 0.0003, color: 0x00d4ff },
+            TRAINING: { bloom: 2.5, orbitRadius: 20, orbitSpeed: 0.0005, color: 0xa855f7 },
+            CRITICAL: { bloom: 3.0, orbitRadius: 18, orbitSpeed: 0.0008, color: 0xff3366 },
+            SUCCESS:  { bloom: 2.2, orbitRadius: 28, orbitSpeed: 0.0002, color: 0x00ff88 }
+        };
+
+        let currentState = 'IDLE';
+        let targetState = 'IDLE';
+        let transitionStart = 0;
+        let transitionDuration = 1500;
+        let currentParams = { ...STATES.IDLE };
+
+        window.setState = function(newState, durationMs) {
+            if (newState === targetState || !STATES[newState]) return;
+            currentState = targetState;
+            targetState = newState;
+            transitionStart = performance.now();
+            transitionDuration = durationMs || 1500;
+        };
+
+        function updateStateTransition() {
+            const now = performance.now();
+            const t = Math.min(1, (now - transitionStart) / transitionDuration);
+            const k = t * t * (3 - 2 * t);  // smoothstep
+
+            const from = STATES[currentState];
+            const to = STATES[targetState];
+
+            currentParams.bloom = THREE.MathUtils.lerp(from.bloom, to.bloom, k);
+            currentParams.orbitRadius = THREE.MathUtils.lerp(from.orbitRadius, to.orbitRadius, k);
+            currentParams.orbitSpeed = THREE.MathUtils.lerp(from.orbitSpeed, to.orbitSpeed, k);
+
+            // Color interpolation
+            const fromColor = new THREE.Color(from.color);
+            const toColor = new THREE.Color(to.color);
+            fromColor.lerp(toColor, k);
+            currentParams.color = fromColor;
+
+            if (t >= 1) currentState = targetState;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MOOD ENGINE - Derived emotional state
+        // ─────────────────────────────────────────────────────────────────────
+        let mood = { arousal: 0.5, valence: 0.0, focus: 0.8 };
+
+        function computeMood() {
+            const cpu = metrics.cpu_load || 0.3;
+            const gpu = metrics.gpu_load || 0.3;
+            const eprCv = metrics.epr_cv || 0.1;
+            const topoCos = metrics.topo_cos || 0.9;
+
+            // Arousal: how "activated" the system is (0-1)
+            mood.arousal = Math.min(1.0, 0.4 * cpu + 0.4 * gpu + 0.2 * eprCv * 5);
+
+            // Valence: positive/negative (-1 to 1). High topo = positive
+            mood.valence = (topoCos - 0.5) * 2.0;  // Map 0.5-1.0 to 0-1
+
+            // Focus: inverse of instability
+            mood.focus = Math.max(0.2, 1.0 - eprCv * 3);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // REACTIVE METRICS
         // ─────────────────────────────────────────────────────────────────────
         let metrics = {
             epr_cv: 0.10,
@@ -1788,12 +1917,21 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             hypervolume: 0
         };
 
-        // Update metrics from parent (Python will call this)
         window.updateMetrics = function(newMetrics) {
             metrics = { ...metrics, ...newMetrics };
+            computeMood();
             document.getElementById('metrics').textContent =
-                `EPR-CV: ${(metrics.epr_cv || 0).toFixed(3)} | TOPO: ${(metrics.topo_cos || 0).toFixed(2)} | HV: ${(metrics.hypervolume || 0).toFixed(0)}`;
+                `EPR: ${(metrics.epr_cv || 0).toFixed(3)} | TOPO: ${(metrics.topo_cos || 0).toFixed(2)} | MOOD: ${mood.valence >= 0 ? '+' : ''}${mood.valence.toFixed(1)}`;
+
+            // Auto state detection based on metrics
+            if (metrics.cpu_load > 0.8 || metrics.gpu_load > 0.8) {
+                if (currentParams.color !== STATES.CRITICAL.color) setState('WORKING', 800);
+            }
         };
+
+        // Camera orbital parameters
+        let orbitAngle = 0;
+        let cameraBaseY = 8;
 
         // State
         let currentMode = 'neural';
@@ -2011,37 +2149,70 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // ANIMATION - REACTIVE TO SYSTEM METRICS
+        // ANIMATION - FLAGSHIP SCI-FI EXPERIENCE
         // ─────────────────────────────────────────────────────────────────────
         function animate() {
             requestAnimationFrame(animate);
             time += 0.016;
 
-            // ═══════════════════════════════════════════════════════════════
-            // REACTIVE PARAMETERS - Driven by system state
-            // ═══════════════════════════════════════════════════════════════
-            // Higher EPR_CV = more "agitated" animation
-            const agitation = Math.max(0.5, Math.min(2.0, 1.0 + (metrics.epr_cv || 0.1) * 5));
-            // Lower topology coherence = warmer colors (shift toward red)
-            const topoStability = metrics.topo_cos || 0.9;
-            // CPU/GPU load affects bloom intensity
-            const systemLoad = Math.max(metrics.cpu_load || 0.3, metrics.gpu_load || 0.4);
+            // Update state machine & mood
+            updateStateTransition();
 
-            // DYNAMIC BLOOM - Pulses with system heartbeat
-            bloomPass.strength = 1.5 + Math.sin(time * 2) * 0.4 * systemLoad + systemLoad * 0.8;
+            // Update CRT shader time
+            crtPass.uniforms.time.value = time;
 
-            // DYNAMIC LIGHTS - React to topology stability
-            if (topoStability > 0.8) {
-                cyanLight.intensity = 2.5 + Math.sin(time) * 0.5;
-                purpleLight.intensity = 1.5;
+            // ═══════════════════════════════════════════════════════════════
+            // CAMERA ORBITAL DRIFT - Slow parallax motion
+            // ═══════════════════════════════════════════════════════════════
+            orbitAngle += currentParams.orbitSpeed;
+            const orbitX = Math.cos(orbitAngle) * currentParams.orbitRadius;
+            const orbitZ = Math.sin(orbitAngle) * currentParams.orbitRadius;
+            const targetY = cameraBaseY + Math.sin(time * 0.3) * 2;
+
+            // Smooth camera interpolation
+            camera.position.x += (orbitX - camera.position.x) * 0.02;
+            camera.position.z += (orbitZ - camera.position.z) * 0.02;
+            camera.position.y += (targetY - camera.position.y) * 0.02;
+
+            // ═══════════════════════════════════════════════════════════════
+            // REACTIVE PARAMETERS - Driven by mood engine
+            // ═══════════════════════════════════════════════════════════════
+            const arousal = mood.arousal;
+            const valence = mood.valence;
+            const focus = mood.focus;
+
+            // Agitation from arousal
+            const agitation = 0.5 + arousal * 1.5;
+
+            // DYNAMIC BLOOM - Pulses with mood arousal
+            bloomPass.strength = currentParams.bloom + Math.sin(time * 2) * 0.3 * arousal;
+
+            // CRT effect intensity based on focus (less focus = more distortion)
+            crtPass.uniforms.chromaticAberration.value = 0.001 + (1 - focus) * 0.003;
+            crtPass.uniforms.noiseIntensity.value = 0.02 + (1 - focus) * 0.04;
+
+            // MOOD-BASED COLOR - Blend main light color
+            const baseColor = new THREE.Color(0x00d4ff);  // cyan
+            const negColor = new THREE.Color(0xff3366);   // red/pink
+            const posColor = new THREE.Color(0x00ff88);   // green
+
+            let targetColor;
+            if (valence < 0) {
+                targetColor = baseColor.clone().lerp(negColor, Math.abs(valence));
             } else {
-                // Unstable - more purple/red
-                cyanLight.intensity = 1.5;
-                purpleLight.intensity = 2.5 + Math.sin(time * 2) * 0.8;
+                targetColor = baseColor.clone().lerp(posColor, valence);
             }
+            cyanLight.color.lerp(targetColor, 0.03);
 
+            // DYNAMIC LIGHTS - Intensity from arousal
+            cyanLight.intensity = 2.0 + arousal * 2.0 + Math.sin(time * 1.5) * 0.5;
+            purpleLight.intensity = 1.5 + (1 - valence) * 1.0;
+            greenLight.intensity = 1.0 + valence * 1.5;
+
+            // ═══════════════════════════════════════════════════════════════
+            // MODE-SPECIFIC ANIMATIONS
+            // ═══════════════════════════════════════════════════════════════
             if (currentMode === 'neural' && objects.points) {
-                // ROTATION SPEED tied to agitation
                 objects.points.rotation.y += 0.002 * agitation;
                 if (objects.lines) objects.lines.rotation.y += 0.002 * agitation;
 
@@ -2050,30 +2221,31 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
                 for (let i = 0; i < col.length; i += 3) {
                     const phase = phases[i/3] || 0;
-                    const pulse = Math.sin(time * 2 * agitation + phase) * 0.5 + 0.5;
 
-                    // Neural firing - more frequent when agitated
-                    if (Math.random() < 0.003 * agitation) {
-                        // Fire! Bright white flash
+                    // Neural firing - frequency based on arousal
+                    if (Math.random() < 0.002 * arousal * 2) {
                         col[i] = 1; col[i+1] = 1; col[i+2] = 1;
                     } else {
-                        // Decay back to base color (cyan-dominant)
-                        col[i] = Math.max(col[i] * 0.98, 0.0);
-                        col[i+1] = Math.max(col[i+1] * 0.98, 0.6);
-                        col[i+2] = Math.max(col[i+2] * 0.98, 0.8);
+                        // Decay toward mood color
+                        const moodR = targetColor.r * 0.8;
+                        const moodG = targetColor.g * 0.9;
+                        const moodB = targetColor.b;
+                        col[i] = col[i] * 0.97 + moodR * 0.03;
+                        col[i+1] = col[i+1] * 0.97 + moodG * 0.03;
+                        col[i+2] = col[i+2] * 0.97 + moodB * 0.03;
                     }
                 }
                 objects.points.geometry.attributes.color.needsUpdate = true;
 
-                // Line opacity pulses
+                // Line opacity pulses with breathing
                 if (objects.lines) {
-                    objects.lines.material.opacity = 0.25 + Math.sin(time * 1.5) * 0.1 * agitation;
+                    objects.lines.material.opacity = 0.2 + arousal * 0.3 + Math.sin(time * 1.5) * 0.1;
                 }
             }
             else if (currentMode === 'barcode' && objects.bars) {
                 objects.bars.forEach((bar, i) => {
-                    bar.position.z = Math.sin(time * agitation + bar.userData.phase) * 0.4;
-                    bar.material.emissiveIntensity = 0.4 + Math.sin(time * 2 * agitation + i * 0.1) * 0.3;
+                    bar.position.z = Math.sin(time * agitation + bar.userData.phase) * 0.5;
+                    bar.material.emissiveIntensity = 0.3 + arousal * 0.4 + Math.sin(time * 2 + i * 0.1) * 0.2;
                 });
             }
             else if (currentMode === 'landscape' && objects.layers) {
@@ -2081,14 +2253,14 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                     const pos = line.geometry.attributes.position.array;
                     for (let i = 0; i < pos.length / 3; i++) {
                         const x = pos[i * 3];
-                        pos[i * 3 + 1] = l * 1.2 + Math.sin(x * 0.5 * agitation + time + l) * 0.9 * (1 - l * 0.1);
+                        pos[i * 3 + 1] = l * 1.2 + Math.sin(x * 0.5 * focus + time * agitation + l) * (0.6 + arousal * 0.4);
                     }
                     line.geometry.attributes.position.needsUpdate = true;
                 });
             }
             else if (currentMode === 'poincare' && objects.points) {
                 const pos = objects.points.geometry.attributes.position.array;
-                const rotSpeed = 0.002 * agitation;
+                const rotSpeed = 0.001 * agitation;
                 for (let i = 0; i < pos.length; i += 3) {
                     const x = pos[i], y = pos[i+1];
                     const r = Math.sqrt(x*x + y*y);
@@ -2100,12 +2272,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             }
             else if (currentMode === 'pareto' && objects.points) {
                 objects.points.rotation.y += 0.002 * agitation;
-                objects.points.rotation.x = Math.sin(time * 0.3 * agitation) * 0.15;
+                objects.points.rotation.x = Math.sin(time * 0.3) * 0.1 * focus;
             }
 
             camera.lookAt(0, 0, 0);
 
-            // Use COMPOSER for bloom post-processing (not direct renderer)
+            // Render through post-processing stack
             composer.render();
         }
 
