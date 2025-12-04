@@ -643,3 +643,198 @@ scrollbar slider:active {
 .stagger-5 { animation-delay: 0.25s; }
 .stagger-6 { animation-delay: 0.3s; }
 .stagger-7 { animation-delay: 0.35s; }
+
+/* ============================================================================
+   BANOS Mood States (PAD-driven visual effects)
+   ============================================================================ */
+
+/* Color definitions for mood states */
+@define-color mood-calm-color #00ff88;
+@define-color mood-flow-color #00d4ff;
+@define-color mood-anxious-color #ffaa00;
+@define-color mood-critical-color #ff4444;
+
+/* CALM: P > 0.3, A < 0.3 - green serenity */
+.mood-calm .metric-card {
+    border-color: rgba(0, 255, 136, 0.3);
+    box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.3),
+        0 0 30px rgba(0, 255, 136, 0.1);
+    transition: all 0.8s ease;
+}
+
+.mood-calm .hud-title {
+    color: @mood-calm-color;
+    text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+}
+
+.mood-calm .pad-card {
+    border-color: rgba(0, 255, 136, 0.4);
+}
+
+/* FLOW: P > 0, A in [0.3, 0.7] - cyan productivity */
+.mood-flow .metric-card {
+    border-color: rgba(0, 212, 255, 0.4);
+    box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.3),
+        0 0 25px rgba(0, 212, 255, 0.15);
+    transition: all 0.5s ease;
+}
+
+.mood-flow .hud-title {
+    color: @mood-flow-color;
+    text-shadow: 0 0 25px rgba(0, 212, 255, 0.6);
+}
+
+.mood-flow .pad-card {
+    border-color: rgba(0, 212, 255, 0.5);
+    animation: flow-pulse 3s ease-in-out infinite;
+}
+
+@keyframes flow-pulse {
+    0%, 100% {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 20px rgba(0, 212, 255, 0.1);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 35px rgba(0, 212, 255, 0.25);
+    }
+}
+
+/* ANXIOUS: P < 0 OR A > 0.7 - amber warning */
+.mood-anxious .metric-card {
+    border-color: rgba(255, 170, 0, 0.4);
+    box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.3),
+        0 0 25px rgba(255, 170, 0, 0.15);
+    transition: all 0.3s ease;
+}
+
+.mood-anxious .hud-title {
+    color: @mood-anxious-color;
+    text-shadow: 0 0 25px rgba(255, 170, 0, 0.6);
+    animation: anxious-flicker 0.1s ease-in-out infinite;
+}
+
+@keyframes anxious-flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.92; }
+}
+
+.mood-anxious .pad-card {
+    border-color: rgba(255, 170, 0, 0.5);
+    animation: anxious-shake 0.5s ease-in-out infinite;
+}
+
+@keyframes anxious-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-1px); }
+    75% { transform: translateX(1px); }
+}
+
+/* CRITICAL: P < -0.5 AND A > 0.8 - red emergency */
+.mood-critical .metric-card {
+    border-color: rgba(255, 68, 68, 0.6);
+    box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.4),
+        0 0 40px rgba(255, 68, 68, 0.3);
+    transition: all 0.15s ease;
+}
+
+.mood-critical .hud-title {
+    color: @mood-critical-color;
+    text-shadow: 0 0 30px rgba(255, 68, 68, 0.8);
+    animation: critical-pulse 0.5s ease-in-out infinite;
+}
+
+@keyframes critical-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.mood-critical .pad-card {
+    border-color: rgba(255, 68, 68, 0.7);
+    animation: critical-throb 0.3s ease-in-out infinite;
+}
+
+@keyframes critical-throb {
+    0%, 100% {
+        box-shadow: 0 0 30px rgba(255, 68, 68, 0.3);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 50px rgba(255, 68, 68, 0.5);
+        transform: scale(1.005);
+    }
+}
+
+/* Cockpit-wide vignette intensifies with pain */
+.mood-critical .cockpit-vignette {
+    background: radial-gradient(
+        ellipse at center,
+        transparent 40%,
+        rgba(255, 68, 68, 0.15) 70%,
+        rgba(255, 0, 0, 0.3) 100%
+    );
+}
+
+.mood-anxious .cockpit-vignette {
+    background: radial-gradient(
+        ellipse at center,
+        transparent 45%,
+        rgba(255, 170, 0, 0.08) 75%,
+        rgba(255, 100, 0, 0.15) 100%
+    );
+}
+
+/* Scanline noise intensity increases with arousal */
+.mood-critical .cockpit-scanlines {
+    background-image: repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 1px,
+        rgba(255, 68, 68, 0.04) 1px,
+        rgba(255, 68, 68, 0.04) 2px
+    );
+    opacity: 1;
+}
+
+.mood-anxious .cockpit-scanlines {
+    background-image: repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 2px,
+        rgba(255, 170, 0, 0.025) 2px,
+        rgba(255, 170, 0, 0.025) 4px
+    );
+    opacity: 0.9;
+}
+
+/* PAD bar color overrides based on mood */
+.mood-critical progressbar > trough > progress {
+    background: linear-gradient(90deg, @mood-critical-color, #ff8888);
+}
+
+.mood-anxious progressbar > trough > progress {
+    background: linear-gradient(90deg, @mood-anxious-color, #ffcc00);
+}
+
+.mood-calm progressbar > trough > progress {
+    background: linear-gradient(90deg, @mood-calm-color, #88ffaa);
+}
+
+/* Status label mood styling */
+.mood-calm .status-connected {
+    color: @mood-calm-color;
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+.mood-critical .status-connected {
+    color: @mood-critical-color;
+    text-shadow: 0 0 15px rgba(255, 68, 68, 0.7);
+    animation: status-critical-blink 0.8s ease-in-out infinite;
+}
+
+@keyframes status-critical-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}

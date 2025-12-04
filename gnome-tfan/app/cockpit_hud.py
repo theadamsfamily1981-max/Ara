@@ -293,16 +293,19 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         self._load_cockpit_css()
 
         # Root overlay for layering
-        root_overlay = Gtk.Overlay()
-        root_overlay.add_css_class('cockpit-window')
-        self.set_content(root_overlay)
+        self.root_overlay = Gtk.Overlay()
+        self.root_overlay.add_css_class('cockpit-window')
+        self.set_content(self.root_overlay)
+
+        # Current mood class for PAD-driven visual effects
+        self._current_mood_class = None
 
         # Layer 0: Background (video or holographic)
         if VIDEO_AVAILABLE:
             video_widget, self.video_bg = create_background()
             video_widget.set_hexpand(True)
             video_widget.set_vexpand(True)
-            root_overlay.set_child(video_widget)
+            self.root_overlay.set_child(video_widget)
 
             # Start video/animation background
             if self.video_bg and hasattr(self.video_bg, 'play'):
@@ -311,12 +314,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             # Fallback: simple gradient background
             bg = Gtk.Box()
             bg.add_css_class('cockpit-bg')
-            root_overlay.set_child(bg)
+            self.root_overlay.set_child(bg)
 
         # Layer 1: Main content
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         main_box.add_css_class('cockpit-content')
-        root_overlay.add_overlay(main_box)
+        self.root_overlay.add_overlay(main_box)
 
         # HUD control strip (top)
         hud_strip = self._build_hud_strip()
@@ -345,7 +348,7 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         overlay_effects.set_hexpand(True)
         overlay_effects.set_vexpand(True)
         overlay_effects.set_can_target(False)  # Click through
-        root_overlay.add_overlay(overlay_effects)
+        self.root_overlay.add_overlay(overlay_effects)
 
         # Touch gestures
         if GESTURES_AVAILABLE:
@@ -2356,6 +2359,9 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 emotion = self._get_emotion_label(v, a, d)
                 self.emotion_label.set_text(emotion)
 
+                # Update mood CSS class for PAD-driven visual effects
+                self._update_mood_class(v, a, d)
+
                 # Update CLV
                 clv = status.get('clv', {})
                 risk = clv.get('risk_level', 'LOW')
@@ -2406,6 +2412,9 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
                 emotion = self._get_emotion_label(v, a, d)
                 self.emotion_label.set_text(emotion)
+
+                # Update mood CSS class for PAD-driven visual effects (demo mode)
+                self._update_mood_class(v, a, d)
 
                 # Simulate CLV values
                 inst = abs(math.sin(t * 0.4)) * 0.3
@@ -2640,6 +2649,64 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             return "😴 CALM"
         else:
             return "😐 NEUTRAL"
+
+    def _get_mood_class(self, v, a, d):
+        """
+        Determine mood CSS class from PAD values.
+
+        BANOS mood modes:
+        - CALM: P > 0.3 and A < 0.3 (green serenity)
+        - FLOW: P > 0 and A in [0.3, 0.7] (cyan productivity)
+        - ANXIOUS: P < 0 or A > 0.7 (amber warning)
+        - CRITICAL: P < -0.5 and A > 0.8 (red emergency)
+
+        Args:
+            v: Valence/Pleasure [-1, 1]
+            a: Arousal [-1, 1]
+            d: Dominance [-1, 1] (currently unused for mood)
+
+        Returns:
+            CSS class name: 'mood-calm', 'mood-flow', 'mood-anxious', or 'mood-critical'
+        """
+        # CRITICAL takes priority - extreme negative pleasure + high arousal
+        if v < -0.5 and a > 0.8:
+            return 'mood-critical'
+
+        # ANXIOUS - negative pleasure or very high arousal
+        if v < 0 or a > 0.7:
+            return 'mood-anxious'
+
+        # CALM - positive pleasure, low arousal
+        if v > 0.3 and a < 0.3:
+            return 'mood-calm'
+
+        # FLOW - positive pleasure, moderate arousal (productive state)
+        if v > 0 and 0.3 <= a <= 0.7:
+            return 'mood-flow'
+
+        # Default to flow for neutral states
+        return 'mood-flow'
+
+    def _update_mood_class(self, v, a, d):
+        """
+        Update the mood CSS class on the root overlay based on PAD values.
+        Manages transitions between mood states smoothly.
+
+        Args:
+            v: Valence/Pleasure [-1, 1]
+            a: Arousal [-1, 1]
+            d: Dominance [-1, 1]
+        """
+        new_mood = self._get_mood_class(v, a, d)
+
+        if new_mood != self._current_mood_class:
+            # Remove old mood class if present
+            if self._current_mood_class:
+                self.root_overlay.remove_css_class(self._current_mood_class)
+
+            # Add new mood class
+            self.root_overlay.add_css_class(new_mood)
+            self._current_mood_class = new_mood
 
 
 class CockpitHUDApplication(Adw.Application):
