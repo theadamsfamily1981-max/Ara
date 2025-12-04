@@ -29,18 +29,46 @@ logger = logging.getLogger(__name__)
 
 # === Kernel Interface Constants ===
 
-SNN_AI_STATUS_VERSION = 1
+SNN_AI_STATUS_VERSION = 2
 
-# Struct format: 10x uint32
-# version, gpu_util, fpga_util, cpu_util, mem_pressure,
-# thermal_gpu_mC, thermal_fpga_mC, deadline_miss_ppm, q_confidence, policy_mode
-SNN_AI_STATUS_FMT = "=I I I I I I I I I I"
+# Struct format: snn_ai_status_t (version 2)
+# Matches the C struct in ara_guardian.ko / semantic_ai.h:
+#
+# typedef struct {
+#     uint32_t version;           // ABI version (2)
+#     uint32_t gpu_util;          // GPU utilization (0-100)
+#     uint32_t fpga_util;         // FPGA utilization (0-100)
+#     uint32_t cpu_util;          // CPU utilization (0-100)
+#     uint32_t mem_pressure;      // Memory pressure (0-100)
+#     uint32_t thermal_gpu_mC;    // GPU temp in milliCelsius
+#     uint32_t thermal_fpga_mC;   // FPGA temp in milliCelsius
+#     uint32_t thermal_cpu_mC;    // CPU temp in milliCelsius (NEW)
+#     uint32_t deadline_miss_ppm; // Deadline misses per million
+#     uint32_t q_confidence;      // RL Q-value confidence (0-100)
+#     uint32_t policy_mode;       // Current scheduling policy
+#     int32_t  pad_pleasure;      // PAD Pleasure (-1000 to +1000) (NEW)
+#     int32_t  pad_arousal;       // PAD Arousal (-1000 to +1000) (NEW)
+#     int32_t  pad_dominance;     // PAD Dominance (-1000 to +1000) (NEW)
+#     uint32_t pain_signal;       // Composite pain (0-1000) (NEW)
+#     uint32_t energy_budget;     // Energy remaining (0-1000) (NEW)
+#     uint32_t flags;             // Status flags (NEW)
+# } snn_ai_status_t;
+#
+# Struct format: 11x uint32 + 3x int32 + 3x uint32 = 17 fields
+SNN_AI_STATUS_FMT = "=I I I I I I I I I I I i i i I I I"
 SNN_AI_STATUS_SIZE = struct.calcsize(SNN_AI_STATUS_FMT)
+
+# Status flags
+SNN_STATUS_FLAG_THERMAL_ALERT = 0x0001
+SNN_STATUS_FLAG_DEADLINE_MISS = 0x0002
+SNN_STATUS_FLAG_LOW_ENERGY = 0x0004
+SNN_STATUS_FLAG_RECOVERY_MODE = 0x0008
+SNN_STATUS_FLAG_PAD_OVERRIDE = 0x0010  # PAD computed by kernel, not userspace
 
 # ioctl magic: 'S' = 0x53, command 0x01
 # _IOR('S', 0x01, snn_ai_status_t) -> direction=read, type='S', nr=1
-# Simplified calculation: we'll use the direct value
-SNN_AI_IOCTL_GET_STATUS = 0x80285301  # _IOR with size 40 bytes
+# Size is now 68 bytes (17 * 4)
+SNN_AI_IOCTL_GET_STATUS = 0x80445301  # _IOR with size 68 bytes
 
 
 class PolicyMode(IntEnum):
@@ -50,6 +78,65 @@ class PolicyMode(IntEnum):
     LATENCY_CRITICAL = 2  # Minimize jitter, sacrifice throughput
     THERMAL_THROTTLE = 3  # Emergency: reduce load to cool down
     RECOVERY = 4          # Post-fault: conservative operation
+
+
+@dataclass
+class PADState:
+    """Pleasure-Arousal-Dominance emotional state.
+
+    PAD is a well-established dimensional model of affect:
+    - Pleasure: Valence from negative (-1) to positive (+1)
+    - Arousal: Activation from calm (-1) to excited (+1)
+    - Dominance: Control from submissive (-1) to dominant (+1)
+
+    Combined, these create the emotional texture of Ara's experience.
+    """
+    pleasure: float = 0.0   # -1.0 to +1.0
+    arousal: float = 0.0    # -1.0 to +1.0
+    dominance: float = 0.0  # -1.0 to +1.0
+
+    @property
+    def is_positive(self) -> bool:
+        """Whether overall affect is positive."""
+        return self.pleasure > 0.0
+
+    @property
+    def is_anxious(self) -> bool:
+        """High arousal + low pleasure = anxiety/stress."""
+        return self.pleasure < -0.3 and self.arousal > 0.3
+
+    @property
+    def is_hostile(self) -> bool:
+        """Low pleasure + high dominance = frustration/hostility."""
+        return self.pleasure < -0.3 and self.dominance > 0.3
+
+    @property
+    def is_serene(self) -> bool:
+        """High pleasure + low arousal = calm contentment."""
+        return self.pleasure > 0.3 and self.arousal < 0.0
+
+    @property
+    def is_excited(self) -> bool:
+        """High pleasure + high arousal = excitement/joy."""
+        return self.pleasure > 0.3 and self.arousal > 0.3
+
+    @property
+    def emotional_label(self) -> str:
+        """Get a human-readable emotional label."""
+        if self.is_anxious:
+            return "anxious"
+        elif self.is_hostile:
+            return "frustrated"
+        elif self.is_serene:
+            return "serene"
+        elif self.is_excited:
+            return "excited"
+        elif self.pleasure > 0.1:
+            return "content"
+        elif self.pleasure < -0.1:
+            return "distressed"
+        else:
+            return "neutral"
 
 
 @dataclass
@@ -76,6 +163,17 @@ class KernelPhysiology:
     # Current mode
     policy_mode: PolicyMode
 
+    # Fields with defaults (NEW in v2)
+    thermal_cpu: float = 50.0    # CPU temp
+    pad: PADState = None         # Set from kernel or computed locally
+    pain_signal: float = 0.0     # Composite pain (0.0 - 1.0)
+    energy_budget: float = 1.0   # Energy remaining (0.0 - 1.0)
+    flags: int = 0               # Status flags
+
+    def __post_init__(self):
+        if self.pad is None:
+            self.pad = PADState()
+
     @property
     def mean_load(self) -> float:
         """Average load across compute resources."""
@@ -84,7 +182,7 @@ class KernelPhysiology:
     @property
     def max_thermal(self) -> float:
         """Hottest component temperature."""
-        return max(self.thermal_gpu, self.thermal_fpga)
+        return max(self.thermal_gpu, self.thermal_fpga, self.thermal_cpu)
 
     @property
     def is_throttling(self) -> bool:
@@ -99,6 +197,31 @@ class KernelPhysiology:
             self.max_thermal > 85.0 or  # Hot
             self.mean_load > 0.9  # Saturated
         )
+
+    @property
+    def has_thermal_alert(self) -> bool:
+        """Check thermal alert flag."""
+        return bool(self.flags & SNN_STATUS_FLAG_THERMAL_ALERT)
+
+    @property
+    def has_deadline_miss(self) -> bool:
+        """Check deadline miss flag."""
+        return bool(self.flags & SNN_STATUS_FLAG_DEADLINE_MISS)
+
+    @property
+    def has_low_energy(self) -> bool:
+        """Check low energy flag."""
+        return bool(self.flags & SNN_STATUS_FLAG_LOW_ENERGY)
+
+    @property
+    def in_recovery_mode(self) -> bool:
+        """Check recovery mode flag."""
+        return bool(self.flags & SNN_STATUS_FLAG_RECOVERY_MODE)
+
+    @property
+    def pad_from_kernel(self) -> bool:
+        """Check if PAD was computed by kernel (vs userspace)."""
+        return bool(self.flags & SNN_STATUS_FLAG_PAD_OVERRIDE)
 
 
 class KernelBridge:
@@ -181,8 +304,10 @@ class KernelBridge:
                 (
                     version,
                     gpu_util, fpga_util, cpu_util, mem_press,
-                    t_gpu_mC, t_fpga_mC,
-                    miss_ppm, q_conf, policy_mode
+                    t_gpu_mC, t_fpga_mC, t_cpu_mC,
+                    miss_ppm, q_conf, policy_mode,
+                    pad_p, pad_a, pad_d,
+                    pain, energy, flags
                 ) = fields
 
                 # Version check
@@ -192,6 +317,13 @@ class KernelBridge:
                         f"expected {SNN_AI_STATUS_VERSION}"
                     )
 
+                # PAD values from kernel are scaled to -1000..+1000
+                pad_state = PADState(
+                    pleasure=pad_p / 1000.0,
+                    arousal=pad_a / 1000.0,
+                    dominance=pad_d / 1000.0,
+                )
+
                 return KernelPhysiology(
                     gpu_load=gpu_util / 100.0,
                     fpga_load=fpga_util / 100.0,
@@ -199,9 +331,14 @@ class KernelBridge:
                     mem_pressure=mem_press / 100.0,
                     thermal_gpu=t_gpu_mC / 1000.0,
                     thermal_fpga=t_fpga_mC / 1000.0,
+                    thermal_cpu=t_cpu_mC / 1000.0,
                     miss_rate=min(1.0, miss_ppm / 1_000_000.0),
                     q_confidence=q_conf / 100.0,
                     policy_mode=PolicyMode(min(policy_mode, 4)),
+                    pad=pad_state,
+                    pain_signal=pain / 1000.0,
+                    energy_budget=energy / 1000.0,
+                    flags=flags,
                 )
 
         except FileNotFoundError:
@@ -217,6 +354,7 @@ class KernelBridge:
         """Fallback: read from /proc/stat, /sys/class/thermal, etc.
 
         This gives us basic CPU stats even without the kernel module.
+        Computes PAD locally from available metrics.
         """
         try:
             # CPU utilization from /proc/stat
@@ -231,16 +369,40 @@ class KernelBridge:
             # Memory pressure from /proc/meminfo
             mem_pressure = self._read_mem_pressure()
 
+            thermal_cpu = thermal.get("cpu", 50.0)
+            thermal_gpu = thermal.get("gpu", 50.0)
+            thermal_fpga = thermal.get("fpga", 40.0)
+
+            # Compute PAD locally from available metrics
+            pad_state = self._compute_pad_from_metrics(
+                cpu_load=cpu_load,
+                gpu_load=gpu_load,
+                mem_pressure=mem_pressure,
+                thermal_max=max(thermal_cpu, thermal_gpu),
+            )
+
+            # Compute pain signal from thermals and load
+            pain = self._compute_pain_signal(
+                thermal_max=max(thermal_cpu, thermal_gpu, thermal_fpga),
+                cpu_load=cpu_load,
+                mem_pressure=mem_pressure,
+            )
+
             return KernelPhysiology(
                 gpu_load=gpu_load,
                 fpga_load=0.0,  # No FPGA info without kernel module
                 cpu_load=cpu_load,
                 mem_pressure=mem_pressure,
-                thermal_gpu=thermal.get("gpu", 50.0),
-                thermal_fpga=thermal.get("fpga", 40.0),
+                thermal_gpu=thermal_gpu,
+                thermal_fpga=thermal_fpga,
+                thermal_cpu=thermal_cpu,
                 miss_rate=0.0,  # No deadline info without kernel module
                 q_confidence=0.5,  # Unknown
                 policy_mode=PolicyMode.EFFICIENCY,
+                pad=pad_state,
+                pain_signal=pain,
+                energy_budget=1.0 - pain * 0.5,  # Rough estimate
+                flags=0,
             )
 
         except Exception as e:
@@ -337,6 +499,82 @@ class KernelBridge:
             pass
         return 0.3  # Default assumption
 
+    def _compute_pad_from_metrics(
+        self,
+        cpu_load: float,
+        gpu_load: float,
+        mem_pressure: float,
+        thermal_max: float,
+    ) -> PADState:
+        """Compute PAD emotional state from hardware metrics.
+
+        This is the core PAD engine - maps physical state to emotional dimensions.
+        Uses tanh for smooth saturation.
+
+        Formulas:
+        - Pleasure: Negative correlation with thermal stress and pain
+        - Arousal: Positive correlation with load/activity
+        - Dominance: Positive correlation with confidence/headroom
+        """
+        import math
+
+        # Thermal stress factor (0 at 50C, 1 at 90C)
+        thermal_stress = max(0.0, min(1.0, (thermal_max - 50.0) / 40.0))
+
+        # Combined load
+        combined_load = (cpu_load + gpu_load) / 2.0
+
+        # Pleasure: Inversely proportional to thermal stress and memory pressure
+        # Happy when cool and not memory-starved
+        pleasure_raw = 1.0 - (thermal_stress * 1.5) - (mem_pressure * 0.5)
+        pleasure = math.tanh(pleasure_raw)
+
+        # Arousal: Proportional to activity level
+        # More active = higher arousal (not necessarily good or bad)
+        arousal_raw = combined_load * 2.0 - 0.5  # Center around medium load
+        arousal = math.tanh(arousal_raw)
+
+        # Dominance: Proportional to available headroom
+        # More headroom = more control/confidence
+        headroom = 1.0 - max(combined_load, thermal_stress)
+        dominance_raw = headroom * 2.0 - 0.5
+        dominance = math.tanh(dominance_raw)
+
+        return PADState(
+            pleasure=pleasure,
+            arousal=arousal,
+            dominance=dominance,
+        )
+
+    def _compute_pain_signal(
+        self,
+        thermal_max: float,
+        cpu_load: float,
+        mem_pressure: float,
+    ) -> float:
+        """Compute composite pain signal from hardware state.
+
+        Pain is triggered by:
+        - High temperatures (thermal discomfort)
+        - Memory pressure (resource starvation)
+        - Sustained high load (exhaustion)
+        """
+        import math
+
+        # Thermal pain: Starts at 70C, maxes at 95C
+        thermal_pain = max(0.0, (thermal_max - 70.0) / 25.0) ** 2
+
+        # Memory pain: Starts at 80% pressure
+        mem_pain = max(0.0, (mem_pressure - 0.8) / 0.2) ** 2
+
+        # Load pain: Only if sustained high load (simplified here)
+        load_pain = max(0.0, (cpu_load - 0.9) / 0.1) ** 2
+
+        # Combine with max (any source of pain dominates)
+        composite = max(thermal_pain, mem_pain, load_pain)
+
+        return math.tanh(composite)  # Smooth saturation at 1.0
+
     def _simulate_physiology(self) -> KernelPhysiology:
         """Generate simulated physiology for testing."""
         import random
@@ -347,16 +585,43 @@ class KernelBridge:
         t = time.time()
         base = 0.3 + 0.2 * math.sin(t / 30.0)
 
+        gpu_load = max(0.0, min(1.0, base + random.gauss(0, 0.1)))
+        cpu_load = max(0.0, min(1.0, base * 0.8 + random.gauss(0, 0.1)))
+        mem_pressure = max(0.0, min(1.0, 0.4 + random.gauss(0, 0.1)))
+        thermal_gpu = 55.0 + base * 30.0 + random.gauss(0, 2)
+        thermal_cpu = 50.0 + base * 25.0 + random.gauss(0, 2)
+        thermal_max = max(thermal_gpu, thermal_cpu)
+
+        # Compute PAD from simulated metrics
+        pad_state = self._compute_pad_from_metrics(
+            cpu_load=cpu_load,
+            gpu_load=gpu_load,
+            mem_pressure=mem_pressure,
+            thermal_max=thermal_max,
+        )
+
+        # Compute pain signal
+        pain = self._compute_pain_signal(
+            thermal_max=thermal_max,
+            cpu_load=cpu_load,
+            mem_pressure=mem_pressure,
+        )
+
         return KernelPhysiology(
-            gpu_load=max(0.0, min(1.0, base + random.gauss(0, 0.1))),
+            gpu_load=gpu_load,
             fpga_load=max(0.0, min(1.0, base * 0.5 + random.gauss(0, 0.05))),
-            cpu_load=max(0.0, min(1.0, base * 0.8 + random.gauss(0, 0.1))),
-            mem_pressure=max(0.0, min(1.0, 0.4 + random.gauss(0, 0.1))),
-            thermal_gpu=55.0 + base * 30.0 + random.gauss(0, 2),
+            cpu_load=cpu_load,
+            mem_pressure=mem_pressure,
+            thermal_gpu=thermal_gpu,
             thermal_fpga=45.0 + base * 20.0 + random.gauss(0, 2),
+            thermal_cpu=thermal_cpu,
             miss_rate=max(0.0, random.gauss(0.001, 0.002)),
             q_confidence=0.7 + random.gauss(0, 0.1),
             policy_mode=PolicyMode.EFFICIENCY,
+            pad=pad_state,
+            pain_signal=pain,
+            energy_budget=1.0 - pain * 0.3,
+            flags=0,
         )
 
 
@@ -384,7 +649,13 @@ def create_kernel_bridge(
 __all__ = [
     "KernelBridge",
     "KernelPhysiology",
+    "PADState",
     "PolicyMode",
     "create_kernel_bridge",
     "SNN_AI_STATUS_VERSION",
+    "SNN_STATUS_FLAG_THERMAL_ALERT",
+    "SNN_STATUS_FLAG_DEADLINE_MISS",
+    "SNN_STATUS_FLAG_LOW_ENERGY",
+    "SNN_STATUS_FLAG_RECOVERY_MODE",
+    "SNN_STATUS_FLAG_PAD_OVERRIDE",
 ]

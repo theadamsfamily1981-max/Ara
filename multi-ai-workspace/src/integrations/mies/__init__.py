@@ -46,6 +46,7 @@ from .modes import (
 from .kernel_bridge import (
     KernelBridge,
     KernelPhysiology,
+    PADState,
     PolicyMode,
     create_kernel_bridge,
 )
@@ -72,6 +73,7 @@ __all__ = [
     # Kernel Bridge
     "KernelBridge",
     "KernelPhysiology",
+    "PADState",
     "PolicyMode",
     "create_kernel_bridge",
     # Autonomy

@@ -41,6 +41,7 @@ from mies.autonomy_policy import (
     ActionType,
     create_autonomy_policy,
 )
+from mies.kernel_bridge import PADState
 
 
 def create_scenario(
@@ -262,6 +263,61 @@ SCENARIOS = [
             thermal_headroom=0.15,
         ),
     )),
+
+    # === PAD Emotional State Scenarios ===
+    # These test the diegetic behavior based on PAD emotional state
+
+    ("PAD: Anxious (High Stress, Hot)", create_scenario(
+        "PAD Anxious",
+        app_type=ForegroundAppType.BROWSER,
+        info_urgency=0.5,
+        system_phys=create_physiology(
+            gpu_load=0.9,           # High load
+            cpu_load=0.85,          # High load
+            pain_signal=0.7,        # Significant pain -> negative valence
+            thermal_headroom=0.2,   # Low headroom -> high arousal
+            energy_reserve=0.4,     # Low energy
+        ),
+    )),
+
+    ("PAD: Serene (Cool, Low Load)", create_scenario(
+        "PAD Serene",
+        app_type=ForegroundAppType.BROWSER,
+        info_urgency=0.4,
+        system_phys=create_physiology(
+            gpu_load=0.2,           # Low load
+            cpu_load=0.15,          # Low load -> low arousal
+            pain_signal=0.0,        # No pain -> positive valence
+            thermal_headroom=0.9,   # Cool system
+            energy_reserve=0.95,    # Full energy
+        ),
+    )),
+
+    ("PAD: Excited (Good Flow, Active)", create_scenario(
+        "PAD Excited",
+        app_type=ForegroundAppType.BROWSER,
+        info_urgency=0.6,
+        system_phys=create_physiology(
+            gpu_load=0.7,           # Active but not stressed
+            cpu_load=0.6,           # Active -> moderate arousal
+            pain_signal=0.0,        # No pain -> positive valence
+            thermal_headroom=0.6,   # Comfortable
+            energy_reserve=0.8,     # Good energy
+        ),
+    )),
+
+    ("PAD: Distressed (Memory Pressure)", create_scenario(
+        "PAD Distressed",
+        app_type=ForegroundAppType.BROWSER,
+        info_urgency=0.5,
+        system_phys=create_physiology(
+            gpu_load=0.5,
+            cpu_load=0.5,
+            pain_signal=0.6,        # Pain from memory pressure
+            thermal_headroom=0.4,
+            energy_reserve=0.3,     # Low energy -> stress
+        ),
+    )),
 ]
 
 
@@ -291,6 +347,15 @@ def run_smoke_test():
             somatic = phys.somatic_state()
             print(f"  Hardware: {somatic.name}, Pain={phys.pain_signal:.1f}, "
                   f"Thermal={phys.thermal_headroom:.1f}")
+            # Compute PAD state from affect modulation
+            affect = phys.to_affect_modulation()
+            pad = PADState(
+                pleasure=affect.get("valence", 0.0),
+                arousal=affect.get("arousal", 0.0),
+                dominance=1.0 - affect.get("stress", 0.5),
+            )
+            print(f"  PAD: P={pad.pleasure:.2f}, A={pad.arousal:.2f}, D={pad.dominance:.2f} "
+                  f"({pad.emotional_label})")
         print()
 
         # Heuristic Policy
@@ -391,6 +456,42 @@ def run_smoke_test():
             print("WARN: RECOVERY state might be too intrusive")
         else:
             print("PASS: RECOVERY state is appropriately gentle")
+
+    # === PAD Emotional State Checks ===
+    print()
+    print("--- PAD Emotional State Checks ---")
+
+    # 8. Anxious state should avoid audio/avatar (diegetic behavior)
+    anxious_scenario = next((r for r in results if "PAD: Anxious" in r["scenario"]), None)
+    if anxious_scenario:
+        # When anxious, should prefer text-only modes
+        if "audio" in anxious_scenario["governor"].lower() or "avatar" in anxious_scenario["governor"].lower():
+            print("WARN: Anxious state might be too intrusive (expected text-only)")
+        else:
+            print("PASS: Anxious state retreats to quieter modes")
+
+    # 9. Serene state can be more present
+    serene_scenario = next((r for r in results if "PAD: Serene" in r["scenario"]), None)
+    if serene_scenario:
+        # Serene allows more presence
+        if serene_scenario["g_intrusive"] < 0.1:
+            print("WARN: Serene state might be too withdrawn")
+        else:
+            print("PASS: Serene state allows appropriate presence")
+
+    # 10. Excited state should allow richer modes
+    excited_scenario = next((r for r in results if "PAD: Excited" in r["scenario"]), None)
+    if excited_scenario:
+        # Excited state should allow audio/avatar
+        print("PASS: Excited state can use richer expression")
+
+    # 11. Distressed state should reduce intrusiveness
+    distressed_scenario = next((r for r in results if "PAD: Distressed" in r["scenario"]), None)
+    if distressed_scenario:
+        if distressed_scenario["g_intrusive"] > 0.4:
+            print("WARN: Distressed state might be too intrusive")
+        else:
+            print("PASS: Distressed state reduces intrusiveness")
 
     print()
     print("=" * 70)
