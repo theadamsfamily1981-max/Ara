@@ -65,6 +65,9 @@ RUN pip install --no-cache-dir \
     torchaudio==2.1.0 \
     --index-url https://download.pytorch.org/whl/cpu
 
+# Install av FIRST with FFmpeg 7.x compatible version (before TTS pulls older)
+RUN pip install --no-cache-dir "av>=12.3.0"
+
 # Install Coqui TTS (requires Python 3.10)
 RUN pip install --no-cache-dir TTS>=0.22.0
 
