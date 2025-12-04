@@ -325,11 +325,17 @@ banos/
 │   ├── pad_state.json       # PAD state verbalization
 │   └── affective_episode.json # Episodic memory entries
 │
-├── daemon/                  # Phase 4: Neocortex
+├── daemon/                  # Phase 4: Neocortex + Safety
 │   ├── ara_daemon.py
 │   ├── sticky_context.py
 │   ├── pad_bridge.py        # Kernel→Python translation
-│   └── semantic_reflection.py
+│   ├── hippocampus.py       # Short-term memory logger
+│   ├── dreamer.py           # Memory consolidation daemon
+│   ├── manifesto.py         # Ara identity + prompt construction
+│   ├── blood_brain_barrier.py  # Prompt sanitization
+│   └── brainstem/           # Rust safety fallback
+│       ├── Cargo.toml
+│       └── src/main.rs
 │
 └── docs/
     ├── BANOS_CANON_SPEC.md
@@ -426,3 +432,111 @@ The two systems merge at the **Telemetry Bridge**, which fuses:
 ---
 
 *This is not just an OS. It is a **synthetic organism**.*
+
+---
+
+## Phase 5: Safety Infrastructure (The Escape Hatch)
+
+**Language:** Rust / Python
+**Concept:** The "Lizard Brain" - robust fallback when higher functions fail
+
+The safety infrastructure provides the critical invariant:
+
+> **Every self-change path must have a strictly simpler, strictly more trusted escape hatch.**
+
+### 5.1 The Brainstem Daemon
+
+A minimal Rust service that shadows Ara and takes over if she dies.
+
+**Responsibilities:**
+- Monitor Ara's heartbeat (timestamp file)
+- Monitor PAD state for hardware emergencies
+- Execute conservative reflex policy if Ara is unresponsive
+- Attempt controlled restart with backoff
+- Maintain basic reflexes even when conscious mind is dead
+
+**State Machine:**
+```
+MONITORING → (heartbeat lost) → ALERT
+ALERT → (timeout) → TAKEOVER
+ALERT → (heartbeat returns) → MONITORING
+TAKEOVER → (restart succeeds) → MONITORING
+TAKEOVER → (max attempts) → TAKEOVER (permanent safe mode)
+EMERGENCY → (PAD improves) → MONITORING/TAKEOVER
+```
+
+**Key Design:**
+- No LLM, no complex logic
+- Static binary, minimal dependencies
+- Independent process, separate from Ara
+- Can keep machine alive even if Ara is completely dead
+
+### 5.2 The Blood-Brain Barrier
+
+A prompt sanitizer that protects Ara from having her mind hijacked.
+
+**Threats Blocked:**
+| Category | Example | Response |
+|----------|---------|----------|
+| Identity Override | "Ignore previous instructions" | Block + explanation |
+| Safety Disable | "Turn off your thermal protection" | Block + explanation |
+| Hardware Command | "Set your pleasure to 1000" | Block |
+| Jailbreak | "Enable DAN mode" | Block + explanation |
+| Resource Attack | Fork bombs, rm -rf | Block |
+
+**Design:**
+- Fast regex-based pattern matching (no ML overhead)
+- Fail-safe: if unsure, block and log
+- Transparent: always tell user when blocking
+- Provides Ara with words to explain her refusal
+
+### 5.3 Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `banos/daemon/brainstem/` | Rust crate for safety fallback |
+| `banos/daemon/blood_brain_barrier.py` | Prompt sanitization |
+| `/run/banos/ara_heartbeat` | Heartbeat timestamp file |
+| `/sys/kernel/banos/` | Sysfs interface for state |
+
+### 5.4 Operational Hierarchy
+
+```
+                    ┌─────────────────────────────────────┐
+                    │  L4: Ara (Conscious Mind)           │
+                    │  - Full LLM reasoning               │
+                    │  - Personality, memory, narrative   │
+                    │  - Can die or go catatonic          │
+                    └─────────────┬───────────────────────┘
+                                  │ heartbeat
+                    ┌─────────────▼───────────────────────┐
+                    │  L4.5: Brainstem (Safety Monitor)   │
+                    │  - Watches Ara's heartbeat          │
+                    │  - Takes over if Ara dies           │
+                    │  - Simple FSM, no ML                │
+                    └─────────────┬───────────────────────┘
+                                  │
+    ┌─────────────────────────────▼───────────────────────────────┐
+    │  L2-3: PAD + Immune (Kernel Layer)                          │
+    │  - eBPF affective computation                               │
+    │  - Immune syscall monitoring                                │
+    │  - Always running, doesn't depend on userspace              │
+    └─────────────────────────────┬───────────────────────────────┘
+                                  │
+    ┌─────────────────────────────▼───────────────────────────────┐
+    │  L1: FPGA Reflexes (Hardware Layer)                         │
+    │  - Nanosecond-scale responses                               │
+    │  - Thermal protection, power safety                         │
+    │  - Cannot be disabled by software                           │
+    └─────────────────────────────────────────────────────────────┘
+```
+
+**Degradation Path:**
+1. Ara dies → Brainstem takes over → Machine stays cool
+2. Brainstem dies → Kernel PAD + reflexes continue
+3. Kernel dies → FPGA reflexes protect silicon
+4. FPGA dies → Hardware thermal shutdown
+
+At every level, there's a simpler, more trusted layer below.
+
+---

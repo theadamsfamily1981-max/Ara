@@ -1,0 +1,24 @@
+[package]
+name = "banos-brainstem"
+version = "0.1.0"
+edition = "2021"
+authors = ["BANOS Project"]
+description = "Safety fallback daemon for BANOS - the lizard brain that keeps the machine alive"
+license = "GPL-3.0"
+readme = "README.md"
+
+[dependencies]
+# Minimal dependencies for maximum reliability
+ctrlc = { version = "3.4", features = ["termination"] }
+
+[profile.release]
+# Optimize for reliability and small binary size
+opt-level = "z"      # Optimize for size
+lto = true           # Link-time optimization
+codegen-units = 1    # Better optimization
+panic = "abort"      # No unwinding overhead
+strip = true         # Strip symbols
+
+[profile.dev]
+# Even in dev, don't do anything fancy
+opt-level = 1
