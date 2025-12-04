@@ -62,13 +62,18 @@ RUN pip install --no-cache-dir \
     torchaudio==2.1.0 \
     --index-url https://download.pytorch.org/whl/cpu
 
-# Install av using pre-built wheel (bundles its own FFmpeg, no compatibility issues)
-RUN pip install --no-cache-dir "av>=10.0.0"
+# Install av BEFORE anything that depends on it (faster-whisper needs av>=12)
+# Use --only-binary to FORCE using pre-built wheels - never build from source
+# Pre-built wheels bundle their own FFmpeg, avoiding all version conflicts
+RUN pip install --no-cache-dir --only-binary=av "av>=12.0.0" || \
+    (echo "ERROR: No pre-built av wheel available for this platform." && \
+     echo "This is required for faster-whisper. Consider using Conda instead." && \
+     exit 1)
 
 # Install Coqui TTS (requires Python 3.10)
 RUN pip install --no-cache-dir TTS>=0.22.0
 
-# Install remaining dependencies
+# Install remaining dependencies (faster-whisper will use the av we already installed)
 RUN pip install --no-cache-dir -r requirements-minimal.txt
 RUN pip install --no-cache-dir -r requirements-multimodal.txt || true
 
