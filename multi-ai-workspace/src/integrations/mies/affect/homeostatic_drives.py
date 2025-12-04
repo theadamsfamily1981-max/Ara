@@ -121,8 +121,10 @@ class DriveSystemConfig:
     survival_rate: float = 0.05      # Slow, triggered by events
     comfort_rate: float = 0.1        # Moderate
     connection_rate: float = 0.15    # Social need grows faster
+    belonging_rate: float = 0.08     # Slower than connection
     curiosity_rate: float = 0.2      # Curiosity is hungry
     competence_rate: float = 0.1     # Moderate
+    autonomy_rate: float = 0.1       # Need for independence
     rest_rate: float = 0.05          # Slow, tied to activity
     expression_rate: float = 0.12    # Need to share builds
 
@@ -130,8 +132,10 @@ class DriveSystemConfig:
     survival_importance: float = 2.0   # Highest priority
     comfort_importance: float = 1.0
     connection_importance: float = 1.5
+    belonging_importance: float = 1.2
     curiosity_importance: float = 0.8
     competence_importance: float = 1.0
+    autonomy_importance: float = 1.0
     rest_importance: float = 0.7
     expression_importance: float = 0.9
 
@@ -175,8 +179,10 @@ class HomeostaticDriveSystem:
             DriveType.SURVIVAL: (cfg.survival_rate, cfg.survival_importance),
             DriveType.COMFORT: (cfg.comfort_rate, cfg.comfort_importance),
             DriveType.CONNECTION: (cfg.connection_rate, cfg.connection_importance),
+            DriveType.BELONGING: (cfg.belonging_rate, cfg.belonging_importance),
             DriveType.CURIOSITY: (cfg.curiosity_rate, cfg.curiosity_importance),
             DriveType.COMPETENCE: (cfg.competence_rate, cfg.competence_importance),
+            DriveType.AUTONOMY: (cfg.autonomy_rate, cfg.autonomy_importance),
             DriveType.REST: (cfg.rest_rate, cfg.rest_importance),
             DriveType.EXPRESSION: (cfg.expression_rate, cfg.expression_importance),
         }

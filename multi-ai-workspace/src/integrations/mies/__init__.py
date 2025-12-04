@@ -57,6 +57,17 @@ from .autonomy_policy import (
     ActionType,
     create_autonomy_policy,
 )
+from .inference import (
+    StickyContextManager,
+    StickyContextConfig,
+    ContextState,
+    EvictionStrategy,
+    create_sticky_context,
+    AraPromptController,
+    PromptControllerConfig,
+    create_prompt_controller,
+    LLAMA_CPP_AVAILABLE,
+)
 
 __all__ = [
     # Context
@@ -82,4 +93,14 @@ __all__ = [
     "AutonomyBounds",
     "ActionType",
     "create_autonomy_policy",
+    # Inference / LLM Integration
+    "StickyContextManager",
+    "StickyContextConfig",
+    "ContextState",
+    "EvictionStrategy",
+    "create_sticky_context",
+    "AraPromptController",
+    "PromptControllerConfig",
+    "create_prompt_controller",
+    "LLAMA_CPP_AVAILABLE",
 ]

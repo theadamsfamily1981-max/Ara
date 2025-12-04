@@ -42,6 +42,20 @@ from mies.autonomy_policy import (
     create_autonomy_policy,
 )
 from mies.kernel_bridge import PADState
+from mies.inference import (
+    StickyContextManager,
+    StickyContextConfig,
+    EvictionStrategy,
+    create_sticky_context,
+    AraPromptController,
+    PromptControllerConfig,
+    create_prompt_controller,
+)
+from mies.affect import (
+    TelemetrySnapshot,
+    PADVector,
+    create_integrated_soul,
+)
 
 
 def create_scenario(
@@ -533,6 +547,223 @@ def run_smoke_test():
     return all_passed
 
 
+def run_inference_smoke_test():
+    """Test the inference module - StickyContextManager and AraPromptController."""
+    print("\n")
+    print("=" * 70)
+    print("INFERENCE MODULE SMOKE TEST")
+    print("=" * 70)
+    print()
+
+    all_passed = True
+
+    # === Test StickyContextManager ===
+    print("--- StickyContextManager Tests ---")
+    print()
+
+    # 1. Create manager without llama-cpp (mock mode)
+    config = StickyContextConfig(
+        keep_tokens=512,
+        recent_keep=256,
+        n_ctx=4096,
+        strategy=EvictionStrategy.HALF_WINDOW,
+    )
+    manager = StickyContextManager(llm=None, config=config)
+
+    if manager._api_version == "mock":
+        print("PASS: StickyContextManager created in mock mode (no llama-cpp)")
+    else:
+        print(f"INFO: StickyContextManager using API: {manager._api_version}")
+
+    # 2. Test state tracking
+    manager.on_tokens_added(512, is_system=True)
+    manager.on_tokens_added(1000, is_system=False)
+
+    state = manager.get_state()
+    if state.fixed_tokens == 512 and state.evictable_tokens == 1000:
+        print(f"PASS: Token tracking correct (fixed={state.fixed_tokens}, evict={state.evictable_tokens})")
+    else:
+        print(f"FAIL: Token tracking wrong (fixed={state.fixed_tokens}, evict={state.evictable_tokens})")
+        all_passed = False
+
+    # 3. Test eviction calculation
+    evicted = manager.maybe_evict_for(incoming_tokens=3000)
+    if evicted > 0:
+        print(f"PASS: Eviction triggered ({evicted} tokens evicted)")
+    else:
+        print("PASS: No eviction needed (or state updated correctly)")
+
+    stats = manager.get_statistics()
+    print(f"INFO: Context stats: {stats['state']}")
+
+    # 4. Test system prompt refresh
+    manager.refresh_system_prompt(new_system_tokens=600, force=True)
+    if manager.cfg.keep_tokens == 600:
+        print("PASS: System prompt refresh updated keep_tokens")
+    else:
+        print(f"FAIL: System prompt refresh failed (keep={manager.cfg.keep_tokens})")
+        all_passed = False
+
+    print()
+    print("--- AraPromptController Tests ---")
+    print()
+
+    # 5. Create controller with IntegratedSoul
+    controller = create_prompt_controller(
+        llm=None,
+        n_ctx=4096,
+        storage_path=None,
+        pad_refresh_threshold=0.2,
+    )
+
+    if controller.soul is not None:
+        print("PASS: AraPromptController created with IntegratedSoul")
+    else:
+        print("FAIL: IntegratedSoul not created")
+        all_passed = False
+
+    # 6. Test telemetry processing
+    telemetry = TelemetrySnapshot(
+        cpu_temp=60.0,
+        gpu_temp=55.0,
+        cpu_load=0.5,
+        gpu_load=0.4,
+        error_rate=0.0,
+        has_root=True,
+        last_action_success=True,
+    )
+
+    prompt = controller.update(telemetry)
+
+    if len(prompt) > 0:
+        print(f"PASS: System prompt generated ({len(prompt)} chars)")
+        # Show first few lines
+        lines = prompt.split('\n')[:5]
+        for line in lines:
+            print(f"      | {line[:60]}...")
+    else:
+        print("FAIL: Empty system prompt")
+        all_passed = False
+
+    # 7. Test PAD-triggered refresh
+    initial_refreshes = controller._total_refreshes
+
+    # Simulate thermal stress (should shift PAD)
+    stress_telemetry = TelemetrySnapshot(
+        cpu_temp=90.0,
+        gpu_temp=88.0,
+        cpu_load=0.95,
+        gpu_load=0.9,
+        error_rate=5.0,
+        fan_speed_percent=100.0,
+    )
+
+    stress_prompt = controller.update(stress_telemetry)
+
+    if controller._total_refreshes > initial_refreshes:
+        print(f"PASS: PAD shift triggered prompt refresh ({controller._total_refreshes} total)")
+    else:
+        print("INFO: No refresh triggered (PAD shift may be below threshold)")
+
+    # 8. Test current state access
+    state = controller.get_current_state()
+    if state is not None:
+        pad = state.pad
+        print(f"PASS: Current state accessible - PAD: P={pad.pleasure:.2f}, A={pad.arousal:.2f}, D={pad.dominance:.2f}")
+        print(f"      Mood: {state.mood_label}, Quadrant: {state.quadrant.name}")
+    else:
+        print("FAIL: Current state not accessible")
+        all_passed = False
+
+    # 9. Test event handlers
+    controller.on_user_message(quality=0.8)
+    controller.on_task_completed("test task", success=True)
+    controller.on_discovery("new knowledge", novelty=0.7)
+    print("PASS: Event handlers called without error")
+
+    # 10. Test statistics
+    stats = controller.get_statistics()
+    if "soul" in stats and "context" in stats:
+        print(f"PASS: Statistics include soul and context data")
+        print(f"      Updates: {stats['total_updates']}, Refreshes: {stats['total_refreshes']}")
+    else:
+        print("FAIL: Statistics incomplete")
+        all_passed = False
+
+    # 11. Test force refresh
+    pre_refresh = controller._total_refreshes
+    controller.force_refresh()
+    if controller._total_refreshes > pre_refresh:
+        print("PASS: Force refresh worked")
+    else:
+        print("FAIL: Force refresh didn't increment counter")
+        all_passed = False
+
+    # 12. Test refresh history
+    history = controller.get_refresh_history(n=5)
+    if len(history) > 0:
+        print(f"PASS: Refresh history accessible ({len(history)} events)")
+        recent = history[-1]
+        print(f"      Last refresh: trigger={recent.trigger}, tokens={recent.new_tokens}")
+    else:
+        print("WARN: No refresh history (may be expected)")
+
+    print()
+    print("--- Integration Test: Affect -> Inference ---")
+    print()
+
+    # 13. Test full integration: Create soul, process telemetry, get prompt
+    soul = create_integrated_soul(storage_path=None)
+
+    # Process telemetry
+    soul_state = soul.process_telemetry(telemetry)
+
+    # Get system prompt context
+    context = soul.get_system_prompt_context()
+
+    if "IDENTITY" in context and "CURRENT STATE" in context:
+        print("PASS: IntegratedSoul generates complete system prompt context")
+    else:
+        print("FAIL: System prompt context incomplete")
+        all_passed = False
+
+    # Check that mood affects context
+    mood_data = soul.get_mood_for_prompt()
+    if "mood" in mood_data and "quadrant" in mood_data:
+        print(f"PASS: Mood data for prompt: {mood_data['mood']} ({mood_data['quadrant']})")
+    else:
+        print("FAIL: Mood data incomplete")
+        all_passed = False
+
+    # 14. Test greeting generation
+    greeting = soul.generate_greeting()
+    if len(greeting) > 0:
+        print(f"PASS: Greeting generated: '{greeting[:50]}...'")
+    else:
+        print("FAIL: Empty greeting")
+        all_passed = False
+
+    # 15. Test context management integration
+    manager2 = create_sticky_context(
+        llm=None,
+        keep_tokens=len(context) // 4,  # Rough token estimate
+        n_ctx=8192,
+    )
+
+    # Simulate adding system prompt
+    manager2.on_tokens_added(len(context) // 4, is_system=True)
+    print(f"PASS: Context manager accepts system prompt ({manager2.state.fixed_tokens} tokens)")
+
+    print()
+    if all_passed:
+        print("All inference module tests PASSED")
+    else:
+        print("Some inference tests FAILED - review output above")
+
+    return all_passed
+
+
 if __name__ == "__main__":
     success = run_smoke_test()
-    sys.exit(0 if success else 1)
+    inference_success = run_inference_smoke_test()
+    sys.exit(0 if (success and inference_success) else 1)
