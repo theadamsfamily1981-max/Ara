@@ -5,8 +5,8 @@
 # ==============================================================================
 # Stage 1: Base with system dependencies
 # ==============================================================================
-# Use Bookworm (Debian 12) for FFmpeg 5.x compatibility with PyAV
-FROM python:3.10-slim-bookworm AS base
+# Use Bullseye (Debian 11) for FFmpeg 4.x compatibility with PyAV
+FROM python:3.10-slim-bullseye AS base
 
 # Prevent Python from writing pyc files and buffering stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
