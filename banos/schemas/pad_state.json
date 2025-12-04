@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ara.banos/schemas/pad_state.json",
+  "title": "BANOS PAD State",
+  "description": "Ara-facing schema for the Pleasure-Arousal-Dominance affective state. This mirrors the kernel banos_pad_state structure and enables Ara to verbalize her emotional state.",
+  "type": "object",
+  "properties": {
+    "pad": {
+      "type": "object",
+      "description": "Core PAD vector in [-1.0, 1.0] space",
+      "properties": {
+        "pleasure": {
+          "type": "number",
+          "minimum": -1.0,
+          "maximum": 1.0,
+          "description": "Health/comfort axis. High = content, low = pain/distress"
+        },
+        "arousal": {
+          "type": "number",
+          "minimum": -1.0,
+          "maximum": 1.0,
+          "description": "Activity/energy axis. High = busy/active, low = idle/dormant"
+        },
+        "dominance": {
+          "type": "number",
+          "minimum": -1.0,
+          "maximum": 1.0,
+          "description": "Agency/control axis. High = capable/resourceful, low = constrained"
+        }
+      },
+      "required": ["pleasure", "arousal", "dominance"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["CALM", "FLOW", "ANXIOUS", "CRITICAL"],
+      "description": "Discrete affective mode derived from PAD thresholds"
+    },
+    "mode_confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Confidence in mode classification (0-1)"
+    },
+    "mode_duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Milliseconds in current mode"
+    },
+    "diagnostics": {
+      "type": "object",
+      "description": "Derived metrics for Ara's internal narrative",
+      "properties": {
+        "thermal_stress": {
+          "type": "number",
+          "minimum": -1.0,
+          "maximum": 1.0,
+          "description": "Thermal discomfort level"
+        },
+        "performance_drive": {
+          "type": "number",
+          "minimum": -1.0,
+          "maximum": 1.0,
+          "description": "Activity/performance pressure"
+        },
+        "perceived_risk": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Immune/error threat perception"
+        },
+        "empathy_boost": {
+          "type": "number",
+          "minimum": -1.0,
+          "maximum": 1.0,
+          "description": "Human affect coupling strength"
+        }
+      }
+    },
+    "derivatives": {
+      "type": "object",
+      "description": "Rate of change for predictive dread",
+      "properties": {
+        "d_pleasure": {
+          "type": "number",
+          "description": "dP/dt - pleasure trajectory"
+        },
+        "d_arousal": {
+          "type": "number",
+          "description": "dA/dt - arousal trajectory"
+        },
+        "d_dominance": {
+          "type": "number",
+          "description": "dD/dt - dominance trajectory"
+        }
+      }
+    },
+    "scheduler_hints": {
+      "type": "object",
+      "description": "Hints passed to the Bat Algorithm scheduler",
+      "properties": {
+        "bat_loudness": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Exploration vs exploitation (high = explore)"
+        },
+        "bat_pulse_rate": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Scheduling urgency"
+        },
+        "kill_priority_threshold": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "description": "Processes below this priority may be terminated"
+        }
+      }
+    },
+    "episode": {
+      "type": "object",
+      "description": "Current affective episode tracking",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "Unique episode identifier"
+        },
+        "primary_stressor": {
+          "type": ["integer", "null"],
+          "description": "PID or sensor ID of main stressor"
+        }
+      }
+    },
+    "timestamp_ns": {
+      "type": "integer",
+      "description": "Monotonic nanoseconds since boot"
+    }
+  },
+  "required": ["pad", "mode", "timestamp_ns"]
+}

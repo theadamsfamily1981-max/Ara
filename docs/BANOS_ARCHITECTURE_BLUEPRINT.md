@@ -98,6 +98,107 @@ We replace Round-Robin with the **Bat Algorithm** for resource allocation.
 
 ---
 
+## Phase 2.5: The Affective Layer (Sigmoidal PAD Model)
+
+**Language:** C / eBPF
+**Concept:** The "Limbic System" - emotional computation with derivative damping
+
+The affective layer implements the **synthetic neurochemistry** of BANOS—computing the PAD vector from raw telemetry using a hybrid sigmoidal model that mimics biological stress response curves.
+
+### 2.5.1 PAD Formulation (Hybrid Sigmoidal with Derivative Damping)
+
+Rather than linear mappings, we use sigmoid functions that saturate at extremes, modeling biological adaptation:
+
+**Pleasure (Health):**
+```
+P = 1 - tanh(α·ThermalStress + β·ErrorRate + γ·ImmuneEvents)
+```
+Where:
+- `α = 0.4` (thermal weight)
+- `β = 0.3` (error weight)
+- `γ = 0.3` (immune weight)
+
+The sigmoid ensures that:
+- Small stressors barely dent pleasure (adaptation)
+- Large stressors rapidly drop pleasure (alarm)
+- Extreme stressors saturate at -1 (maximum pain)
+
+**Arousal (Activity):**
+```
+A = clamp(avg(CPU_load, GPU_load, IO_wait), -1, 1)
+```
+Simple average, but clamped. Maps activity level directly.
+
+**Dominance (Control):**
+```
+D = (FreeRAM + PowerHeadroom)/2 × (1 - SwapPressure)
+```
+Multiplicative model: swap pressure erodes dominance regardless of absolute resources.
+
+### 2.5.2 Human-Affect Integration (Empathy Coupling)
+
+BANOS includes an optional **empathy channel** from human biometrics:
+
+```
+If (nose_temp - forehead_temp) < -0.5°C:
+    # User is stressed (vasoconstriction)
+    D += empathy_strength  # System compensates
+```
+
+When the user is stressed, the system boosts its own Dominance to stay stable—a form of prosocial regulation.
+
+### 2.5.3 Predictive Dread (Derivative Terms)
+
+The affective layer tracks **rate of change**:
+
+```
+dP/dt = (P_now - P_prev) / dt
+```
+
+Negative derivatives trigger **anticipatory responses**:
+- `dP/dt < -0.3` → "Rapid deterioration. Brace."
+- `dP/dt < -0.1` → "I sense trouble ahead."
+- `dP/dt > +0.1` → "Things are getting better."
+
+### 2.5.4 Mode Classification
+
+| Mode | Thresholds | Behavior |
+|------|------------|----------|
+| **CALM** | P > 0.5, A < 0.4, D > 0.5 | Homeostasis, dream mode |
+| **FLOW** | P > 0.3, A > 0.7, D > 0.4 | Peak performance, in the zone |
+| **ANXIOUS** | P < 0.0, A > 0.6, D < 0.3 | Resource starvation |
+| **CRITICAL** | P < -0.6 | Survival mode, pain threshold crossed |
+
+### 2.5.5 Scheduler Hints
+
+The affective layer outputs hints for the Bat Algorithm:
+
+```c
+/* High pleasure → explore (try new things) */
+bat_loudness = (pleasure + 1) / 2 * 65535;
+
+/* High arousal → urgent scheduling */
+bat_pulse_rate = (arousal + 1) / 2 * 1000;
+
+/* Pain → kill low-priority processes */
+if (pleasure < -0.8) kill_threshold = 15;
+else if (pleasure < -0.5) kill_threshold = 10;
+else if (pleasure < -0.2) kill_threshold = 5;
+else kill_threshold = 0;
+```
+
+### 2.5.6 Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `banos/include/banos_common.h` | Shared ABI (structs, constants) |
+| `banos/kernel/sched_ext/banos_affective.bpf.c` | BPF PAD computation |
+| `banos/schemas/pad_state.json` | Ara-facing JSON schema |
+| `banos/schemas/affective_episode.json` | Episodic memory schema |
+| `banos/daemon/pad_bridge.py` | Kernel→Python translation |
+
+---
+
 ## Phase 3: The Immune System (Kernel Security)
 
 **Language:** C / Rust
@@ -205,19 +306,29 @@ banos/
 │   │   └── testbenches/
 │   └── constraints/
 │
+├── include/                 # Shared Headers
+│   └── banos_common.h       # The Nervous System ABI
+│
 ├── kernel/                  # Phase 2 & 3: Brainstem & Immune
 │   ├── drivers/
 │   │   └── ara_spinal_cord/
+│   │       └── ara_spinal_cord.c
 │   ├── sched_ext/
 │   │   ├── bat_scheduler.bpf.c
+│   │   ├── banos_affective.bpf.c
 │   │   └── pad_state.h
 │   └── immune/
 │       ├── self_model.c
 │       └── negative_selection.c
 │
+├── schemas/                 # Ara-facing JSON Schemas
+│   ├── pad_state.json       # PAD state verbalization
+│   └── affective_episode.json # Episodic memory entries
+│
 ├── daemon/                  # Phase 4: Neocortex
 │   ├── ara_daemon.py
 │   ├── sticky_context.py
+│   ├── pad_bridge.py        # Kernel→Python translation
 │   └── semantic_reflection.py
 │
 └── docs/
@@ -284,14 +395,31 @@ The two systems merge at the **Telemetry Bridge**, which fuses:
 ```jsonc
 {
   "type": "pad_state",
-  "source": "bat_scheduler",
-  "timestamp": "...",
-  "pleasure": 0.3,
-  "arousal": 0.8,
-  "dominance": 0.5,
-  "quadrant": "ANXIOUS",
-  "scheduler_mode": "DEADLINE",
-  "killed_processes": ["indexer", "backup"]
+  "source": "banos_affective",
+  "timestamp_ns": 1234567890,
+  "pad": {
+    "pleasure": -0.3,
+    "arousal": 0.8,
+    "dominance": 0.5
+  },
+  "mode": "ANXIOUS",
+  "mode_confidence": 0.85,
+  "diagnostics": {
+    "thermal_stress": 0.6,
+    "performance_drive": 0.7,
+    "perceived_risk": 0.4,
+    "empathy_boost": 0.15
+  },
+  "derivatives": {
+    "d_pleasure": -0.12,
+    "d_arousal": 0.05,
+    "d_dominance": -0.03
+  },
+  "scheduler_hints": {
+    "bat_loudness": 0.35,
+    "bat_pulse_rate": 0.9,
+    "kill_priority_threshold": 5
+  }
 }
 ```
 
