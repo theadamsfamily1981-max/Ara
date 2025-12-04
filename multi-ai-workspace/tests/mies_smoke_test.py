@@ -5,27 +5,27 @@ Run this to sanity-check that MIES is making sensible decisions
 without needing the full avatar stack running.
 
 Usage:
-    python -m tests.mies_smoke_test
+    cd multi-ai-workspace && python tests/mies_smoke_test.py
 """
 
 import sys
 from pathlib import Path
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add src/integrations to path for imports (avoid pulling in other backends)
+sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "integrations"))
 
-from multi_ai_workspace.src.integrations.mies.context import (
+from mies.context import (
     ModalityContext,
     ForegroundAppType,
     ForegroundInfo,
     AudioContext,
     ActivityType,
 )
-from multi_ai_workspace.src.integrations.mies.modes import DEFAULT_MODES
-from multi_ai_workspace.src.integrations.mies.policy.heuristic_baseline import (
+from mies.modes import DEFAULT_MODES
+from mies.policy.heuristic_baseline import (
     HeuristicModalityPolicy,
 )
-from multi_ai_workspace.src.integrations.mies.policy.ebm_aepo_policy import (
+from mies.policy.ebm_aepo_policy import (
     ThermodynamicGovernor,
     ContentMeta,
 )
