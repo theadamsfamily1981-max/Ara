@@ -275,6 +275,81 @@ class ModalityContext:
 
         return features
 
+    def update_from_scavengers(
+        self,
+        focus_data: Optional[Dict[str, Any]] = None,
+        audio_data: Optional[Dict[str, Any]] = None,
+        biometrics_data: Optional[Dict[str, Any]] = None,
+        cognitive_state: Optional[Any] = None,
+    ):
+        """
+        Update context from scavenger sensor data.
+
+        This is a convenience method for updating the context in-place
+        from raw sensor outputs.
+
+        Args:
+            focus_data: Dict from GnomeFocusSensor.get_state()
+            audio_data: Dict from PipeWireAudioSensor.get_state()
+            biometrics_data: Dict from BiometricsSensor.get_state()
+            cognitive_state: Homeostatic/affective state from cognitive core
+        """
+        import time
+
+        # Update from focus sensor
+        if focus_data:
+            if hasattr(focus_data, 'app_type'):
+                self.foreground = focus_data
+            elif isinstance(focus_data, dict):
+                self.foreground = ForegroundInfo(
+                    app_type=focus_data.get('app_type', ForegroundAppType.UNKNOWN),
+                    wm_class=focus_data.get('wm_class', ''),
+                    title=focus_data.get('title', ''),
+                    rect=focus_data.get('geometry'),
+                    is_fullscreen=focus_data.get('is_fullscreen', False),
+                )
+
+        # Update from audio sensor
+        if audio_data:
+            if hasattr(audio_data, 'mic_in_use'):
+                self.audio = audio_data
+            elif isinstance(audio_data, dict):
+                self.audio = AudioContext(
+                    mic_in_use=audio_data.get('mic_in_use', False),
+                    speakers_in_use=audio_data.get('speakers_in_use', False),
+                    has_voice_call=audio_data.get('voice_call_active', False)
+                                   or audio_data.get('has_voice_call', False),
+                    music_playing=audio_data.get('music_playing', False),
+                )
+
+        # Update from biometrics sensor
+        if biometrics_data:
+            if hasattr(biometrics_data, 'blink_rate'):
+                self.biometrics = biometrics_data
+            elif isinstance(biometrics_data, dict):
+                self.biometrics = BiometricState(
+                    blink_rate=biometrics_data.get('blink_rate'),
+                    estimated_fatigue=biometrics_data.get('fatigue'),
+                    estimated_load=biometrics_data.get('cognitive_load'),
+                )
+
+        # Update from cognitive state
+        if cognitive_state:
+            if hasattr(cognitive_state, 'energy'):
+                self.ara_fatigue = 1.0 - cognitive_state.energy
+            if hasattr(cognitive_state, 'stress'):
+                self.ara_stress = cognitive_state.stress
+            if hasattr(cognitive_state, 'valence'):
+                self.valence = cognitive_state.valence
+            if hasattr(cognitive_state, 'arousal'):
+                self.arousal = cognitive_state.arousal
+
+        # Update timestamp
+        self.timestamp = time.time()
+
+        # Derive activity from updated sensors
+        self.update_derived_fields()
+
 
 # === Utility Functions ===
 
