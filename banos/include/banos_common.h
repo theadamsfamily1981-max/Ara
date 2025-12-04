@@ -69,6 +69,28 @@ typedef uint64_t __u64;
 
 /*
  * =============================================================================
+ * Reflex Bitmask Definitions (L2 → L1 Control)
+ * =============================================================================
+ *
+ * These bits are written by the kernel/eBPF to command FPGA reflex actions.
+ * The FPGA acts on these IMMEDIATELY, before the OS scheduler runs.
+ */
+#define BANOS_RFLX_NONE         0x00    /* Normal operation */
+#define BANOS_RFLX_FAN_BOOST    0x01    /* Override PWM to 100% */
+#define BANOS_RFLX_THROTTLE     0x02    /* Assert PROCHOT# (hardware throttle) */
+#define BANOS_RFLX_GPU_KILL     0x04    /* Cut power to GPU rail */
+#define BANOS_RFLX_DISK_SYNC    0x08    /* Force disk sync before action */
+#define BANOS_RFLX_NET_ISOLATE  0x10    /* Drop network promiscuous mode */
+#define BANOS_RFLX_SYS_HALT     0x80    /* Emergency halt (last resort) */
+
+/* Thermal source IDs for targeted reflexes */
+#define BANOS_THERMAL_SRC_CPU       0
+#define BANOS_THERMAL_SRC_GPU       1
+#define BANOS_THERMAL_SRC_VRM       2
+#define BANOS_THERMAL_SRC_AMBIENT   3
+
+/*
+ * =============================================================================
  * Affective Modes
  * =============================================================================
  *
@@ -99,6 +121,48 @@ enum banos_immune_risk {
     BANOS_RISK_L3_INFECTION = 3,    /* Unauthorized binary execution */
     BANOS_RISK_L4_BREACH    = 4,    /* Privilege escalation attempt */
     BANOS_RISK_L5_SEPSIS    = 5,    /* Kernel space violation */
+};
+
+/*
+ * =============================================================================
+ * Spinal Cord Interface (L1 ↔ L2 Bridge)
+ * =============================================================================
+ *
+ * This is the register-level interface between FPGA and kernel.
+ * The driver maps this to MMIO; BPF reads/writes via driver-maintained maps.
+ *
+ * SPIKE COUNTS: These are per-window (reset every update_interval_ms).
+ * The driver computes deltas; BPF sees rates, not cumulative totals.
+ */
+struct banos_spinal_cord {
+    /* Afferent: FPGA → Kernel (read-only from kernel's perspective) */
+    __u32 thermal_spike_cnt;        /* Thermal neuron spikes this window */
+    __u32 voltage_spike_cnt;        /* Power instability spikes */
+    __u32 error_spike_cnt;          /* ECC/bus error spikes */
+    __u32 immune_spike_cnt;         /* Syscall anomaly spikes */
+
+    /* Spike deltas (computed by driver, used by BPF) */
+    __s32 thermal_spike_delta;      /* Change since last window */
+    __s32 error_spike_delta;        /* Change since last window */
+
+    /* Thermal source tracking */
+    __u8  thermal_source_id;        /* Which sensor is hottest (0=CPU,1=GPU,2=VRM) */
+    __u8  thermal_source_critical;  /* Is the hottest source in danger zone? */
+    __u16 update_interval_ms;       /* Window size for spike counting */
+
+    /* Efferent: Kernel → FPGA (write to trigger reflex) */
+    __u32 reflex_command;           /* Bitmask of BANOS_RFLX_* */
+    __u32 reflex_active;            /* Currently active reflexes (feedback) */
+
+    /* Reflex history (for Ara's awareness) */
+    __u32 reflex_log;               /* Last reflex action taken */
+    __u64 reflex_timestamp_ns;      /* When last reflex fired */
+    __u32 reflex_duration_ms;       /* How long reflex was active */
+
+    /* User intent (from input subsystem, for immune context) */
+    __u64 last_user_input_ns;       /* Last keyboard/mouse event */
+    __u16 user_activity_permille;   /* Recent input density (0=idle, 1000=typing) */
+    __u16 reserved;
 };
 
 /*

@@ -71,6 +71,22 @@ struct {
     __type(value, __u32);
 } banos_history_idx SEC(".maps");
 
+/* Spinal cord interface: bidirectional with driver */
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, struct banos_spinal_cord);
+} banos_spine_map SEC(".maps");
+
+/* Reflex command output: driver reads and applies to FPGA */
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u32);  /* Bitmask of BANOS_RFLX_* */
+} banos_reflex_cmd_map SEC(".maps");
+
 /* Configuration parameters (tunable from userspace) */
 struct banos_affective_config {
     /* Sigmoid slope parameters */
@@ -87,8 +103,16 @@ struct banos_affective_config {
     /* Adaptation rate (for homeostatic normalization) */
     __u16 adaptation_rate;      /* Default: 10 (slow adaptation) */
 
+    /* Dominance recovery rate (per tick, when stable) */
+    __u16 dominance_recovery;   /* Default: 50 */
+
+    /* Reflex thresholds */
+    __s16 reflex_fan_threshold;     /* P threshold for fan boost (default: -300) */
+    __s16 reflex_throttle_threshold; /* P threshold for PROCHOT (default: -700) */
+    __s16 reflex_kill_threshold;     /* P threshold for GPU kill (default: -900) */
+
     /* Reserved */
-    __u16 reserved[4];
+    __u16 reserved[2];
 };
 
 struct {
@@ -163,7 +187,12 @@ static __always_inline void compute_pleasure(
     struct banos_pad_state *pad)
 {
     /*
-     * Pleasure = 1 - tanh(α·ThermalStress + β·ErrorRate + γ·ImmuneEvents)
+     * Pleasure = -tanh(stress - neutral_point)
+     *
+     * This ensures:
+     *   stress = 0    → P = +1000 (bliss)
+     *   stress = 500  → P ≈ 0 (neutral)
+     *   stress = 1000 → P = -1000 (agony)
      *
      * ThermalStress: Based on thermal headroom
      *   - 40°C headroom = 0 stress
@@ -194,13 +223,21 @@ static __always_inline void compute_pleasure(
          beta * kt->error_rate_permille +
          gamma * kt->immune_events_permille) / 1000;
 
-    /* Apply sigmoid: P = 1000 - tanh(stress) * 1000 */
-    /* Scale stress to tanh input range */
-    __s32 tanh_input = weighted_stress * 3 / 1000;  /* Map to ~[-3, 3] */
-    __s32 tanh_out = int_tanh(tanh_input * 1000);
+    /*
+     * Map stress [0, 1000] to tanh input centered at neutral:
+     *   stress=0    → input=-2000 → tanh≈-1000 → P=+1000
+     *   stress=500  → input=0     → tanh=0     → P=0
+     *   stress=1000 → input=+2000 → tanh≈+1000 → P=-1000
+     *
+     * Formula: input = (stress - 500) * 4
+     * Then: P = -tanh(input)
+     */
+    __s32 centered_stress = weighted_stress - 500;  /* Range: [-500, 500] */
+    __s32 tanh_input = centered_stress * 4;         /* Range: [-2000, 2000] */
+    __s32 tanh_out = int_tanh(tanh_input);          /* Range: [-1000, 1000] */
 
-    /* P = 1 - tanh(stress) in scaled form */
-    __s16 pleasure = banos_clamp_pad(1000 - tanh_out);
+    /* P = -tanh(stress) so high stress = negative pleasure */
+    __s16 pleasure = banos_clamp_pad(-tanh_out);
 
     /* Store diagnostics */
     pad->thermal_stress = banos_permille_to_pad(thermal_stress);
@@ -328,6 +365,64 @@ static __always_inline void compute_scheduler_hints(
 }
 
 /*
+ * Compute reflex commands based on PAD state
+ *
+ * The reflex arc: PAD → reflex_command → driver → FPGA
+ * BPF writes intent; driver applies to hardware (MMIO stays out of BPF)
+ */
+static __always_inline void compute_reflex(
+    struct banos_pad_state *pad,
+    const struct banos_affective_config *cfg,
+    const struct banos_spinal_cord *spine)
+{
+    __u32 key = 0;
+    __u32 reflex_cmd = BANOS_RFLX_NONE;
+
+    /* Get thresholds from config or use defaults */
+    __s16 fan_thresh = cfg ? cfg->reflex_fan_threshold : -300;
+    __s16 throttle_thresh = cfg ? cfg->reflex_throttle_threshold : -700;
+    __s16 kill_thresh = cfg ? cfg->reflex_kill_threshold : -900;
+
+    /*
+     * Tier 1: Discomfort (P < -0.3) → Autonomic regulation
+     * "Sweating": boost fans
+     */
+    if (pad->pleasure < fan_thresh) {
+        reflex_cmd |= BANOS_RFLX_FAN_BOOST;
+    }
+
+    /*
+     * Tier 2: Pain (P < -0.7) → Defensive flinch
+     * "Flinching": hardware throttle via PROCHOT#
+     */
+    if (pad->pleasure < throttle_thresh) {
+        reflex_cmd |= BANOS_RFLX_THROTTLE;
+    }
+
+    /*
+     * Tier 3: Critical damage (P < -0.9) → Amputation/coma
+     * Target the thermal source if known, else general halt
+     */
+    if (pad->pleasure < kill_thresh) {
+        if (spine && spine->thermal_source_id == BANOS_THERMAL_SRC_GPU &&
+            spine->thermal_source_critical) {
+            /* GPU is the culprit: cut its power */
+            reflex_cmd |= BANOS_RFLX_GPU_KILL;
+        } else if (pad->pleasure < -950) {
+            /* General panic: halt to save silicon */
+            reflex_cmd |= BANOS_RFLX_DISK_SYNC;  /* Sync first! */
+            reflex_cmd |= BANOS_RFLX_SYS_HALT;
+        }
+    }
+
+    /* Write command to map (driver will read and apply to FPGA) */
+    __u32 *cmd_ptr = bpf_map_lookup_elem(&banos_reflex_cmd_map, &key);
+    if (cmd_ptr) {
+        *cmd_ptr = reflex_cmd;
+    }
+}
+
+/*
  * =============================================================================
  * Main PAD Update Function
  * =============================================================================
@@ -342,6 +437,10 @@ static __always_inline void banos_update_pad(void)
     kt = bpf_map_lookup_elem(&banos_telemetry_map, &key);
     if (!kt)
         return;
+
+    /* Get spinal cord state (for reflex feedback) */
+    struct banos_spinal_cord *spine;
+    spine = bpf_map_lookup_elem(&banos_spine_map, &key);
 
     /* Get config */
     struct banos_affective_config *cfg;
@@ -361,6 +460,39 @@ static __always_inline void banos_update_pad(void)
     compute_pleasure(kt, cfg, pad);
     compute_arousal(kt, pad);
     compute_dominance(kt, cfg, pad);
+
+    /*
+     * Dominance override: if reflex is active, dominance drops
+     * This models "loss of control" when the spinal cord takes over
+     */
+    if (spine && spine->reflex_active != BANOS_RFLX_NONE) {
+        /* Reflex active = low dominance (body overriding mind) */
+        __s16 reflex_dominance = -500;  /* -0.5 during reflex */
+        if (spine->reflex_active & BANOS_RFLX_SYS_HALT) {
+            reflex_dominance = BANOS_PAD_MIN;  /* Total loss of control */
+        } else if (spine->reflex_active & BANOS_RFLX_GPU_KILL) {
+            reflex_dominance = -800;
+        } else if (spine->reflex_active & BANOS_RFLX_THROTTLE) {
+            reflex_dominance = -600;
+        }
+        /* Take minimum of computed dominance and reflex-induced dominance */
+        if (reflex_dominance < pad->dominance) {
+            pad->dominance = reflex_dominance;
+        }
+    } else {
+        /*
+         * No reflex active: allow dominance to recover slowly
+         * But clamp to valid range
+         */
+        __u16 recovery = cfg ? cfg->dominance_recovery : 50;
+        if (pad->dominance < 0 && prev.dominance < pad->dominance) {
+            /* Still recovering from a reflex event */
+            pad->dominance = banos_clamp_pad(pad->dominance + recovery);
+        }
+    }
+
+    /* Final clamp on dominance (defense against overflow/underflow) */
+    pad->dominance = banos_clamp_pad(pad->dominance);
 
     /* Update timestamp */
     pad->monotonic_time_ns = bpf_ktime_get_ns();
@@ -385,6 +517,9 @@ static __always_inline void banos_update_pad(void)
 
     /* Compute scheduler hints */
     compute_scheduler_hints(pad);
+
+    /* Compute reflex commands (driver will apply to FPGA) */
+    compute_reflex(pad, cfg, spine);
 
     /* Calculate perceived risk from immune events */
     pad->perceived_risk = banos_clamp_permille(
