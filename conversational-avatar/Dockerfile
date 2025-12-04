@@ -5,7 +5,7 @@
 # ==============================================================================
 # Stage 1: Base with system dependencies
 # ==============================================================================
-FROM python:3.10-slim as base
+FROM python:3.10-slim AS base
 
 # Prevent Python from writing pyc files and buffering stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -50,7 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ==============================================================================
 # Stage 2: Builder with Python dependencies
 # ==============================================================================
-FROM base as builder
+FROM base AS builder
 
 WORKDIR /build
 
@@ -75,7 +75,7 @@ RUN pip install --no-cache-dir -r requirements-multimodal.txt || true
 # ==============================================================================
 # Stage 3: Production image
 # ==============================================================================
-FROM base as production
+FROM base AS production
 
 WORKDIR /app
 
@@ -112,7 +112,7 @@ CMD ["python", "ara_multimodal.py"]
 # ==============================================================================
 # Stage 4: GPU-enabled image (CUDA 12.1)
 # ==============================================================================
-FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04 as gpu
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04 AS gpu
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -181,7 +181,7 @@ CMD ["python", "ara_multimodal.py"]
 # ==============================================================================
 # Stage 5: Development image
 # ==============================================================================
-FROM production as development
+FROM production AS development
 
 USER root
 
