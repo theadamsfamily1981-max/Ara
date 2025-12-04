@@ -73,9 +73,11 @@ RUN pip install --no-cache-dir --only-binary=av "av>=12.0.0" || \
 # Install Coqui TTS (requires Python 3.10)
 RUN pip install --no-cache-dir TTS>=0.22.0
 
-# Install remaining dependencies (faster-whisper will use the av we already installed)
-RUN pip install --no-cache-dir -r requirements-minimal.txt
-RUN pip install --no-cache-dir -r requirements-multimodal.txt || true
+# Install remaining dependencies
+# CRITICAL: Use --only-binary=av to prevent pip from rebuilding av from source
+# even when faster-whisper triggers a dependency resolution
+RUN pip install --no-cache-dir --only-binary=av -r requirements-minimal.txt
+RUN pip install --no-cache-dir --only-binary=av -r requirements-multimodal.txt || true
 
 # ==============================================================================
 # Stage 3: Production image
