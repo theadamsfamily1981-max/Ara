@@ -7,15 +7,17 @@ This backend integrates:
 - Voice macro processing
 - Multi-AI delegation
 - TFAN Cognitive Architecture (optional)
+- MIES Modality Intelligence & Embodiment System
 
 Ara is your local AI co-pilot that runs offline and delegates to online AIs when needed.
 
-Cognitive Architecture (Full TFAN Biomimetic Pipeline):
+Cognitive Architecture (Full TFAN Biomimetic Pipeline + MIES):
     Phase 1: SENSATION - SensoryCortex normalizes audio/video/text
     Phase 2: PERCEPTION - Thalamus filters noise via TLS
     Phase 3: PREDICTION - PredictiveController anticipates states
     Phase 4: AFFECT - HomeostaticCore + AppraisalEngine for emotional regulation
     Phase 5: IDENTITY - NIBManager handles persona selection
+    Phase 5.5: MODALITY INTELLIGENCE - MIES decides HOW to present response
     Phase 6: SELF-PRESERVATION - Conscience checks stability
     Phase 7: EXECUTIVE - CognitiveSynthesizer + AEPO for action gating
     Phase 8: COGNITION - Model inference with sparse attention
@@ -61,6 +63,47 @@ AEPO = None
 # Level 9 components
 ThermodynamicMonitor = None
 EpisodicMemory = None
+
+# MIES components (lazy loaded)
+MIES_AVAILABLE = False
+ModalityContext = None
+ModalityDecision = None
+HeuristicModalityPolicy = None
+ThermodynamicGovernor = None
+GnomeFocusSensor = None
+PipeWireAudioSensor = None
+
+
+def _init_mies_components():
+    """Lazy initialization of MIES (Modality Intelligence & Embodiment System)."""
+    global MIES_AVAILABLE, ModalityContext, ModalityDecision
+    global HeuristicModalityPolicy, ThermodynamicGovernor
+    global GnomeFocusSensor, PipeWireAudioSensor
+
+    if ModalityContext is not None:
+        return MIES_AVAILABLE
+
+    try:
+        from .mies import ModalityContext as MCtx, ModalityDecision as MDec
+        from .mies.policy import HeuristicModalityPolicy as HeurPolicy
+        from .mies.policy import ThermodynamicGovernor as ThermoGov
+        from .mies.sensors import GnomeFocusSensor as GFocus
+        from .mies.sensors import PipeWireAudioSensor as PWAudio
+
+        ModalityContext = MCtx
+        ModalityDecision = MDec
+        HeuristicModalityPolicy = HeurPolicy
+        ThermodynamicGovernor = ThermoGov
+        GnomeFocusSensor = GFocus
+        PipeWireAudioSensor = PWAudio
+
+        MIES_AVAILABLE = True
+        logger.info("MIES components loaded successfully")
+    except ImportError as e:
+        logger.warning(f"MIES components not available: {e}")
+        MIES_AVAILABLE = False
+
+    return MIES_AVAILABLE
 
 
 def _init_cognitive_components():
@@ -707,17 +750,136 @@ class AraAvatarBackend(AIBackend):
                 embedding_dim=d_model,
             )
 
+            # MIES: Modality Intelligence & Embodiment System
+            self._init_mies()
+
             # Track current metrics and state
             self.current_metrics = None
             self._last_prediction = None
+            self._last_modality_mode = None
+            self._modality_policy_state = None
             self._cognitive_initialized = True
 
-            logger.info(f"Full cognitive architecture initialized with Level 9 (modalities={modalities})")
+            logger.info(f"Full cognitive architecture initialized with Level 9 + MIES (modalities={modalities})")
             return True
         except Exception as e:
             logger.error(f"Failed to initialize cognitive core: {e}")
             self._cognitive_initialized = False
             return False
+
+    def _init_mies(self):
+        """Initialize MIES (Modality Intelligence & Embodiment System)."""
+        if not _init_mies_components():
+            logger.warning("MIES components not available, using fallback")
+            self.mies_enabled = False
+            self.modality_policy = None
+            self.focus_sensor = None
+            self.audio_sensor = None
+            return
+
+        try:
+            # Initialize modality policy (heuristic baseline)
+            self.modality_policy = HeuristicModalityPolicy()
+
+            # Initialize sensors (start in background)
+            self.focus_sensor = GnomeFocusSensor()
+            self.audio_sensor = PipeWireAudioSensor()
+
+            # Start sensors
+            self.focus_sensor.start()
+            self.audio_sensor.start()
+
+            self.mies_enabled = True
+            logger.info("MIES initialized with heuristic policy and sensors")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize MIES: {e}")
+            self.mies_enabled = False
+            self.modality_policy = None
+
+    def _build_modality_context(
+        self,
+        homeostatic_state,
+        appraisal,
+        persona,
+        thermo_stats=None,
+        content_urgency: float = 0.0,
+        is_user_requested: bool = False,
+    ):
+        """Build ModalityContext from cognitive state."""
+        if not MIES_AVAILABLE or not self.mies_enabled:
+            return None
+
+        from .mies.context import (
+            ModalityContext as MCtx,
+            ForegroundInfo,
+            AudioContext,
+            create_context_from_sensors,
+        )
+
+        # Get sensor state
+        foreground = self.focus_sensor.get_state() if self.focus_sensor else None
+        audio = self.audio_sensor.get_state() if self.audio_sensor else None
+        idle_seconds = self.focus_sensor.get_idle_seconds() if self.focus_sensor else 0.0
+
+        # Create base context from sensors
+        ctx = create_context_from_sensors(
+            foreground=foreground,
+            audio=audio,
+            idle_seconds=idle_seconds,
+        )
+
+        # Inject affective state
+        if homeostatic_state:
+            ctx.ara_fatigue = 1.0 - homeostatic_state.energy
+            ctx.ara_stress = homeostatic_state.stress
+            ctx.user_cognitive_load = 0.5  # Could be estimated from biometrics
+
+        if appraisal:
+            ctx.valence = appraisal.valence
+            ctx.arousal = appraisal.arousal
+
+        # Inject thermodynamic state
+        if thermo_stats:
+            ctx.entropy_production = thermo_stats.Pi_q
+            ctx.thermal_state = thermo_stats.thermal_state.name
+        if hasattr(self, 'thermo_monitor') and self.thermo_monitor:
+            ctx.energy_remaining = self.thermo_monitor.energy_budget.percentage
+
+        # Inject identity
+        if persona:
+            ctx.persona_name = persona.name if hasattr(persona, 'name') else str(persona)
+
+        # Inject content metadata
+        ctx.info_urgency = content_urgency
+        ctx.is_user_requested = is_user_requested
+
+        # Interaction history
+        if self._last_modality_mode:
+            ctx.last_mode_name = self._last_modality_mode.name
+            ctx.seconds_since_last_utterance = 0.0  # Just responded
+
+        ctx.update_derived_fields()
+        return ctx
+
+    def _apply_modality_decision(self, decision):
+        """Apply a modality decision to the output system."""
+        if decision is None:
+            return
+
+        mode = decision.mode
+        logger.debug(
+            f"[MIES] Applying modality: {mode.name} "
+            f"(presence={mode.presence_intensity:.2f}, "
+            f"intrusiveness={mode.intrusiveness:.2f})"
+        )
+
+        # Store for history
+        self._last_modality_mode = mode
+
+        # The actual routing to text/audio/avatar would happen here
+        # For now, we just log the decision and store metadata
+        self._current_modality_decision = decision
 
     async def cognitive_cycle(
         self,
@@ -868,6 +1030,34 @@ class AraAvatarBackend(AIBackend):
         personality_prompt = self.nib_manager.get_personality_prompt()
 
         phase_times["identity_ms"] = (time.perf_counter() - phase_start) * 1000
+
+        # ========================================
+        # Phase 5.5: MODALITY INTELLIGENCE (MIES)
+        # ========================================
+        phase_start = time.perf_counter()
+
+        modality_decision = None
+        if hasattr(self, 'mies_enabled') and self.mies_enabled and self.modality_policy:
+            # Build modality context from cognitive state
+            modality_ctx = self._build_modality_context(
+                homeostatic_state=homeostatic_state,
+                appraisal=appraisal,
+                persona=active_nib,
+                content_urgency=0.5,  # Medium urgency for user request
+                is_user_requested=True,
+            )
+
+            if modality_ctx:
+                # Select modality
+                modality_decision = self.modality_policy.select_modality(
+                    ctx=modality_ctx,
+                    prev_mode=self._last_modality_mode,
+                )
+
+                # Apply the decision
+                self._apply_modality_decision(modality_decision)
+
+        phase_times["modality_ms"] = (time.perf_counter() - phase_start) * 1000
 
         # ========================================
         # Phase 6: SELF-PRESERVATION (Conscience)
@@ -1138,6 +1328,14 @@ class AraAvatarBackend(AIBackend):
                 "episode_id": episode_id,
                 "total_episodes": self.episodic_memory.total_episodes if self.episodic_memory else 0,
             },
+            "modality": {
+                "mode": modality_decision.mode.name if modality_decision else "text_inline",
+                "channel": modality_decision.mode.channel.name if modality_decision else "TEXT_INLINE",
+                "presence": modality_decision.mode.presence_intensity if modality_decision else 0.3,
+                "intrusiveness": modality_decision.mode.intrusiveness if modality_decision else 0.2,
+                "rationale": modality_decision.rationale if modality_decision else "",
+                "mies_enabled": getattr(self, 'mies_enabled', False),
+            },
             "refused": False,
         }
 
@@ -1243,13 +1441,41 @@ class AraAvatarBackend(AIBackend):
                 "working_memory_items": len(self.cognitive_synthesizer.working_memory.get_state()),
             }
 
+        # MIES status
+        if hasattr(self, 'mies_enabled'):
+            mies_status = {
+                "enabled": self.mies_enabled,
+                "policy_type": "heuristic" if self.modality_policy else "none",
+            }
+            if self._last_modality_mode:
+                mies_status["last_mode"] = self._last_modality_mode.name
+                mies_status["last_channel"] = self._last_modality_mode.channel.name
+            if hasattr(self, 'focus_sensor') and self.focus_sensor:
+                fg = self.focus_sensor.get_state()
+                mies_status["foreground_app"] = fg.app_type.name
+            if hasattr(self, 'audio_sensor') and self.audio_sensor:
+                audio = self.audio_sensor.get_state()
+                mies_status["audio_context"] = {
+                    "mic_in_use": audio.mic_in_use,
+                    "speakers_in_use": audio.speakers_in_use,
+                    "voice_call": audio.has_voice_call,
+                }
+            status["mies"] = mies_status
+
         return status
 
     def cleanup(self):
-        """Cleanup resources (thread pool)."""
+        """Cleanup resources (thread pool, sensors)."""
         if hasattr(self, '_executor'):
             self._executor.shutdown(wait=False)
             logger.info("Ara Avatar Backend thread pool shut down")
+
+        # Stop MIES sensors
+        if hasattr(self, 'focus_sensor') and self.focus_sensor:
+            self.focus_sensor.stop()
+        if hasattr(self, 'audio_sensor') and self.audio_sensor:
+            self.audio_sensor.stop()
+        logger.info("MIES sensors stopped")
 
     def __del__(self):
         """Destructor to ensure cleanup."""
