@@ -101,6 +101,14 @@ from .integrated_soul import (
     create_integrated_soul,
 )
 
+# Persistence
+from .persistence import (
+    PersistenceManager,
+    StoredEpisode,
+    StoredGoal,
+    create_persistence_manager,
+)
+
 
 __all__ = [
     # PAD Engine
@@ -145,4 +153,9 @@ __all__ = [
     "IntegratedSoul",
     "SoulState",
     "create_integrated_soul",
+    # Persistence
+    "PersistenceManager",
+    "StoredEpisode",
+    "StoredGoal",
+    "create_persistence_manager",
 ]
