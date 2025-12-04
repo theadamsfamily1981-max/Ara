@@ -5,7 +5,8 @@
 # ==============================================================================
 # Stage 1: Base with system dependencies
 # ==============================================================================
-FROM python:3.10-slim AS base
+# Use Bookworm (Debian 12) for FFmpeg 5.x compatibility with PyAV
+FROM python:3.10-slim-bookworm AS base
 
 # Prevent Python from writing pyc files and buffering stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -65,10 +66,8 @@ RUN pip install --no-cache-dir \
     torchaudio==2.1.0 \
     --index-url https://download.pytorch.org/whl/cpu
 
-# Install av FIRST with pre-built wheel (avoid source build issues with FFmpeg 7.x)
-RUN pip install --no-cache-dir --only-binary=av "av>=12.3.0" || \
-    pip install --no-cache-dir --only-binary=:all: "av>=12.0.0" || \
-    echo "Warning: Could not install av binary wheel, TTS may have limited functionality"
+# Install av (Bookworm has FFmpeg 5.x which is compatible with av 10.x+)
+RUN pip install --no-cache-dir "av>=10.0.0"
 
 # Install Coqui TTS (requires Python 3.10)
 RUN pip install --no-cache-dir TTS>=0.22.0
