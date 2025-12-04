@@ -1,39 +1,39 @@
 # Ara Audio Pipeline - Minimal Docker Requirements
-# This file contains only the dependencies needed for text chat and audio
+# Pinned versions for fast, reliable dependency resolution
 
 # Core
-pyyaml>=6.0
-pydantic>=2.0
-pydantic-settings>=2.0
-loguru>=0.7
-numpy>=1.24
-scipy>=1.11
+pyyaml==6.0.1
+pydantic==2.5.3
+pydantic-settings==2.1.0
+loguru==0.7.2
+numpy==1.26.4
+scipy==1.11.4
 
 # Audio I/O
-sounddevice>=0.4
-soundfile>=0.12
+sounddevice==0.4.6
+soundfile==0.12.1
 
 # Audio Processing
-librosa>=0.10
-webrtcvad>=2.0.10
+librosa==0.10.1
+webrtcvad==2.0.10
 
-# ASR (Speech-to-Text)
-openai-whisper>=20231117
+# ASR (Speech-to-Text) - Note: openai-whisper conflicts with TTS, using faster-whisper instead
+faster-whisper==1.0.1
 
-# TTS (Text-to-Speech)
-TTS>=0.22
+# TTS is installed separately in Dockerfile (already installed)
+# TTS==0.22.0
 
 # LLM
-ollama>=0.1
-openai>=1.0
-transformers>=4.37
-accelerate>=0.27
+ollama==0.3.3
+openai==1.12.0
+transformers==4.37.2
+accelerate==0.27.2
 
 # Web API (optional)
-fastapi>=0.109
-uvicorn>=0.27
+fastapi==0.109.2
+uvicorn==0.27.1
 
 # Utils
-requests>=2.31
-tqdm>=4.66
-aiofiles>=23.0
+requests==2.31.0
+tqdm==4.66.1
+aiofiles==23.2.1
