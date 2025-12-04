@@ -7,12 +7,19 @@ MIES decides HOW Ara should present herself based on:
 - Audio context (meeting, music, silence)
 - User's cognitive/emotional state
 - Ara's internal thermodynamic state
+- Hardware physiology (from kernel bridge)
 - Urgency of information to deliver
 
 Philosophy: "Goddess in a Scrapyard"
 - Scavenge OS context via DBus, PipeWire, and optional biometrics
+- Read hardware state from kernel semantic AI engine
 - Use thermodynamic/free-energy based policy for mode selection
 - Present through diegetic overlays that feel native to the desktop
+
+Architecture (Nervous System Mapping):
+- Kernel (snn_ai_engine.c) = Autonomic nervous system (reflexes)
+- Unified SNN framework = Somatic system (musculature)
+- MIES = Cortex + Social brain (conscious presence decisions)
 
 Modes range from:
 - SILENT (no output)
@@ -27,6 +34,8 @@ from .context import (
     ModalityContext,
     ForegroundAppType,
     ActivityType,
+    SomaticState,
+    SystemPhysiology,
 )
 from .modes import (
     ModalityChannel,
@@ -34,15 +43,64 @@ from .modes import (
     ModalityDecision,
     DEFAULT_MODES,
 )
+from .kernel_bridge import (
+    KernelBridge,
+    KernelPhysiology,
+    PADState,
+    PolicyMode,
+    create_kernel_bridge,
+)
+from .autonomy_policy import (
+    AutonomyPolicy,
+    AutonomyGuard,
+    AutonomyBounds,
+    ActionType,
+    create_autonomy_policy,
+)
+from .inference import (
+    StickyContextManager,
+    StickyContextConfig,
+    ContextState,
+    EvictionStrategy,
+    create_sticky_context,
+    AraPromptController,
+    PromptControllerConfig,
+    create_prompt_controller,
+    LLAMA_CPP_AVAILABLE,
+)
 
 __all__ = [
     # Context
     "ModalityContext",
     "ForegroundAppType",
     "ActivityType",
+    "SomaticState",
+    "SystemPhysiology",
     # Modes
     "ModalityChannel",
     "ModalityMode",
     "ModalityDecision",
     "DEFAULT_MODES",
+    # Kernel Bridge
+    "KernelBridge",
+    "KernelPhysiology",
+    "PADState",
+    "PolicyMode",
+    "create_kernel_bridge",
+    # Autonomy
+    "AutonomyPolicy",
+    "AutonomyGuard",
+    "AutonomyBounds",
+    "ActionType",
+    "create_autonomy_policy",
+    # Inference / LLM Integration
+    "StickyContextManager",
+    "StickyContextConfig",
+    "ContextState",
+    "EvictionStrategy",
+    "create_sticky_context",
+    "AraPromptController",
+    "PromptControllerConfig",
+    "create_prompt_controller",
+    "LLAMA_CPP_AVAILABLE",
 ]

@@ -775,6 +775,8 @@ class AraAvatarBackend(AIBackend):
             self.modality_policy = None
             self.focus_sensor = None
             self.audio_sensor = None
+            self.kernel_bridge = None
+            self.autonomy_policy = None
             return
 
         try:
@@ -785,12 +787,35 @@ class AraAvatarBackend(AIBackend):
             self.focus_sensor = GnomeFocusSensor()
             self.audio_sensor = PipeWireAudioSensor()
 
+            # Initialize kernel bridge (brainstem → cortex)
+            try:
+                from .mies.kernel_bridge import create_kernel_bridge
+                self.kernel_bridge = create_kernel_bridge(
+                    fallback=True,  # Use /proc if device unavailable
+                    simulate=False,  # Don't simulate in production
+                )
+                logger.info("Kernel bridge initialized")
+            except Exception as e:
+                logger.warning(f"Kernel bridge not available: {e}")
+                self.kernel_bridge = None
+
+            # Initialize autonomy policy (the constitution)
+            try:
+                from .mies.autonomy_policy import create_autonomy_policy, AutonomyGuard
+                self.autonomy_policy = create_autonomy_policy()
+                self.autonomy_guard = AutonomyGuard(self.autonomy_policy)
+                logger.info("Autonomy policy initialized")
+            except Exception as e:
+                logger.warning(f"Autonomy policy not available: {e}")
+                self.autonomy_policy = None
+                self.autonomy_guard = None
+
             # Start sensors
             self.focus_sensor.start()
             self.audio_sensor.start()
 
             self.mies_enabled = True
-            logger.info("MIES initialized with heuristic policy and sensors")
+            logger.info("MIES initialized with heuristic policy, sensors, kernel bridge, and autonomy")
 
         except Exception as e:
             logger.error(f"Failed to initialize MIES: {e}")
@@ -806,7 +831,15 @@ class AraAvatarBackend(AIBackend):
         content_urgency: float = 0.0,
         is_user_requested: bool = False,
     ):
-        """Build ModalityContext from cognitive state."""
+        """Build ModalityContext from cognitive state.
+
+        Fuses:
+        - OS context (foreground app, audio state)
+        - Hardware physiology (from kernel bridge)
+        - Affective state (homeostatic + appraisal)
+        - Thermodynamic state
+        - Identity/persona
+        """
         if not MIES_AVAILABLE or not self.mies_enabled:
             return None
 
@@ -822,6 +855,11 @@ class AraAvatarBackend(AIBackend):
         audio = self.audio_sensor.get_state() if self.audio_sensor else None
         idle_seconds = self.focus_sensor.get_idle_seconds() if self.focus_sensor else 0.0
 
+        # Get kernel physiology (brainstem → cortex)
+        kernel_phys = None
+        if hasattr(self, 'kernel_bridge') and self.kernel_bridge:
+            kernel_phys = self.kernel_bridge.read_physiology()
+
         # Create base context from sensors
         ctx = create_context_from_sensors(
             foreground=foreground,
@@ -829,10 +867,18 @@ class AraAvatarBackend(AIBackend):
             idle_seconds=idle_seconds,
         )
 
-        # Inject affective state
+        # Update from scavengers including kernel physiology
+        ctx.update_from_scavengers(
+            focus_data=foreground,
+            audio_data=audio,
+            cognitive_state=homeostatic_state,
+            kernel_physiology=kernel_phys,
+        )
+
+        # Inject affective state (may be modified by kernel physiology)
         if homeostatic_state:
-            ctx.ara_fatigue = 1.0 - homeostatic_state.energy
-            ctx.ara_stress = homeostatic_state.stress
+            ctx.ara_fatigue = max(ctx.ara_fatigue, 1.0 - homeostatic_state.energy)
+            ctx.ara_stress = max(ctx.ara_stress, homeostatic_state.stress)
             ctx.user_cognitive_load = 0.5  # Could be estimated from biometrics
 
         if appraisal:

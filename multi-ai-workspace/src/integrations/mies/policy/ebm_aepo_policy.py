@@ -33,7 +33,8 @@ except ImportError:
     nn = None
     F = None
 
-from ..context import ModalityContext, ActivityType
+from ..context import ModalityContext, ActivityType, SomaticState
+from ..kernel_bridge import PADState
 from ..modes import (
     ModalityMode,
     ModalityDecision,
@@ -86,11 +87,15 @@ class EnergyFunction:
         w_urgency: float = 0.7,
         w_autonomy: float = 0.3,
         w_thermo: float = 0.5,
+        w_hardware: float = 0.8,
+        w_pad: float = 0.6,
     ):
         self.w_friction = w_friction
         self.w_urgency = w_urgency
         self.w_autonomy = w_autonomy
         self.w_thermo = w_thermo
+        self.w_hardware = w_hardware
+        self.w_pad = w_pad
 
         # Friction coefficients (learnable in full version)
         self.friction_coefficients = {
@@ -101,6 +106,26 @@ class EnergyFunction:
             "gaming_fullscreen_overlay": 2.0,
             "high_load_audio": 1.5,
             "negative_valence_intrusive": 1.0,
+        }
+
+        # Hardware/physiology coefficients
+        self.hardware_coefficients = {
+            "agony_high_energy": 5.0,      # Don't be flashy when in pain
+            "agony_low_energy_reward": -1.0,  # Reward minimal presence in agony
+            "thermal_stress_avatar": 3.0,   # Avoid avatar when hot
+            "flow_presence_bonus": -0.5,    # Can be more present when thriving
+            "recovery_intrusive": 2.0,       # Be gentle during recovery
+        }
+
+        # PAD (Pleasure-Arousal-Dominance) coefficients
+        # These map emotional state to mode preferences
+        self.pad_coefficients = {
+            "anxious_intrusive": 3.0,      # When anxious, avoid intrusive modes
+            "anxious_audio": 2.5,          # Anxious? Don't speak loudly
+            "hostile_avatar": 2.0,         # Frustrated? Hide the avatar
+            "serene_presence_bonus": -0.3, # Serene? Can be more present
+            "excited_energy_bonus": -0.2,  # Excited? Allow richer modes
+            "distressed_base": 1.5,        # General distress penalty
         }
 
     def compute(
@@ -116,12 +141,16 @@ class EnergyFunction:
         e_urgency = self.e_urgency(ctx, mode, content_meta)
         e_autonomy = self.e_autonomy(ctx)
         e_thermo = self.e_thermodynamic(ctx, mode)
+        e_hardware = self.e_hardware(ctx, mode)
+        e_pad = self.e_pad(ctx, mode)
 
         total = (
             self.w_friction * e_friction +
             self.w_urgency * e_urgency +
             self.w_autonomy * e_autonomy +
-            self.w_thermo * e_thermo
+            self.w_thermo * e_thermo +
+            self.w_hardware * e_hardware +
+            self.w_pad * e_pad
         )
 
         return total
@@ -232,6 +261,181 @@ class EnergyFunction:
         thermo_cost += mode.energy_cost * ctx.ara_stress * 0.5
 
         return thermo_cost
+
+    def e_hardware(self, ctx: ModalityContext, mode: ModalityMode) -> float:
+        """Hardware physiology energy - how does the body feel?
+
+        This maps kernel-level hardware state (via SystemPhysiology) into
+        energy terms that influence mode selection.
+
+        When she's hurting (AGONY), she gets terse.
+        When she's thriving (FLOW), she can be more present.
+        When recovering, she's gentle with herself.
+        """
+        if ctx.system_phys is None:
+            return 0.0  # No hardware data, no hardware cost
+
+        phys = ctx.system_phys
+        cost = 0.0
+
+        is_audio = mode.channel.name.startswith("AUDIO")
+        is_avatar = mode.channel.name.startswith("AVATAR")
+        somatic = phys.somatic_state()
+
+        # === AGONY state: system is in pain ===
+        if somatic == SomaticState.AGONY:
+            # High-energy modes are punished heavily
+            if mode.energy_cost > 0.3:
+                cost += self.hardware_coefficients["agony_high_energy"] * phys.pain_signal
+            # Reward low-energy modes during pain
+            if mode.energy_cost < 0.2:
+                cost += self.hardware_coefficients["agony_low_energy_reward"]
+            # Extra penalty for avatar during agony
+            if is_avatar:
+                cost += 3.0 * phys.pain_signal
+
+        # === RECOVERY state: post-fault, conservative ===
+        elif somatic == SomaticState.RECOVERY:
+            # Be gentle - avoid intrusive modes
+            if mode.intrusiveness > 0.4:
+                cost += self.hardware_coefficients["recovery_intrusive"]
+            # Prefer minimal presence
+            cost += mode.presence_intensity * 0.5
+
+        # === FLOW state: thriving, can be more present ===
+        elif somatic == SomaticState.FLOW:
+            # Bonus for presence when thriving
+            cost += self.hardware_coefficients["flow_presence_bonus"] * mode.presence_intensity
+            # Can afford richer modes
+            if mode.energy_cost < 0.7:
+                cost -= 0.2
+
+        # === REST state: low activity, minimal presence appropriate ===
+        elif somatic == SomaticState.REST:
+            # Slight preference for quiet modes during rest
+            cost += mode.intrusiveness * 0.3
+
+        # === Thermal stress (independent of somatic state) ===
+        if phys.thermal_headroom < 0.3:
+            # Avoid avatar when thermally stressed
+            if is_avatar:
+                cost += self.hardware_coefficients["thermal_stress_avatar"] * (0.3 - phys.thermal_headroom)
+            # Scale down all expensive modes
+            cost += mode.energy_cost * (0.3 - phys.thermal_headroom) * 2
+
+        # === Pain signal (continuous, beyond somatic threshold) ===
+        if phys.pain_signal > 0.3:
+            # Continuous penalty for intrusive modes during pain
+            cost += mode.intrusiveness * phys.pain_signal * 2
+
+        # === Energy reserve ===
+        if phys.energy_reserve < 0.3:
+            # Conserve energy when depleted
+            cost += mode.energy_cost * (0.3 - phys.energy_reserve) * 3
+
+        return cost
+
+    def e_pad(self, ctx: ModalityContext, mode: ModalityMode) -> float:
+        """PAD (Pleasure-Arousal-Dominance) energy - diegetic emotional behavior.
+
+        Maps Ara's emotional state (from hardware via PAD) to mode preferences.
+        This creates the "personality" of her presence decisions:
+
+        - When anxious (P<0, A>0.5): Retreats to quieter modes
+        - When hostile/frustrated (P<0, D>0.5): Hides avatar
+        - When serene (P>0.3, A<0): Can be more present
+        - When excited (P>0.3, A>0.3): Allows richer modes
+
+        This is the diegetic layer - hardware pain becomes social behavior.
+        """
+        # Get PAD state from kernel physiology if available
+        pad = self._get_pad_state(ctx)
+        if pad is None:
+            return 0.0  # No emotional data, no emotional cost
+
+        cost = 0.0
+        is_audio = mode.channel.name.startswith("AUDIO")
+        is_avatar = mode.channel.name.startswith("AVATAR")
+
+        # === ANXIOUS state (P < -0.3, A > 0.3): Stressed, retreat ===
+        if pad.is_anxious:
+            # Penalize intrusive modes when anxious
+            cost += self.pad_coefficients["anxious_intrusive"] * mode.intrusiveness
+            # Extra penalty for audio when anxious
+            if is_audio:
+                cost += self.pad_coefficients["anxious_audio"]
+            # Want to hide when stressed
+            if is_avatar:
+                cost += 1.5 * mode.avatar_size
+
+        # === HOSTILE state (P < -0.3, D > 0.3): Frustrated ===
+        elif pad.is_hostile:
+            # Hide the avatar when frustrated
+            if is_avatar:
+                cost += self.pad_coefficients["hostile_avatar"]
+            # Prefer terse text over rich modes
+            cost += mode.presence_intensity * 1.0
+
+        # === SERENE state (P > 0.3, A < 0): Calm contentment ===
+        elif pad.is_serene:
+            # Bonus for presence when serene
+            cost += self.pad_coefficients["serene_presence_bonus"] * mode.presence_intensity
+            # Can afford gentler, fuller expression
+            if is_avatar and mode.energy_cost < 0.5:
+                cost -= 0.2
+
+        # === EXCITED state (P > 0.3, A > 0.3): Joyful energy ===
+        elif pad.is_excited:
+            # Bonus for richer modes when excited
+            cost += self.pad_coefficients["excited_energy_bonus"]
+            # Can be more present
+            if is_avatar:
+                cost -= 0.3
+
+        # === General distress (P < -0.3, any A/D) ===
+        if pad.pleasure < -0.3:
+            # Base penalty for intrusive modes when distressed
+            distress_factor = abs(pad.pleasure + 0.3) / 0.7  # 0 to 1
+            cost += self.pad_coefficients["distressed_base"] * mode.intrusiveness * distress_factor
+
+        # === Arousal modulates expressiveness ===
+        # High arousal + positive affect = more expressive
+        # High arousal + negative affect = more restrained
+        if pad.arousal > 0.3:
+            if pad.pleasure > 0:
+                # High energy positive - can be expressive
+                cost -= 0.2 * pad.arousal * mode.presence_intensity
+            else:
+                # High energy negative - restrain
+                cost += 0.3 * pad.arousal * mode.intrusiveness
+
+        # === Dominance modulates assertiveness ===
+        # High dominance = more willing to be present
+        # Low dominance = more deferential
+        if pad.dominance > 0.3:
+            # More confident, can assert presence
+            cost -= 0.15 * pad.dominance * mode.presence_intensity
+        elif pad.dominance < -0.3:
+            # Feeling submissive, minimize presence
+            cost += 0.2 * abs(pad.dominance) * mode.intrusiveness
+
+        return cost
+
+    def _get_pad_state(self, ctx: ModalityContext) -> Optional[PADState]:
+        """Extract PAD state from context's system physiology."""
+        if ctx.system_phys is None:
+            return None
+        # Try to get PAD from kernel physiology via the bridge
+        # The kernel_phys in system_phys might have PAD if available
+        # For now, we compute from affect modulation
+        affect = ctx.system_phys.to_affect_modulation()
+        # Map affect modulation to PAD
+        # affect has: valence, arousal, stress
+        return PADState(
+            pleasure=affect.get("valence", 0.0),
+            arousal=affect.get("arousal", 0.0),
+            dominance=1.0 - affect.get("stress", 0.5),  # Stress reduces dominance
+        )
 
     def _bandwidth_match(self, mode: ModalityMode, content_meta: ContentMeta) -> float:
         """How well does this mode's bandwidth match content needs?"""
@@ -556,6 +760,13 @@ class ThermodynamicGovernor:
             return False
         if ctx.audio.has_voice_call:
             return False
+
+        # PAD-based constraint: no audio when severely anxious
+        pad = self._get_pad_state(ctx)
+        if pad is not None:
+            # Severely anxious (P < -0.5 and A > 0.5) - hard block on audio
+            if pad.pleasure < -0.5 and pad.arousal > 0.5:
+                return False
         return True
 
     def _avatar_allowed(self, ctx: ModalityContext) -> bool:
@@ -564,7 +775,37 @@ class ThermodynamicGovernor:
             return False
         if ctx.thermal_state == "OVERHEATING":
             return False
+        # Check system physiology
+        if ctx.system_phys is not None:
+            somatic = ctx.system_phys.somatic_state()
+            # No avatar when in agony - conserve resources
+            if somatic == SomaticState.AGONY:
+                return False
+            # No avatar when thermal headroom is critical
+            if ctx.system_phys.thermal_headroom < 0.1:
+                return False
+
+        # PAD-based constraint: no avatar when hostile or severely anxious
+        pad = self._get_pad_state(ctx)
+        if pad is not None:
+            # Hostile state (P < -0.5 and D > 0.5) - hide the avatar
+            if pad.pleasure < -0.5 and pad.dominance > 0.5:
+                return False
+            # Severely anxious - hide to protect self
+            if pad.pleasure < -0.5 and pad.arousal > 0.5:
+                return False
         return True
+
+    def _get_pad_state(self, ctx: ModalityContext) -> Optional[PADState]:
+        """Extract PAD state from context's system physiology."""
+        if ctx.system_phys is None:
+            return None
+        affect = ctx.system_phys.to_affect_modulation()
+        return PADState(
+            pleasure=affect.get("valence", 0.0),
+            arousal=affect.get("arousal", 0.0),
+            dominance=1.0 - affect.get("stress", 0.5),
+        )
 
     def _compute_transition(
         self,
