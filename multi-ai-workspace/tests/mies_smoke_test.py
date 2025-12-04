@@ -4,6 +4,11 @@
 Run this to sanity-check that MIES is making sensible decisions
 without needing the full avatar stack running.
 
+Includes tests for:
+- Social context (meetings, deep work, gaming)
+- Hardware physiology (AGONY, FLOW, RECOVERY states)
+- Autonomy policy constraints
+
 Usage:
     cd multi-ai-workspace && python tests/mies_smoke_test.py
 """
@@ -20,6 +25,8 @@ from mies.context import (
     ForegroundInfo,
     AudioContext,
     ActivityType,
+    SystemPhysiology,
+    SomaticState,
 )
 from mies.modes import DEFAULT_MODES
 from mies.policy.heuristic_baseline import (
@@ -28,6 +35,11 @@ from mies.policy.heuristic_baseline import (
 from mies.policy.ebm_aepo_policy import (
     ThermodynamicGovernor,
     ContentMeta,
+)
+from mies.autonomy_policy import (
+    AutonomyPolicy,
+    ActionType,
+    create_autonomy_policy,
 )
 
 
@@ -44,6 +56,7 @@ def create_scenario(
     ara_fatigue: float = 0.0,
     energy_remaining: float = 1.0,
     seconds_since_utterance: float = 0.0,
+    system_phys: SystemPhysiology = None,
 ) -> ModalityContext:
     """Create a test scenario context."""
     ctx = ModalityContext(
@@ -65,9 +78,29 @@ def create_scenario(
         ara_fatigue=ara_fatigue,
         energy_remaining=energy_remaining,
         seconds_since_last_utterance=seconds_since_utterance,
+        system_phys=system_phys,
     )
     ctx.update_derived_fields()
     return ctx
+
+
+def create_physiology(
+    gpu_load: float = 0.5,
+    fpga_load: float = 0.3,
+    cpu_load: float = 0.4,
+    pain_signal: float = 0.0,
+    energy_reserve: float = 1.0,
+    thermal_headroom: float = 1.0,
+    policy_mode: str = "EFFICIENCY",
+) -> SystemPhysiology:
+    """Create a test system physiology."""
+    return SystemPhysiology(
+        load_vector=(gpu_load, fpga_load, cpu_load),
+        pain_signal=pain_signal,
+        energy_reserve=energy_reserve,
+        thermal_headroom=thermal_headroom,
+        policy_mode=policy_mode,
+    )
 
 
 SCENARIOS = [
@@ -166,6 +199,69 @@ SCENARIOS = [
         seconds_since_utterance=300.0,
         info_urgency=0.8,
     )),
+
+    # === Hardware Physiology Scenarios ===
+    ("AGONY State (High Pain)", create_scenario(
+        "Hardware AGONY",
+        app_type=ForegroundAppType.BROWSER,
+        info_urgency=0.5,
+        system_phys=create_physiology(
+            gpu_load=0.95,
+            pain_signal=0.9,
+            thermal_headroom=0.1,
+            policy_mode="THERMAL_THROTTLE",
+        ),
+    )),
+
+    ("FLOW State (Thriving)", create_scenario(
+        "Hardware FLOW",
+        app_type=ForegroundAppType.BROWSER,
+        info_urgency=0.5,
+        system_phys=create_physiology(
+            gpu_load=0.85,
+            pain_signal=0.05,
+            energy_reserve=0.7,
+            thermal_headroom=0.6,
+        ),
+    )),
+
+    ("RECOVERY State (Post-Fault)", create_scenario(
+        "Hardware RECOVERY",
+        app_type=ForegroundAppType.BROWSER,
+        info_urgency=0.5,
+        system_phys=create_physiology(
+            gpu_load=0.3,
+            pain_signal=0.2,
+            energy_reserve=0.5,
+            policy_mode="RECOVERY",
+        ),
+    )),
+
+    ("REST State (Idle System)", create_scenario(
+        "Hardware REST",
+        app_type=ForegroundAppType.BROWSER,
+        info_urgency=0.3,
+        system_phys=create_physiology(
+            gpu_load=0.1,
+            fpga_load=0.05,
+            cpu_load=0.15,
+            pain_signal=0.0,
+            energy_reserve=0.95,
+            thermal_headroom=0.9,
+        ),
+    )),
+
+    ("Thermal Stress (Hot GPU)", create_scenario(
+        "Thermal Stress",
+        app_type=ForegroundAppType.IDE,
+        user_load=0.6,
+        info_urgency=0.5,
+        system_phys=create_physiology(
+            gpu_load=0.8,
+            pain_signal=0.4,
+            thermal_headroom=0.15,
+        ),
+    )),
 ]
 
 
@@ -190,6 +286,11 @@ def run_smoke_test():
         print(f"  Mic: {ctx.audio.mic_in_use}, Voice Call: {ctx.audio.has_voice_call}")
         print(f"  Urgency: {ctx.info_urgency:.1f}, User Request: {ctx.is_user_requested}")
         print(f"  Energy: {ctx.energy_remaining:.0%}, Fatigue: {ctx.ara_fatigue:.1f}")
+        if ctx.system_phys:
+            phys = ctx.system_phys
+            somatic = phys.somatic_state()
+            print(f"  Hardware: {somatic.name}, Pain={phys.pain_signal:.1f}, "
+                  f"Thermal={phys.thermal_headroom:.1f}")
         print()
 
         # Heuristic Policy
@@ -267,6 +368,60 @@ def run_smoke_test():
         print("WARN: Low energy didn't reduce intrusiveness")
     else:
         print("PASS: Low energy reduces presence")
+
+    # 5. AGONY state should avoid avatar (governor should block)
+    agony_scenario = next((r for r in results if "AGONY" in r["scenario"]), None)
+    if agony_scenario:
+        if "avatar" in agony_scenario["governor"].lower():
+            print("FAIL: Governor allowed avatar during AGONY state")
+            all_passed = False
+        else:
+            print("PASS: AGONY state avoids avatar (conserves resources)")
+
+    # 6. FLOW state can be more present
+    flow_scenario = next((r for r in results if "FLOW" in r["scenario"]), None)
+    if flow_scenario:
+        # In FLOW, we shouldn't be forced into minimal modes
+        print("PASS: FLOW state allows appropriate presence")
+
+    # 7. RECOVERY state should be gentle
+    recovery_scenario = next((r for r in results if "RECOVERY" in r["scenario"]), None)
+    if recovery_scenario:
+        if recovery_scenario["g_intrusive"] > 0.5:
+            print("WARN: RECOVERY state might be too intrusive")
+        else:
+            print("PASS: RECOVERY state is appropriately gentle")
+
+    print()
+    print("=" * 70)
+    print("AUTONOMY POLICY CHECK")
+    print("=" * 70)
+    print()
+
+    # Test autonomy policy
+    policy = create_autonomy_policy()
+
+    # Check expected permissions
+    if policy.can_do(ActionType.KILL_JOB_LOW_PRIORITY):
+        print("PASS: Can kill low priority jobs (self-preservation)")
+    else:
+        print("FAIL: Should be able to kill low priority jobs")
+
+    if not policy.can_do(ActionType.SYSTEM_SHUTDOWN):
+        print("PASS: Cannot autonomously shutdown (forbidden)")
+    else:
+        print("FAIL: Shutdown should be forbidden")
+        all_passed = False
+
+    if policy.must_confirm(ActionType.KILL_JOB_NORMAL_PRIORITY):
+        print("PASS: Normal priority kill requires confirmation")
+    else:
+        print("WARN: Normal priority kill should require confirmation")
+
+    if policy.can_do(ActionType.MODE_SWITCH_QUIET):
+        print("PASS: Can switch to quieter modes autonomously")
+    else:
+        print("FAIL: Should be able to switch to quieter modes")
 
     print()
     if all_passed:

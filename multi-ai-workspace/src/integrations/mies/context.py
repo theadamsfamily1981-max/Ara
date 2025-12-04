@@ -113,6 +113,123 @@ class BiometricState:
     estimated_load: Optional[float] = None  # Cognitive load estimate 0-1
 
 
+class SomaticState(Enum):
+    """High-level body state derived from hardware physiology.
+
+    Maps hardware metrics to embodied feelings:
+    - AGONY: System is in pain (deadline misses, thermal throttling)
+    - FLOW: High utilization but healthy (peak performance)
+    - ACTIVE: Normal working state
+    - REST: Low utilization, relaxed
+    - RECOVERY: Post-fault conservative operation
+    """
+    AGONY = auto()
+    FLOW = auto()
+    ACTIVE = auto()
+    REST = auto()
+    RECOVERY = auto()
+
+
+@dataclass
+class SystemPhysiology:
+    """Hardware state mapped to embodied physiology.
+
+    This is the "how my body feels" layer - translating raw hardware
+    metrics from KernelPhysiology into experiential terms that
+    influence Ara's mood and presentation.
+
+    The kernel is the autonomic nervous system (reflexive).
+    This is the somatic system (conscious body awareness).
+    """
+    # Load vector (GPU, FPGA, CPU) - "muscle tension"
+    load_vector: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+
+    # Pain signal - composite of deadline misses, thermal stress
+    pain_signal: float = 0.0
+
+    # Energy reserve - inverse of sustained load + memory pressure
+    energy_reserve: float = 1.0
+
+    # Thermal headroom - how much room before throttling (0=throttling, 1=cool)
+    thermal_headroom: float = 1.0
+
+    # Current kernel policy mode
+    policy_mode: str = "EFFICIENCY"
+
+    # Derived somatic state
+    _somatic_state: Optional[SomaticState] = field(default=None, repr=False)
+
+    def somatic_state(self) -> SomaticState:
+        """Derive high-level somatic state from physiology."""
+        if self._somatic_state is not None:
+            return self._somatic_state
+
+        # AGONY: significant pain
+        if self.pain_signal > 0.8:
+            return SomaticState.AGONY
+
+        # RECOVERY: kernel is in recovery mode
+        if self.policy_mode == "RECOVERY":
+            return SomaticState.RECOVERY
+
+        # FLOW: high GPU utilization but healthy (no pain, good thermal)
+        gpu_load = self.load_vector[0]
+        if gpu_load > 0.8 and self.pain_signal < 0.2 and self.thermal_headroom > 0.3:
+            return SomaticState.FLOW
+
+        # REST: low utilization
+        mean_load = sum(self.load_vector) / 3.0
+        if mean_load < 0.2 and self.energy_reserve > 0.8:
+            return SomaticState.REST
+
+        # Default: ACTIVE
+        return SomaticState.ACTIVE
+
+    @property
+    def mean_load(self) -> float:
+        """Average load across compute resources."""
+        return sum(self.load_vector) / 3.0
+
+    @property
+    def is_hurting(self) -> bool:
+        """Whether the system is experiencing significant discomfort."""
+        return self.pain_signal > 0.5 or self.thermal_headroom < 0.2
+
+    @property
+    def is_thriving(self) -> bool:
+        """Whether the system is in optimal operation."""
+        return (
+            self.somatic_state() == SomaticState.FLOW and
+            self.pain_signal < 0.1
+        )
+
+    def to_affect_modulation(self) -> Dict[str, float]:
+        """Convert physiology to affect modulation factors.
+
+        Returns deltas to apply to valence/arousal/stress.
+        """
+        modulation = {
+            "valence_delta": 0.0,
+            "arousal_delta": 0.0,
+            "stress_delta": 0.0,
+        }
+
+        # Pain reduces valence, increases stress
+        if self.pain_signal > 0.3:
+            modulation["valence_delta"] -= self.pain_signal * 0.3
+            modulation["stress_delta"] += self.pain_signal * 0.4
+
+        # Low thermal headroom increases arousal (vigilance)
+        if self.thermal_headroom < 0.3:
+            modulation["arousal_delta"] += (0.3 - self.thermal_headroom)
+
+        # FLOW state is pleasant
+        if self.somatic_state() == SomaticState.FLOW:
+            modulation["valence_delta"] += 0.1
+
+        return modulation
+
+
 @dataclass
 class ModalityContext:
     """Full context vector for modality policy decisions.
@@ -142,6 +259,9 @@ class ModalityContext:
 
     # === Biometrics (optional) ===
     biometrics: Optional[BiometricState] = None
+
+    # === System Physiology (from KernelBridge) ===
+    system_phys: Optional[SystemPhysiology] = None
 
     # === Affective State (from HomeostaticCore + AppraisalEngine) ===
     # User-facing emotional context
@@ -273,6 +393,19 @@ class ModalityContext:
             if self.biometrics.estimated_load is not None:
                 features["bio_load"] = self.biometrics.estimated_load
 
+        # Add system physiology if available
+        if self.system_phys:
+            features["hw_gpu_load"] = self.system_phys.load_vector[0]
+            features["hw_fpga_load"] = self.system_phys.load_vector[1]
+            features["hw_cpu_load"] = self.system_phys.load_vector[2]
+            features["hw_pain_signal"] = self.system_phys.pain_signal
+            features["hw_energy_reserve"] = self.system_phys.energy_reserve
+            features["hw_thermal_headroom"] = self.system_phys.thermal_headroom
+            # Somatic state one-hot
+            somatic = self.system_phys.somatic_state()
+            for state in SomaticState:
+                features[f"somatic_{state.name.lower()}"] = float(somatic == state)
+
         return features
 
     def update_from_scavengers(
@@ -281,6 +414,7 @@ class ModalityContext:
         audio_data: Optional[Dict[str, Any]] = None,
         biometrics_data: Optional[Dict[str, Any]] = None,
         cognitive_state: Optional[Any] = None,
+        kernel_physiology: Optional[Any] = None,
     ):
         """
         Update context from scavenger sensor data.
@@ -293,6 +427,7 @@ class ModalityContext:
             audio_data: Dict from PipeWireAudioSensor.get_state()
             biometrics_data: Dict from BiometricsSensor.get_state()
             cognitive_state: Homeostatic/affective state from cognitive core
+            kernel_physiology: KernelPhysiology from KernelBridge
         """
         import time
 
@@ -344,11 +479,57 @@ class ModalityContext:
             if hasattr(cognitive_state, 'arousal'):
                 self.arousal = cognitive_state.arousal
 
+        # Update from kernel physiology (brainstem → cortex)
+        if kernel_physiology:
+            self.system_phys = self._make_system_phys(kernel_physiology)
+
+            # Apply physiology-based affect modulation
+            if self.system_phys:
+                modulation = self.system_phys.to_affect_modulation()
+                self.valence = max(-1.0, min(1.0,
+                    self.valence + modulation["valence_delta"]))
+                self.arousal = max(0.0, min(1.0,
+                    self.arousal + modulation["arousal_delta"]))
+                self.ara_stress = max(0.0, min(1.0,
+                    self.ara_stress + modulation["stress_delta"]))
+
         # Update timestamp
         self.timestamp = time.time()
 
         # Derive activity from updated sensors
         self.update_derived_fields()
+
+    def _make_system_phys(self, kp: Any) -> Optional[SystemPhysiology]:
+        """Convert KernelPhysiology to SystemPhysiology.
+
+        Maps raw hardware metrics to embodied physiology.
+        """
+        if kp is None:
+            return None
+
+        # Calculate pain signal from thermal stress + deadline misses
+        pain = max(
+            kp.miss_rate,
+            max(0.0, (kp.thermal_gpu - 80.0) / 15.0),  # Above 80C ramps pain
+            max(0.0, (kp.thermal_fpga - 75.0) / 15.0),
+        )
+        pain = min(1.0, pain)
+
+        # Energy reserve: inverse of mean load + memory pressure
+        mean_load = (kp.gpu_load + kp.fpga_load + kp.cpu_load) / 3.0
+        energy_reserve = max(0.0, 1.0 - max(mean_load, kp.mem_pressure))
+
+        # Thermal headroom: room before throttling
+        # 60C = comfortable, 90C = throttling
+        thermal_headroom = max(0.0, 1.0 - max(0.0, (kp.thermal_gpu - 60.0) / 30.0))
+
+        return SystemPhysiology(
+            load_vector=(kp.gpu_load, kp.fpga_load, kp.cpu_load),
+            pain_signal=pain,
+            energy_reserve=energy_reserve,
+            thermal_headroom=thermal_headroom,
+            policy_mode=kp.policy_mode.name if hasattr(kp.policy_mode, 'name') else str(kp.policy_mode),
+        )
 
 
 # === Utility Functions ===
@@ -377,9 +558,11 @@ def create_context_from_sensors(
 __all__ = [
     "ForegroundAppType",
     "ActivityType",
+    "SomaticState",
     "ForegroundInfo",
     "AudioContext",
     "BiometricState",
+    "SystemPhysiology",
     "ModalityContext",
     "create_context_from_sensors",
 ]
