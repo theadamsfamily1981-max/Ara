@@ -65,8 +65,10 @@ RUN pip install --no-cache-dir \
     torchaudio==2.1.0 \
     --index-url https://download.pytorch.org/whl/cpu
 
-# Install av FIRST with FFmpeg 7.x compatible version (before TTS pulls older)
-RUN pip install --no-cache-dir "av>=12.3.0"
+# Install av FIRST with pre-built wheel (avoid source build issues with FFmpeg 7.x)
+RUN pip install --no-cache-dir --only-binary=av "av>=12.3.0" || \
+    pip install --no-cache-dir --only-binary=:all: "av>=12.0.0" || \
+    echo "Warning: Could not install av binary wheel, TTS may have limited functionality"
 
 # Install Coqui TTS (requires Python 3.10)
 RUN pip install --no-cache-dir TTS>=0.22.0
