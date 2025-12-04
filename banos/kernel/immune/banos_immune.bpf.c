@@ -44,6 +44,8 @@ struct process_mhc {
 
     __u64 spawn_time_ns;            /* When process started */
     __u64 last_seen_ns;             /* Last syscall timestamp */
+
+    char comm[16];                  /* Process name for debugging */
 };
 
 /* MHC flags */
@@ -182,12 +184,12 @@ SEC("tracepoint/raw_syscalls/sys_enter")
 int trace_syscall_enter(struct trace_event_raw_sys_enter *ctx)
 {
     __u64 pid_tgid = bpf_get_current_pid_tgid();
-    __u32 pid = pid_tgid >> 32;
-    __u32 tgid = pid_tgid & 0xFFFFFFFF;
+    __u32 tgid = pid_tgid >> 32;          /* Thread group ID (process ID) */
+    __u32 pid = pid_tgid & 0xFFFFFFFF;    /* Thread ID */
     __u64 now = bpf_ktime_get_ns();
 
-    /* Get or create MHC entry */
-    struct process_mhc *mhc = bpf_map_lookup_elem(&mhc_map, &pid);
+    /* Get or create MHC entry (keyed by tgid = process ID) */
+    struct process_mhc *mhc = bpf_map_lookup_elem(&mhc_map, &tgid);
     struct process_mhc new_mhc = {0};
     bool is_new = false;
 
@@ -197,9 +199,12 @@ int trace_syscall_enter(struct trace_event_raw_sys_enter *ctx)
         new_mhc.last_syscall = ctx->id;
         new_mhc.syscall_count = 1;
         new_mhc.last_seen_ns = now;
-        bpf_get_current_comm(new_mhc.flags, sizeof(new_mhc.flags));  /* temp abuse */
-        bpf_map_update_elem(&mhc_map, &pid, &new_mhc, BPF_ANY);
-        mhc = bpf_map_lookup_elem(&mhc_map, &pid);
+        new_mhc.flags = 0;
+        new_mhc.parent_pid = 0;  /* Could be filled via task_struct if needed */
+        new_mhc.intent_proximity = user_recently_active(now) ? 900 : 0;
+        bpf_get_current_comm(new_mhc.comm, sizeof(new_mhc.comm));
+        bpf_map_update_elem(&mhc_map, &tgid, &new_mhc, BPF_ANY);
+        mhc = bpf_map_lookup_elem(&mhc_map, &tgid);
         is_new = true;
     }
 
@@ -262,7 +267,7 @@ int trace_syscall_enter(struct trace_event_raw_sys_enter *ctx)
     /* Emit event to userspace */
     if (should_emit) {
         struct immune_event evt = {0};
-        evt.pid = pid;
+        evt.pid = tgid;  /* Report process ID (tgid) for userspace */
         evt.tgid = tgid;
         evt.syscall_id = ctx->id;
         evt.weirdness_delta = weirdness;
@@ -276,8 +281,8 @@ int trace_syscall_enter(struct trace_event_raw_sys_enter *ctx)
                               &evt, sizeof(evt));
     }
 
-    /* Check quarantine list */
-    __u8 *quarantine = bpf_map_lookup_elem(&quarantine_pids, &pid);
+    /* Check quarantine list (keyed by tgid) */
+    __u8 *quarantine = bpf_map_lookup_elem(&quarantine_pids, &tgid);
     if (quarantine && *quarantine) {
         /* Process is quarantined - send SIGSTOP */
         bpf_send_signal(19);  /* SIGSTOP = 19 */
@@ -304,8 +309,9 @@ int trace_input_event(void *ctx)
 SEC("tracepoint/sched/sched_process_exit")
 int trace_process_exit(struct trace_event_raw_sched_process_template *ctx)
 {
-    __u32 pid = ctx->pid;
-    bpf_map_delete_elem(&mhc_map, &pid);
-    bpf_map_delete_elem(&quarantine_pids, &pid);
+    /* ctx->pid is the tgid (process ID) in this context */
+    __u32 tgid = ctx->pid;
+    bpf_map_delete_elem(&mhc_map, &tgid);
+    bpf_map_delete_elem(&quarantine_pids, &tgid);
     return 0;
 }

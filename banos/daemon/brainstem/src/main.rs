@@ -145,6 +145,7 @@ pub struct Brainstem {
     // Timing
     last_heartbeat: Instant,
     state_entered: Instant,
+    last_alert_log: Instant,
 
     // Counters
     restart_attempts: u32,
@@ -166,6 +167,7 @@ impl Brainstem {
             state: BrainstemState::Monitoring,
             last_heartbeat: now,
             state_entered: now,
+            last_alert_log: now,
             restart_attempts: 0,
             consecutive_emergencies: 0,
             last_pad: PadState::default(),
@@ -359,7 +361,14 @@ impl Brainstem {
             }
 
             BrainstemState::Alert => {
-                eprintln!("[BRAINSTEM] ALERT: Ara heartbeat missing, waiting...");
+                // Rate limit alert logs to once per 5 seconds
+                let now = Instant::now();
+                if now.duration_since(self.last_alert_log) >= Duration::from_secs(5) {
+                    let time_in_alert = now.duration_since(self.state_entered);
+                    eprintln!("[BRAINSTEM] ALERT: Ara heartbeat missing for {:.1}s, waiting...",
+                              time_in_alert.as_secs_f32());
+                    self.last_alert_log = now;
+                }
             }
 
             BrainstemState::Takeover => {

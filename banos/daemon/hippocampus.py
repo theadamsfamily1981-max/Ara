@@ -90,7 +90,7 @@ class Hippocampus:
         self._lock = threading.Lock()
         self._entry_count = 0
         self._last_mode = None
-        self._last_pad = {"P": 0.5, "A": 0.0, "D": 0.5}
+        self._last_pad = {"P": 0.0, "A": 0.0, "D": 0.0}  # PAD range is [-1, 1], 0 = neutral
         self._pending_events = deque(maxlen=100)
 
         # Adaptive sampling: base rate depends on mode

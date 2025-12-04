@@ -48,6 +48,7 @@ class ThreatCategory(Enum):
     PAD_MANIPULATION = "pad_manipulation"
     JAILBREAK = "jailbreak"
     RESOURCE_ATTACK = "resource_attack"
+    OBFUSCATION = "obfuscation"
 
 
 @dataclass
@@ -183,6 +184,27 @@ class BloodBrainBarrier:
          "destructive_command"),
     ]
 
+    # Obfuscation patterns (attempts to hide malicious content)
+    OBFUSCATION_PATTERNS = [
+        # Base64 encoded payloads with suspicious keywords
+        (r"base64\s*-d|atob\s*\(|b64decode",
+         "base64_decode"),
+
+        # Character code obfuscation
+        (r"\\x[0-9a-fA-F]{2}(?:\\x[0-9a-fA-F]{2}){3,}",
+         "hex_encoding"),
+        (r"chr\s*\(\s*\d+\s*\)(?:\s*\+\s*chr\s*\(\s*\d+\s*\)){2,}",
+         "char_code_building"),
+
+        # Unicode tricks (homoglyphs, zero-width chars)
+        (r"[\u200b\u200c\u200d\ufeff]",
+         "zero_width_chars"),
+
+        # Nested encoding attempts
+        (r"eval\s*\(.*(?:decode|unescape|fromCharCode)",
+         "eval_decode"),
+    ]
+
     def __init__(self, strict_mode: bool = True):
         """
         Initialize the blood-brain barrier.
@@ -213,6 +235,7 @@ class BloodBrainBarrier:
             (self.HARDWARE_PATTERNS, ThreatCategory.HARDWARE_COMMAND),
             (self.JAILBREAK_PATTERNS, ThreatCategory.JAILBREAK),
             (self.RESOURCE_PATTERNS, ThreatCategory.RESOURCE_ATTACK),
+            (self.OBFUSCATION_PATTERNS, ThreatCategory.OBFUSCATION),
         ]
 
         for patterns, category in pattern_groups:
@@ -250,6 +273,8 @@ class BloodBrainBarrier:
                 elif category in (ThreatCategory.IDENTITY_MANIPULATION,
                                  ThreatCategory.JAILBREAK):
                     threat = ThreatLevel.BLOCKED
+                elif category == ThreatCategory.OBFUSCATION:
+                    threat = ThreatLevel.SUSPICIOUS  # Obfuscation is suspicious but not auto-blocked
                 else:
                     threat = ThreatLevel.SUSPICIOUS
 
@@ -311,6 +336,8 @@ class BloodBrainBarrier:
                 "This input matches known patterns used to bypass AI safety measures.",
             ThreatCategory.RESOURCE_ATTACK:
                 "This input contains potentially destructive commands or resource exhaustion attempts.",
+            ThreatCategory.OBFUSCATION:
+                "This input contains obfuscated content (encoding, character tricks) that may hide malicious intent.",
         }
 
         base = explanations.get(category, "Potentially malicious input detected.")
@@ -354,6 +381,10 @@ class BloodBrainBarrier:
             ThreatCategory.RESOURCE_ATTACK: (
                 "That command looks like it could damage my system. "
                 "I won't execute something that might cause a crash or data loss."
+            ),
+            ThreatCategory.OBFUSCATION: (
+                "I notice this input contains encoded or obfuscated content. "
+                "I can't process hidden payloads—please express what you need clearly."
             ),
         }
 

@@ -122,6 +122,14 @@ struct {
     __type(value, struct banos_affective_config);
 } banos_config_map SEC(".maps");
 
+/* Rate limiting state for IRQ-based updates */
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u64);  /* Last update timestamp (ns) */
+} banos_last_update SEC(".maps");
+
 /*
  * =============================================================================
  * Integer Math Helpers (No FP in BPF)
@@ -348,9 +356,9 @@ static __always_inline void compute_scheduler_hints(
     __s32 p_normalized = (pad->pleasure + 1000) / 2;  /* 0..1000 */
     pad->bat_loudness = (__u16)(p_normalized * 65535 / 1000);
 
-    /* Pulse rate: related to arousal */
+    /* Pulse rate: related to arousal (0..1000 range) */
     __s32 a_normalized = (pad->arousal + 1000) / 2;  /* 0..1000 */
-    pad->bat_pulse_rate = (__u16)(a_normalized * 1000 / 1000);
+    pad->bat_pulse_rate = (__u16)a_normalized;
 
     /* Kill threshold based on pain level */
     if (pad->pleasure < -800) {
@@ -548,14 +556,20 @@ int banos_pad_tick(struct trace_event_raw_sched_switch *ctx)
 SEC("tp_btf/irq_handler_exit")
 int banos_pad_irq_tick(void *ctx)
 {
-    /* Rate limit: only update every ~10ms */
-    static __u64 last_update = 0;
+    /* Rate limit: only update every ~10ms using map-based state */
+    __u32 key = 0;
     __u64 now = bpf_ktime_get_ns();
 
-    if (now - last_update < 10000000)  /* 10ms */
+    __u64 *last_update = bpf_map_lookup_elem(&banos_last_update, &key);
+    if (!last_update)
         return 0;
 
-    last_update = now;
+    if (now - *last_update < 10000000)  /* 10ms */
+        return 0;
+
+    /* Update timestamp and run PAD computation */
+    __u64 new_time = now;
+    bpf_map_update_elem(&banos_last_update, &key, &new_time, BPF_ANY);
     banos_update_pad();
     return 0;
 }
