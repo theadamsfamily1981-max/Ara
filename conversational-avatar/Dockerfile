@@ -5,8 +5,8 @@
 # ==============================================================================
 # Stage 1: Base with system dependencies
 # ==============================================================================
-# Use Bullseye (Debian 11) for FFmpeg 4.x compatibility with PyAV
-FROM python:3.10-slim-bullseye AS base
+# Use slim image - PyAV wheels bundle their own FFmpeg, no version issues
+FROM python:3.10-slim AS base
 
 # Prevent Python from writing pyc files and buffering stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -15,23 +15,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Install system dependencies
+# NOTE: Do NOT install FFmpeg dev libs (libavformat-dev etc.) - this forces
+# pip to build PyAV from source which causes version compatibility issues.
+# Instead, let pip use pre-built PyAV wheels which bundle compatible FFmpeg.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Audio processing
+    # FFmpeg runtime only (for command-line tools, not for PyAV)
     ffmpeg \
+    # Audio libs
     libsndfile1 \
     portaudio19-dev \
     libportaudio2 \
     libasound2-dev \
     libpulse-dev \
-    # FFmpeg dev libs (for PyAV)
-    libavformat-dev \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavutil-dev \
-    libavfilter-dev \
-    libswscale-dev \
-    libswresample-dev \
-    pkg-config \
     # For espeak (TTS fallback - required by Coqui)
     espeak-ng \
     libespeak-ng1 \
@@ -41,9 +36,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    # Build tools
+    # Build tools (for other packages that need compilation)
     build-essential \
     git \
+    pkg-config \
     # Cleanup
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -66,7 +62,7 @@ RUN pip install --no-cache-dir \
     torchaudio==2.1.0 \
     --index-url https://download.pytorch.org/whl/cpu
 
-# Install av (Bookworm has FFmpeg 5.x which is compatible with av 10.x+)
+# Install av using pre-built wheel (bundles its own FFmpeg, no compatibility issues)
 RUN pip install --no-cache-dir "av>=10.0.0"
 
 # Install Coqui TTS (requires Python 3.10)
