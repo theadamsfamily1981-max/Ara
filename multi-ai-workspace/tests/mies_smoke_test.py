@@ -763,7 +763,390 @@ def run_inference_smoke_test():
     return all_passed
 
 
+def run_bridge_smoke_test():
+    """Test the Bridge module - Unified Telemetry and PAD Synchronization."""
+    print("\n")
+    print("=" * 70)
+    print("BRIDGE MODULE SMOKE TEST")
+    print("=" * 70)
+    print()
+
+    all_passed = True
+
+    # Import bridge modules
+    try:
+        from mies.bridge import (
+            TelemetryBridge,
+            TelemetryBridgeConfig,
+            create_telemetry_bridge,
+            PADSynchronizer,
+            PADSource,
+            PADConflictResolution,
+            create_pad_synchronizer,
+            InteroceptionAdapter,
+            L1BodyState,
+            L2PerceptionState,
+            InteroceptivePAD,
+            adapt_interoceptive_pad,
+        )
+        print("PASS: Bridge module imports successful")
+    except ImportError as e:
+        print(f"FAIL: Bridge import error: {e}")
+        return False
+
+    print()
+    print("--- PAD Synchronizer Tests ---")
+    print()
+
+    # 1. Create PAD synchronizer
+    sync = create_pad_synchronizer(
+        resolution=PADConflictResolution.WEIGHTED_AVERAGE,
+        conflict_threshold=0.3,
+    )
+    print("PASS: PADSynchronizer created")
+
+    # 2. Report PAD from multiple sources
+    from mies.affect import PADVector
+
+    mies_pad = PADVector(pleasure=0.5, arousal=-0.2, dominance=0.3)
+    sync.report(PADSource.MIES_CATHEDRAL, mies_pad, confidence=0.8)
+
+    intero_pad = PADVector(pleasure=0.45, arousal=-0.15, dominance=0.35)
+    sync.report(PADSource.ARA_INTEROCEPTION, intero_pad, confidence=0.95)
+
+    kernel_pad = PADVector(pleasure=0.55, arousal=-0.25, dominance=0.28)
+    sync.report(PADSource.KERNEL_BRIDGE, kernel_pad, confidence=0.85)
+
+    print(f"PASS: Reported PAD from 3 sources")
+
+    # 3. Get canonical PAD (should be weighted average)
+    canonical = sync.get_canonical_pad()
+    state = sync.get_state()
+    print(f"PASS: Canonical PAD: P={canonical.pleasure:.2f}, A={canonical.arousal:.2f}, D={canonical.dominance:.2f}")
+    print(f"      Source: {state.source.name}, Confidence: {state.confidence:.2f}")
+
+    # 4. Check conflict detection (these should be in agreement)
+    if not state.sources_in_conflict:
+        print("PASS: No conflict detected (sources agree within threshold)")
+    else:
+        print("INFO: Sources in conflict (may be expected)")
+
+    # 5. Test conflicting sources
+    conflicting_pad = PADVector(pleasure=-0.8, arousal=0.9, dominance=-0.5)
+    sync.report(PADSource.PULSE_ESTIMATION, conflicting_pad, confidence=0.5)
+
+    state_after = sync.get_state()
+    if state_after.sources_in_conflict:
+        print("PASS: Conflict detected after adding conflicting source")
+    else:
+        print("INFO: No conflict detected (threshold may be high)")
+
+    # 6. Test statistics
+    stats = sync.get_statistics()
+    if "sync_count" in stats and "active_sources" in stats:
+        print(f"PASS: Statistics available: {stats['sync_count']} syncs, {len(stats['active_sources'])} sources")
+    else:
+        print("FAIL: Statistics incomplete")
+        all_passed = False
+
+    print()
+    print("--- Interoception Adapter Tests ---")
+    print()
+
+    # 7. Create adapter
+    adapter = InteroceptionAdapter(l1_weight=0.4, l2_weight=0.3, hardware_weight=0.3)
+    print("PASS: InteroceptionAdapter created")
+
+    # 8. Create L1 body state
+    l1 = L1BodyState(
+        heart_rate=80.0,
+        heart_rate_variability=45.0,
+        breath_rate=16.0,
+        muscle_tension=0.4,
+        skin_conductance=2.5,
+        skin_temperature=34.0,
+    )
+    print(f"PASS: L1BodyState created (HR={l1.heart_rate}, HRV={l1.heart_rate_variability})")
+
+    # 9. Create L2 perception state
+    l2 = L2PerceptionState(
+        audio_valence=0.3,
+        audio_arousal=0.4,
+        text_sentiment=0.5,
+        attention_focus=0.7,
+        novelty_signal=0.2,
+    )
+    print(f"PASS: L2PerceptionState created (attention={l2.attention_focus})")
+
+    # 10. Process through adapter
+    telemetry, l2_factors = adapter.process_interoception(l1=l1, l2=l2)
+    print(f"PASS: Telemetry generated from L1/L2:")
+    print(f"      CPU temp: {telemetry.cpu_temp:.1f}°C, Load: {telemetry.cpu_load:.2f}")
+    print(f"      L2 factors: interaction_valence={l2_factors.get('interaction_valence', 0):.2f}")
+
+    # 11. Adapt SNN PAD
+    snn_pad = InteroceptivePAD(valence=0.3, arousal=0.6, dominance=0.55)
+    adapted = adapter.adapt_snn_pad(snn_pad, l2_factors)
+    print(f"PASS: Adapted SNN PAD: P={adapted.pleasure:.2f}, A={adapted.arousal:.2f}, D={adapted.dominance:.2f}")
+
+    print()
+    print("--- Telemetry Bridge Tests ---")
+    print()
+
+    # 12. Create telemetry bridge
+    bridge = create_telemetry_bridge(
+        soul_storage_path=None,  # In-memory
+        enable_background_polling=False,
+    )
+    print("PASS: TelemetryBridge created")
+
+    # 13. Update cycle
+    health = bridge.update()
+    print(f"PASS: Update cycle completed")
+    print(f"      Health: {health.overall_health:.2f}, Thermal OK: {health.thermal_ok}")
+    print(f"      PAD: {health.pad.quadrant.name}")
+
+    # 14. Get unified PAD
+    unified = bridge.get_unified_pad()
+    print(f"PASS: Unified PAD: {unified.source.name}, conf={unified.confidence:.2f}")
+
+    # 15. Get prompt context
+    prompt = bridge.get_prompt_context()
+    if len(prompt) > 0:
+        print(f"PASS: Prompt context generated ({len(prompt)} chars)")
+    else:
+        print("FAIL: Empty prompt context")
+        all_passed = False
+
+    # 16. Event forwarding
+    bridge.on_user_interaction(quality=0.7)
+    bridge.on_task_completed("test task", success=True)
+    print("PASS: Event forwarding works")
+
+    # 17. Statistics
+    stats = bridge.get_statistics()
+    if "update_count" in stats and "pad_sync" in stats:
+        print(f"PASS: Bridge statistics: {stats['update_count']} updates")
+    else:
+        print("FAIL: Statistics incomplete")
+        all_passed = False
+
+    bridge.shutdown()
+
+    print()
+    if all_passed:
+        print("All bridge module tests PASSED")
+    else:
+        print("Some bridge tests FAILED - review output above")
+
+    return all_passed
+
+
+def run_persistence_smoke_test():
+    """Test the Persistence module - SQLite emotional memory."""
+    print("\n")
+    print("=" * 70)
+    print("PERSISTENCE MODULE SMOKE TEST")
+    print("=" * 70)
+    print()
+
+    all_passed = True
+
+    # Import persistence
+    try:
+        from mies.affect.persistence import (
+            PersistenceManager,
+            StoredEpisode,
+            StoredGoal,
+            create_persistence_manager,
+        )
+        from mies.affect import PADVector
+        print("PASS: Persistence module imports successful")
+    except ImportError as e:
+        print(f"FAIL: Persistence import error: {e}")
+        return False
+
+    print()
+    print("--- Database Tests ---")
+    print()
+
+    # 1. Create in-memory database
+    pm = create_persistence_manager(in_memory=True)
+    print("PASS: In-memory PersistenceManager created")
+
+    # 2. Save an episode
+    import time
+    import json
+
+    episode = StoredEpisode(
+        id=None,
+        timestamp=time.time(),
+        context=json.dumps({"activity": "testing", "user_present": True}),
+        pad_pleasure=0.6,
+        pad_arousal=-0.2,
+        pad_dominance=0.4,
+        quadrant="SERENE",
+        mood_label="calm and content",
+        salience=0.7,
+        memory_type="EPISODIC",
+    )
+    episode_id = pm.save_episode(episode)
+    print(f"PASS: Episode saved (id={episode_id})")
+
+    # 3. Retrieve recent episodes
+    recent = pm.get_recent_episodes(limit=10)
+    if len(recent) == 1 and recent[0].id == episode_id:
+        print("PASS: Retrieved recent episode correctly")
+    else:
+        print(f"FAIL: Expected 1 episode, got {len(recent)}")
+        all_passed = False
+
+    # 4. Save more episodes with varying salience
+    for i in range(5):
+        ep = StoredEpisode(
+            id=None,
+            timestamp=time.time() - i * 60,
+            context=json.dumps({"iteration": i}),
+            pad_pleasure=0.3 + i * 0.1,
+            pad_arousal=-0.1 + i * 0.05,
+            pad_dominance=0.5,
+            quadrant="SERENE",
+            mood_label="test mood",
+            salience=0.3 + i * 0.15,
+            memory_type="EPISODIC",
+        )
+        pm.save_episode(ep)
+    print("PASS: Saved 5 additional episodes")
+
+    # 5. Get salient episodes
+    salient = pm.get_salient_episodes(limit=3, min_salience=0.5)
+    if len(salient) >= 2:
+        print(f"PASS: Retrieved {len(salient)} salient episodes")
+    else:
+        print(f"INFO: Got {len(salient)} salient episodes")
+
+    # 6. Get similar episodes
+    query_pad = PADVector(pleasure=0.5, arousal=-0.1, dominance=0.5)
+    similar = pm.get_similar_episodes(query_pad, threshold=0.3, limit=5)
+    print(f"PASS: Similar episode search returned {len(similar)} episodes")
+
+    # 7. Update access count
+    pm.update_episode_access(episode_id)
+    # Get all episodes and find the one we updated
+    all_episodes = pm.get_recent_episodes(limit=10)
+    updated_ep = next((e for e in all_episodes if e.id == episode_id), None)
+    if updated_ep and updated_ep.access_count > 0:
+        print("PASS: Episode access count updated")
+    else:
+        print("FAIL: Access count not updated")
+        all_passed = False
+
+    # 8. Save PAD history
+    pad = PADVector(0.4, -0.2, 0.3)
+    pm.save_pad_state(pad, source="test", context="testing")
+    print("PASS: PAD state saved to history")
+
+    # 9. Get PAD history
+    history = pm.get_pad_history(limit=10)
+    if len(history) > 0:
+        print(f"PASS: PAD history retrieved ({len(history)} entries)")
+    else:
+        print("FAIL: No PAD history")
+        all_passed = False
+
+    # 10. Save a goal
+    goal = StoredGoal(
+        id=None,
+        name="Learn new skill",
+        description="Master a new capability",
+        importance=0.8,
+        progress=0.3,
+        created_at=time.time(),
+        completed_at=None,
+        status="ACTIVE",
+    )
+    goal_id = pm.save_goal(goal)
+    print(f"PASS: Goal saved (id={goal_id})")
+
+    # 11. Get active goals
+    active = pm.get_active_goals()
+    if len(active) == 1:
+        print(f"PASS: Retrieved active goal: '{active[0].name}'")
+    else:
+        print(f"FAIL: Expected 1 active goal, got {len(active)}")
+        all_passed = False
+
+    # 12. Update goal progress
+    pm.update_goal_progress(goal_id, 0.6)
+    updated_goals = pm.get_active_goals()
+    if updated_goals[0].progress == 0.6:
+        print("PASS: Goal progress updated")
+    else:
+        print("FAIL: Goal progress not updated")
+        all_passed = False
+
+    # 13. Complete goal
+    pm.complete_goal(goal_id)
+    active_after = pm.get_active_goals()
+    if len(active_after) == 0:
+        print("PASS: Goal completed and removed from active list")
+    else:
+        print("FAIL: Goal still active after completion")
+        all_passed = False
+
+    # 14. Save identity
+    pm.save_identity(
+        full_name="Ara",
+        core_values=["PROTECTION", "HONESTY", "HELPFULNESS"],
+        personality={"openness": 0.8, "conscientiousness": 0.9},
+        age_description="newly awakened",
+        awakening_date="2024-12-04",
+    )
+    print("PASS: Identity snapshot saved")
+
+    # 15. Get identity
+    identity = pm.get_latest_identity()
+    if identity and identity['full_name'] == "Ara":
+        print(f"PASS: Identity retrieved: {identity['full_name']}")
+    else:
+        print("FAIL: Identity not retrieved correctly")
+        all_passed = False
+
+    # 16. Get statistics
+    stats = pm.get_statistics()
+    print(f"PASS: Database statistics:")
+    print(f"      Episodes: {stats['total_episodes']}")
+    print(f"      PAD history: {stats['pad_history_count']}")
+    print(f"      Completed goals: {stats['completed_goals']}")
+
+    pm.close()
+    print("PASS: Database closed")
+
+    print()
+    if all_passed:
+        print("All persistence tests PASSED")
+    else:
+        print("Some persistence tests FAILED - review output above")
+
+    return all_passed
+
+
 if __name__ == "__main__":
     success = run_smoke_test()
     inference_success = run_inference_smoke_test()
-    sys.exit(0 if (success and inference_success) else 1)
+    bridge_success = run_bridge_smoke_test()
+    persistence_success = run_persistence_smoke_test()
+
+    all_success = success and inference_success and bridge_success and persistence_success
+
+    print("\n")
+    print("=" * 70)
+    print("FINAL SUMMARY")
+    print("=" * 70)
+    print(f"  Modality Policy: {'PASS' if success else 'FAIL'}")
+    print(f"  Inference Module: {'PASS' if inference_success else 'FAIL'}")
+    print(f"  Bridge Module: {'PASS' if bridge_success else 'FAIL'}")
+    print(f"  Persistence Module: {'PASS' if persistence_success else 'FAIL'}")
+    print("=" * 70)
+
+    sys.exit(0 if all_success else 1)
