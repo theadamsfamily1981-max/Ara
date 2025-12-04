@@ -5,6 +5,7 @@
 # ==============================================================================
 # Stage 1: Base with system dependencies
 # ==============================================================================
+# Use slim image - PyAV wheels bundle their own FFmpeg, no version issues
 FROM python:3.10-slim AS base
 
 # Prevent Python from writing pyc files and buffering stdout/stderr
@@ -14,23 +15,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Install system dependencies
+# NOTE: Do NOT install FFmpeg dev libs (libavformat-dev etc.) - this forces
+# pip to build PyAV from source which causes version compatibility issues.
+# Instead, let pip use pre-built PyAV wheels which bundle compatible FFmpeg.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Audio processing
+    # FFmpeg runtime only (for command-line tools, not for PyAV)
     ffmpeg \
+    # Audio libs
     libsndfile1 \
     portaudio19-dev \
     libportaudio2 \
     libasound2-dev \
     libpulse-dev \
-    # FFmpeg dev libs (for PyAV)
-    libavformat-dev \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavutil-dev \
-    libavfilter-dev \
-    libswscale-dev \
-    libswresample-dev \
-    pkg-config \
     # For espeak (TTS fallback - required by Coqui)
     espeak-ng \
     libespeak-ng1 \
@@ -40,9 +36,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    # Build tools
+    # Build tools (for other packages that need compilation)
     build-essential \
     git \
+    pkg-config \
     # Cleanup
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -65,10 +62,18 @@ RUN pip install --no-cache-dir \
     torchaudio==2.1.0 \
     --index-url https://download.pytorch.org/whl/cpu
 
+# Install av BEFORE anything that depends on it (faster-whisper needs av>=12)
+# Use --only-binary to FORCE using pre-built wheels - never build from source
+# Pre-built wheels bundle their own FFmpeg, avoiding all version conflicts
+RUN pip install --no-cache-dir --only-binary=av "av>=12.0.0" || \
+    (echo "ERROR: No pre-built av wheel available for this platform." && \
+     echo "This is required for faster-whisper. Consider using Conda instead." && \
+     exit 1)
+
 # Install Coqui TTS (requires Python 3.10)
 RUN pip install --no-cache-dir TTS>=0.22.0
 
-# Install remaining dependencies
+# Install remaining dependencies (faster-whisper will use the av we already installed)
 RUN pip install --no-cache-dir -r requirements-minimal.txt
 RUN pip install --no-cache-dir -r requirements-multimodal.txt || true
 
