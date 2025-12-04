@@ -22,6 +22,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libportaudio2 \
     libasound2-dev \
     libpulse-dev \
+    # FFmpeg dev libs (for PyAV)
+    libavformat-dev \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavutil-dev \
+    libavfilter-dev \
+    libswscale-dev \
+    libswresample-dev \
+    pkg-config \
     # For espeak (TTS fallback - required by Coqui)
     espeak-ng \
     libespeak-ng1 \
