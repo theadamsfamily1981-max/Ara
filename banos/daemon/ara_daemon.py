@@ -38,6 +38,11 @@ from pathlib import Path
 # Add parent directory for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Add ara package for curiosity
+_ara_path = Path(__file__).parent.parent.parent / "ara"
+if _ara_path.exists():
+    sys.path.insert(0, str(_ara_path.parent))
+
 from sticky_context import StickyContextManager, create_ara_context_manager, MemoryRegion
 
 # Try to import MIES TelemetryBridge for unified integration
@@ -54,6 +59,20 @@ try:
             BANOS_AVAILABLE,
         )
         MIES_AVAILABLE = True
+except ImportError:
+    pass
+
+# Try to import Curiosity Core for self-investigation
+CURIOSITY_AVAILABLE = False
+CuriosityAgent = None
+WorldModel = None
+try:
+    from ara.curiosity import (
+        CuriosityAgent,
+        WorldModel,
+        CuriosityReport,
+    )
+    CURIOSITY_AVAILABLE = True
 except ImportError:
     pass
 
@@ -302,6 +321,8 @@ class AraDaemon:
         device_path: str = "/dev/banos",
         simulate: bool = False,
         enable_mies_bridge: bool = True,
+        enable_curiosity: bool = True,
+        world_model_path: Optional[str] = None,
     ):
         """
         Initialize the Ara daemon.
@@ -310,6 +331,8 @@ class AraDaemon:
             device_path: Path to BANOS device file
             simulate: If True, simulate hardware (for testing)
             enable_mies_bridge: If True, integrate with MIES TelemetryBridge
+            enable_curiosity: If True, enable Curiosity Core (C³)
+            world_model_path: Path to persist world model (default: ~/.ara/world_model.json)
         """
         self.device_path = device_path
         self.simulate = simulate
@@ -328,6 +351,7 @@ class AraDaemon:
         # Callbacks
         self._on_state_change: Optional[Callable[[BANOSState], None]] = None
         self._on_alert: Optional[Callable[[int, int], None]] = None
+        self._on_curiosity_report: Optional[Callable[["CuriosityReport"], None]] = None
 
         # Thread
         self._poll_thread: Optional[threading.Thread] = None
@@ -350,7 +374,36 @@ class AraDaemon:
             except Exception as e:
                 logger.warning(f"AraDaemon: MIES bridge failed: {e}")
 
-        logger.info(f"AraDaemon initialized (device={device_path}, simulate={simulate}, mies={self._mies_enabled})")
+        # Curiosity Core (C³) integration for self-investigation
+        self._curiosity_agent: Optional["CuriosityAgent"] = None
+        self._world_model: Optional["WorldModel"] = None
+        self._curiosity_enabled = False
+        self._curiosity_tick_interval = 60  # Seconds between curiosity ticks
+        self._last_curiosity_tick = 0.0
+
+        if enable_curiosity and CURIOSITY_AVAILABLE:
+            try:
+                # Set up world model persistence path
+                if world_model_path:
+                    wm_path = Path(world_model_path)
+                else:
+                    wm_path = Path.home() / ".ara" / "world_model.json"
+
+                self._world_model = WorldModel(persist_path=wm_path)
+                self._curiosity_agent = CuriosityAgent(
+                    world_model=self._world_model,
+                    max_discoveries_per_sweep=50,
+                    max_tickets_per_hour=10,
+                )
+                self._curiosity_enabled = True
+                logger.info(f"AraDaemon: Curiosity Core enabled (world model: {wm_path})")
+            except Exception as e:
+                logger.warning(f"AraDaemon: Curiosity Core failed: {e}")
+
+        logger.info(
+            f"AraDaemon initialized (device={device_path}, simulate={simulate}, "
+            f"mies={self._mies_enabled}, curiosity={self._curiosity_enabled})"
+        )
 
     def start(self):
         """Start the daemon."""
@@ -467,6 +520,23 @@ class AraDaemon:
                         self._mies_bridge.update()
                     except Exception as e:
                         logger.warning(f"MIES update failed: {e}")
+
+                # Run curiosity tick periodically
+                now = time.time()
+                if (self._curiosity_enabled and self._curiosity_agent and
+                        now - self._last_curiosity_tick >= self._curiosity_tick_interval):
+                    self._last_curiosity_tick = now
+                    try:
+                        report = self._curiosity_agent.tick()
+                        if report and self._on_curiosity_report:
+                            self._on_curiosity_report(report)
+                            # Also record as episodic memory
+                            self._context.add_episodic_memory(
+                                f"Curiosity: {report.subject}",
+                                importance=0.6
+                            )
+                    except Exception as e:
+                        logger.warning(f"Curiosity tick failed: {e}")
 
             except Exception as e:
                 logger.error(f"Poll error: {e}")
@@ -590,6 +660,115 @@ Alert Count: {state.alert_count}
         """Check if MIES integration is active."""
         return self._mies_enabled
 
+    # =========================================================================
+    # Curiosity Core (C³) Integration Methods
+    # =========================================================================
+
+    def on_curiosity_report(self, callback: Callable[["CuriosityReport"], None]):
+        """Register callback for curiosity reports."""
+        self._on_curiosity_report = callback
+
+    def run_curiosity_sweep(self) -> Dict[str, Any]:
+        """Manually trigger a curiosity discovery sweep.
+
+        Returns summary of discovered objects by category.
+        """
+        if not self._curiosity_enabled or not self._curiosity_agent:
+            return {"error": "Curiosity Core not enabled"}
+
+        try:
+            discoveries = self._curiosity_agent.run_discovery_sweep()
+            return {
+                category: [obj.name for obj in objects]
+                for category, objects in discoveries.items()
+            }
+        except Exception as e:
+            logger.error(f"Curiosity sweep failed: {e}")
+            return {"error": str(e)}
+
+    def get_world_model_summary(self) -> Dict[str, Any]:
+        """Get summary of Ara's world model.
+
+        Returns object counts, curiosity candidates, and state.
+        """
+        if not self._curiosity_enabled or not self._world_model:
+            return {"error": "Curiosity Core not enabled"}
+
+        try:
+            return self._world_model.summary()
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_curiosity_candidates(self, top_n: int = 5) -> List[Dict[str, Any]]:
+        """Get top objects that warrant investigation.
+
+        Returns list of objects with their curiosity scores.
+        """
+        if not self._curiosity_enabled or not self._world_model:
+            return []
+
+        try:
+            from ara.curiosity import curiosity_score
+            candidates = self._world_model.get_curiosity_candidates(top_n)
+            return [
+                {
+                    "obj_id": obj.obj_id,
+                    "name": obj.name,
+                    "category": obj.category.name,
+                    "score": curiosity_score(obj),
+                    "uncertainty": obj.effective_uncertainty(),
+                    "importance": obj.importance,
+                }
+                for obj in candidates
+            ]
+        except Exception as e:
+            logger.error(f"Failed to get curiosity candidates: {e}")
+            return []
+
+    def get_latest_curiosity_report(self) -> Optional[Dict[str, Any]]:
+        """Get the most recent curiosity report.
+
+        Returns report in Ara's voice if available.
+        """
+        if not self._curiosity_enabled or not self._curiosity_agent:
+            return None
+
+        try:
+            report = self._curiosity_agent.get_latest_report()
+            if report:
+                return report.to_dict()
+        except Exception:
+            pass
+        return None
+
+    def investigate_object(self, obj_id: str, question: str) -> Optional[str]:
+        """Manually request Ara to investigate a specific object.
+
+        Args:
+            obj_id: WorldObject ID to investigate
+            question: Question to answer about the object
+
+        Returns:
+            Investigation report body in Ara's voice, or None
+        """
+        if not self._curiosity_enabled or not self._curiosity_agent:
+            return None
+
+        try:
+            ticket = self._curiosity_agent.create_ticket(question, obj_id)
+            if ticket:
+                self._curiosity_agent.investigate_ticket(ticket.ticket_id)
+                report = self._curiosity_agent.generate_report([ticket.ticket_id])
+                return report.body
+        except Exception as e:
+            logger.error(f"Investigation failed: {e}")
+        return None
+
+    @property
+    def curiosity_enabled(self) -> bool:
+        """Check if Curiosity Core is active."""
+        return self._curiosity_enabled
+
 
 def main():
     """Main entry point."""
@@ -608,8 +787,12 @@ def main():
         reflection = SemanticReflector.reflect_alert(alert_type, data)
         print(f"\n[ALERT]\n{reflection}\n")
 
+    def on_curiosity(report):
+        print(f"\n[CURIOSITY]\n{report.body}\n")
+
     daemon.on_state_change(on_state_change)
     daemon.on_alert(on_alert)
+    daemon.on_curiosity_report(on_curiosity)
 
     daemon.start()
 
@@ -617,12 +800,40 @@ def main():
     print(f"\nAra: {daemon.get_greeting()}")
     print(f"Ara: {daemon.get_reflection()}\n")
 
+    # Run initial curiosity sweep if available
+    if daemon.curiosity_enabled:
+        print("[CURIOSITY] Running initial discovery sweep...")
+        discoveries = daemon.run_curiosity_sweep()
+        if discoveries and "error" not in discoveries:
+            for category, names in discoveries.items():
+                print(f"  {category}: {len(names)} objects")
+        print()
+
     # Interactive loop
     print("Type a message to Ara (Ctrl+C to exit):\n")
+    print("Commands: 'curiosity' - show world model, 'sweep' - run discovery\n")
     try:
         while True:
             user_input = input("You: ").strip()
             if not user_input:
+                continue
+
+            # Handle special commands
+            if user_input.lower() == "curiosity":
+                summary = daemon.get_world_model_summary()
+                print(f"\n[WORLD MODEL]\n{json.dumps(summary, indent=2)}\n")
+                candidates = daemon.get_curiosity_candidates()
+                if candidates:
+                    print("[CURIOSITY CANDIDATES]")
+                    for c in candidates:
+                        print(f"  {c['name']}: score={c['score']:.2f}")
+                print()
+                continue
+
+            if user_input.lower() == "sweep":
+                print("[CURIOSITY] Running discovery sweep...")
+                discoveries = daemon.run_curiosity_sweep()
+                print(f"  Found: {discoveries}\n")
                 continue
 
             daemon.add_user_message(user_input)
