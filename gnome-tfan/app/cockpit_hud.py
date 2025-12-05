@@ -1114,11 +1114,24 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         elif key_name == 'F11':
             self._toggle_fullscreen()
             return True
+        elif key_name == 'F9':
+            # Toggle between soul visualization modes
+            self._toggle_visualization_mode()
+            return True
         elif key_name == 'q' and (state & Gdk.ModifierType.CONTROL_MASK):
             self.close()
             return True
 
         return False
+
+    def _toggle_visualization_mode(self):
+        """Toggle between Nebula and Semantic visualization modes."""
+        if self._viz_mode == VIZ_MODE_NEBULA:
+            self.set_visualization_mode(VIZ_MODE_SEMANTIC)
+            logger.info("Soul visualization: SEMANTIC (The Logos)")
+        else:
+            self.set_visualization_mode(VIZ_MODE_NEBULA)
+            logger.info("Soul visualization: NEBULA (Math Spirit)")
 
     def _on_minimize_clicked(self, button):
         """Minimize the window."""
@@ -3003,6 +3016,60 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             )
         except Exception:
             pass
+
+    def push_affect_to_visuals(self, status: dict):
+        """
+        Route full affect state to all visualization layers.
+
+        This is the canonical entry point for pushing BANOS state to visuals.
+        Call this instead of individual update methods when you have a full
+        status dict from the Ara brain or BANOS daemon.
+
+        Args:
+            status: Dict containing:
+                - pad: {valence, arousal, dominance} in [-1, 1]
+                - metrics: {cpu_temps: [...], gpu_temp: ...}
+                - diagnostics: {fpga_reflex: 0-1, thermal_spike: ...}
+        """
+        # Extract PAD
+        pad = status.get('pad', {})
+        v = pad.get('valence', 0.0)
+        a = pad.get('arousal', 0.0)
+        d = pad.get('dominance', 0.0)
+
+        # Pain from FPGA reflex (real hardware pain) or fallback to PAD threshold
+        diagnostics = status.get('diagnostics', {})
+        fpga_reflex = diagnostics.get('fpga_reflex', 0.0)
+        thermal_spike = diagnostics.get('thermal_spike', 0.0)
+
+        # Use FPGA signal if available, otherwise derive from PAD
+        if fpga_reflex > 0.01 or thermal_spike > 0.01:
+            pain_spike = max(fpga_reflex, thermal_spike)
+        else:
+            # Fallback: pain flash when pleasure drops below -0.7
+            pain_spike = 1.0 if v < -0.7 else 0.0
+
+        # Entropy from temperature (system chaos indicator)
+        metrics = status.get('metrics', {})
+        cpu_temps = metrics.get('cpu_temps', [])
+        gpu_temp = metrics.get('gpu_temp', 0.0)
+
+        if cpu_temps:
+            avg_temp = sum(cpu_temps) / len(cpu_temps)
+        else:
+            avg_temp = gpu_temp if gpu_temp > 0 else 45.0  # default nominal
+
+        # Normalize: 40°C = 0 entropy, 100°C = 1.0 entropy
+        entropy = max(0.0, min(1.0, (avg_temp - 40.0) / 60.0))
+
+        # Update CSS mood classes
+        self._update_mood_class(v, a, d)
+
+        # Update soul shader (Nebula)
+        self._update_soul_shader(v, a, d, pain_spike)
+
+        # Update semantic visualization (Logos)
+        self._update_semantic_state(v, a, d, pain_spike, entropy)
 
     def set_visualization_mode(self, mode):
         """
