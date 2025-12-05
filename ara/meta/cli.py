@@ -18,6 +18,10 @@ Provides commands:
 - ara-meta capsules: Manage skill capsules
 - ara-meta forge: Manage agent blueprints
 - ara-meta tournament: Run agent tournaments
+- ara-meta academy: Manage learned skills (Iteration 9)
+- ara-meta institute: View research institute (Iteration 10)
+- ara-meta body: View embodiment status (Iteration 11)
+- ara-meta user: View user model and predictions
 """
 
 from __future__ import annotations
@@ -1082,6 +1086,265 @@ def cmd_tournament(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_academy(args: argparse.Namespace) -> int:
+    """Manage Ara's academy (learned skills)."""
+    from ..academy import get_skill_registry, get_curriculum_manager
+
+    registry = get_skill_registry()
+
+    if args.skills:
+        summary = registry.get_summary()
+        if args.json:
+            print(json.dumps(summary, indent=2, default=str))
+        else:
+            print("Ara Academy - Learned Skills")
+            print("=" * 40)
+            print(f"Total skills: {summary['total_skills']}")
+            print(f"Active: {summary['active']}")
+            print(f"Drafts: {summary['drafts']}")
+            print(f"Deprecated: {summary['deprecated']}")
+        return 0
+
+    if args.curriculum:
+        manager = get_curriculum_manager()
+        summary = manager.get_summary()
+        if args.json:
+            print(json.dumps(summary, indent=2, default=str))
+        else:
+            print("Curriculum Status")
+            print("-" * 40)
+            print(f"Domains tracked: {summary['domains_tracked']}")
+            print(f"Candidates for internalization: {summary['candidates']}")
+        return 0
+
+    # Default: show status
+    print("Ara Academy")
+    print("=" * 40)
+    print("Use --skills to see learned skills")
+    print("Use --curriculum to see internalization status")
+    return 0
+
+
+def cmd_institute(args: argparse.Namespace) -> int:
+    """View Ara's research institute status."""
+    from ..institute import (
+        get_research_graph, get_experiment_scheduler,
+        get_teacher_council, get_safety_contract, get_autonomy_manager,
+    )
+
+    if args.graph:
+        graph = get_research_graph()
+        summary = graph.get_summary()
+        if args.json:
+            print(json.dumps(summary, indent=2, default=str))
+        else:
+            print("Research Graph")
+            print("-" * 40)
+            print(f"Topics: {summary['topics']['total']} ({summary['topics']['active']} active)")
+            print(f"Hypotheses: {summary['hypotheses']['total']} ({summary['hypotheses']['active']} active)")
+            print(f"Threads: {summary['threads']['total']} ({summary['threads']['active']} active)")
+            print(f"Pending actions: {summary['next_actions']}")
+        return 0
+
+    if args.council:
+        council = get_teacher_council()
+        summary = council.get_summary()
+        if args.json:
+            print(json.dumps(summary, indent=2, default=str))
+        else:
+            print("Teacher Council")
+            print("-" * 40)
+            print(f"Teachers: {', '.join(summary['teachers'])}")
+            print(f"Debates conducted: {summary['total_debates']}")
+            print(f"Completed: {summary['completed_debates']}")
+        return 0
+
+    if args.safety:
+        contract = get_safety_contract()
+        summary = contract.get_summary()
+        if args.json:
+            print(json.dumps(summary, indent=2, default=str))
+        else:
+            print("Safety Contract")
+            print("-" * 40)
+            print(f"Total rules: {summary['total_rules']}")
+            print(f"Prohibited actions: {summary['prohibited_actions']}")
+        return 0
+
+    if args.autonomy:
+        manager = get_autonomy_manager()
+        summary = manager.get_summary()
+        if args.json:
+            print(json.dumps(summary, indent=2, default=str))
+        else:
+            print("Autonomy Status")
+            print("-" * 40)
+            if summary['current_session']:
+                print(f"Current level: {summary['current_session']['level']}")
+                print(f"Trust score: {summary['current_session']['trust_score']:.0%}")
+            else:
+                print("No active session")
+        return 0
+
+    if args.brief:
+        graph = get_research_graph()
+        print(graph.generate_morning_brief())
+        return 0
+
+    # Default: show overview
+    graph = get_research_graph()
+    scheduler = get_experiment_scheduler()
+
+    graph_summary = graph.get_summary()
+    exp_summary = scheduler.get_summary()
+
+    print("Ara Institute")
+    print("=" * 40)
+    print(f"Research topics: {graph_summary['topics']['total']}")
+    print(f"Active hypotheses: {graph_summary['hypotheses']['active']}")
+    print(f"Pending experiments: {exp_summary['pending']}")
+    print()
+    print("Use --graph, --council, --safety, --autonomy, or --brief for details")
+    return 0
+
+
+def cmd_body(args: argparse.Namespace) -> int:
+    """View Ara's embodiment status."""
+    from ..embodied import (
+        get_device_graph, get_embodiment_core,
+        get_health_monitor, get_ara_state,
+    )
+
+    if args.devices:
+        graph = get_device_graph()
+        summary = graph.get_summary()
+        if args.json:
+            print(json.dumps(summary, indent=2, default=str))
+        else:
+            print("Device Graph")
+            print("-" * 40)
+            print(f"Total devices: {summary['total_devices']}")
+            print(f"Total memory: {summary['total_memory_gb']:.1f} GB")
+            print(f"Overall health: {summary['overall_health']:.0%}")
+            print()
+            print("By status:")
+            for status, count in summary['by_status'].items():
+                if count > 0:
+                    print(f"  {status}: {count}")
+        return 0
+
+    if args.health:
+        monitor = get_health_monitor()
+        latest = monitor.get_latest_report()
+        if latest:
+            if args.json:
+                print(json.dumps(latest.to_dict(), indent=2, default=str))
+            else:
+                print(latest.to_markdown())
+        else:
+            print("No health reports yet. Run a health check first.")
+        return 0
+
+    if args.check_health:
+        from ..embodied import check_health, get_device_graph
+        graph = get_device_graph()
+        monitor = get_health_monitor()
+        report = monitor.run_health_check(device_graph=graph)
+        if args.json:
+            print(json.dumps(report.to_dict(), indent=2, default=str))
+        else:
+            print(report.to_markdown())
+        return 0
+
+    # Default: show body state
+    core = get_embodiment_core()
+    body_state = core.get_body_state()
+
+    print("Ara Embodiment")
+    print("=" * 40)
+    print(f"State: {body_state['state']}")
+    print(f"Online devices: {body_state['online_devices']}")
+    print(f"Avg utilization: {body_state['avg_utilization_pct']:.1f}%")
+    print(f"Avg temperature: {body_state['avg_temperature_c']:.1f}°C")
+    print(f"Total power: {body_state['total_power_w']:.1f}W")
+    print(f"Health: {body_state['health']:.0%}")
+    print()
+    print("Use --devices, --health, or --check-health for details")
+    return 0
+
+
+def cmd_user(args: argparse.Namespace) -> int:
+    """View user model and predictions."""
+    from ..user import get_user_model, get_user_predictor
+
+    model = get_user_model()
+    predictor = get_user_predictor()
+
+    if args.profile:
+        profile = model.get_profile()
+        if args.json:
+            print(json.dumps(profile.to_dict(), indent=2, default=str))
+        else:
+            print("User Profile")
+            print("-" * 40)
+            print(f"Total sessions: {profile.total_sessions}")
+            print(f"Total interactions: {profile.total_interactions}")
+            print(f"Preferences: {len(profile.preferences)}")
+            print(f"Expertise areas: {len(profile.expertise_areas)}")
+            print()
+            style = model.get_communication_style()
+            print("Communication style:")
+            print(f"  Verbosity: {style['verbosity']}")
+            print(f"  Formality: {style['formality']}")
+        return 0
+
+    if args.predictions:
+        summary = predictor.get_summary()
+        if args.json:
+            print(json.dumps(summary, indent=2, default=str))
+        else:
+            print("Predictions")
+            print("-" * 40)
+            next_action = summary['next_action']
+            print(f"Next action: {next_action['description']}")
+            print(f"Confidence: {next_action['confidence']:.0%}")
+            print()
+            style = summary['response_style']
+            print("Recommended response style:")
+            print(f"  Verbosity: {style['verbosity']}")
+            print(f"  Technical level: {style['technical_level']}")
+        return 0
+
+    if args.suggestions:
+        suggestions = predictor.generate_suggestions()
+        if args.json:
+            print(json.dumps([s.to_dict() for s in suggestions], indent=2, default=str))
+        else:
+            if not suggestions:
+                print("No proactive suggestions at this time.")
+            else:
+                print("Proactive Suggestions")
+                print("-" * 40)
+                for s in suggestions:
+                    priority_mark = {"high": "!!", "medium": "!", "low": " "}[s.priority]
+                    print(f"[{priority_mark}] {s.message}")
+                    if s.reason:
+                        print(f"    Reason: {s.reason}")
+        return 0
+
+    # Default: show summary
+    summary = model.get_summary()
+    print("User Model")
+    print("=" * 40)
+    print(f"Total interactions: {summary['total_interactions']}")
+    print(f"Preferences tracked: {summary['preferences_count']}")
+    print(f"Patterns detected: {summary['patterns_detected']}")
+    print(f"Expertise areas: {summary['expertise_areas']}")
+    print()
+    print("Use --profile, --predictions, or --suggestions for details")
+    return 0
+
+
 def main(argv: Optional[list] = None) -> int:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -1236,6 +1499,39 @@ def main(argv: Optional[list] = None) -> int:
                                    help="Simulate tournament: BENCHMARK:participant1,participant2")
     tournament_parser.add_argument("--json", action="store_true", help="Output as JSON")
     tournament_parser.set_defaults(func=cmd_tournament)
+
+    # Academy command (Iteration 9)
+    academy_parser = subparsers.add_parser("academy", help="Manage learned skills")
+    academy_parser.add_argument("--skills", action="store_true", help="Show skill registry")
+    academy_parser.add_argument("--curriculum", action="store_true", help="Show curriculum status")
+    academy_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    academy_parser.set_defaults(func=cmd_academy)
+
+    # Institute command (Iteration 10)
+    institute_parser = subparsers.add_parser("institute", help="View research institute")
+    institute_parser.add_argument("--graph", action="store_true", help="Show research graph")
+    institute_parser.add_argument("--council", action="store_true", help="Show teacher council")
+    institute_parser.add_argument("--safety", action="store_true", help="Show safety contract")
+    institute_parser.add_argument("--autonomy", action="store_true", help="Show autonomy status")
+    institute_parser.add_argument("--brief", action="store_true", help="Generate morning brief")
+    institute_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    institute_parser.set_defaults(func=cmd_institute)
+
+    # Body command (Iteration 11)
+    body_parser = subparsers.add_parser("body", help="View embodiment status")
+    body_parser.add_argument("--devices", action="store_true", help="Show device graph")
+    body_parser.add_argument("--health", action="store_true", help="Show latest health report")
+    body_parser.add_argument("--check-health", action="store_true", help="Run health check")
+    body_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    body_parser.set_defaults(func=cmd_body)
+
+    # User command
+    user_parser = subparsers.add_parser("user", help="View user model")
+    user_parser.add_argument("--profile", action="store_true", help="Show user profile")
+    user_parser.add_argument("--predictions", action="store_true", help="Show predictions")
+    user_parser.add_argument("--suggestions", action="store_true", help="Show suggestions")
+    user_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    user_parser.set_defaults(func=cmd_user)
 
     args = parser.parse_args(argv)
 
