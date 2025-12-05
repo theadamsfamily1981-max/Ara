@@ -100,6 +100,20 @@ except ImportError:
     FPGA_AVAILABLE = False
     logger.info("FPGA bridge not available (simulation mode)")
 
+# Import Narrative Self components (Iteration 5)
+try:
+    from banos.daemon.dreamer import Dreamer
+    from banos.daemon.somatic_budget import SomaticBudget, Budget, get_budget
+    NARRATIVE_AVAILABLE = True
+except ImportError:
+    try:
+        from dreamer import Dreamer
+        from somatic_budget import SomaticBudget, Budget, get_budget
+        NARRATIVE_AVAILABLE = True
+    except ImportError:
+        NARRATIVE_AVAILABLE = False
+        logger.info("Narrative Self not available (no Dreamer/Budget)")
+
 
 @dataclass
 class LoopMetrics:
@@ -110,6 +124,10 @@ class LoopMetrics:
     ascending_spikes: int = 0
     autonomic_updates: int = 0
     last_system_state: str = "NORMAL"
+    # Narrative Self metrics (Iteration 5)
+    narrative_recalls: int = 0
+    budget_checks: int = 0
+    last_budget_style: str = "verbose"
 
 
 class BicameralLoop:
@@ -141,6 +159,12 @@ class BicameralLoop:
         self.hal: Optional[AraHAL] = None
         self.autonomic: Optional[AutonomicController] = None
         self.fpga: Optional[Any] = None  # FPGABridge when available
+
+        # Narrative Self components (Iteration 5)
+        self.dreamer: Optional[Any] = None  # Dreamer when available
+        self.budget: Optional[Any] = None   # SomaticBudget when available
+        self._last_budget: Optional[Any] = None
+        self._narrative_context: Optional[str] = None
 
         # State
         self.metrics = LoopMetrics()
@@ -183,6 +207,17 @@ class BicameralLoop:
             except Exception as e:
                 logger.warning(f"FPGA bridge unavailable: {e}")
                 self.fpga = None
+
+        # Initialize Narrative Self (Iteration 5)
+        if NARRATIVE_AVAILABLE:
+            try:
+                self.dreamer = Dreamer()
+                self.budget = SomaticBudget(hal=self.hal, dreamer=self.dreamer)
+                logger.info("Narrative Self initialized (Dreamer + Budget)")
+            except Exception as e:
+                logger.warning(f"Narrative Self unavailable: {e}")
+                self.dreamer = None
+                self.budget = None
 
         # Start loop thread
         self.running = True
@@ -246,10 +281,14 @@ class BicameralLoop:
         # 2. AUTONOMIC: Update system state and throttling
         self._autonomic_update()
 
-        # 3. DESCENDING PATHWAY: Project attention to body
+        # 3. BUDGET CHECK: Update resource permissions (every 10 loops)
+        if self.metrics.loop_count % 10 == 0:
+            self._update_budget()
+
+        # 4. DESCENDING PATHWAY: Project attention to body
         self._descending_pathway()
 
-        # 4. DREAM CHECK: Trigger sleep if idle
+        # 5. DREAM CHECK: Trigger sleep if idle
         self._check_dream_trigger()
 
     def _ascending_pathway(self) -> None:
@@ -404,6 +443,163 @@ class BicameralLoop:
             self.hal.set_dream_state(DreamState.REM)
             self.hal.trigger_sleep()
 
+            # Run dream consolidation if available
+            if self.dreamer:
+                try:
+                    memories = self.dreamer.dream(force=True)
+                    logger.info(f"Dream consolidation: {len(memories)} memories stored")
+                except Exception as e:
+                    logger.error(f"Dream consolidation failed: {e}")
+
+    def _update_budget(self) -> None:
+        """Update resource budget based on current state."""
+        if not self.budget:
+            return
+
+        try:
+            self._last_budget = self.budget.compute_budget()
+            self.metrics.budget_checks += 1
+            self.metrics.last_budget_style = self._last_budget.suggested_style
+
+            if self.debug:
+                logger.debug(
+                    f"Budget: LLM={self._last_budget.allow_heavy_llm}, "
+                    f"GPU={self._last_budget.allow_heavy_gpu}, "
+                    f"style={self._last_budget.suggested_style}"
+                )
+        except Exception as e:
+            logger.debug(f"Budget update failed: {e}")
+
+    # =========================================================================
+    # NARRATIVE SELF API (Iteration 5)
+    # =========================================================================
+
+    def get_narrative_context(
+        self,
+        query: str,
+        top_k: int = 3
+    ) -> Optional[str]:
+        """
+        Retrieve narrative context from episodic memory.
+
+        Uses Somatic RAG to find memories that match both:
+        - Semantic content (what was happening)
+        - Emotional state (how we felt)
+        - Hardware state (system conditions)
+
+        Args:
+            query: What to search for
+            top_k: Number of memories to retrieve
+
+        Returns:
+            Formatted narrative context string, or None
+        """
+        if not self.dreamer or not self.hal:
+            return None
+
+        try:
+            # Read current state
+            somatic = self.hal.read_somatic()
+            pad = somatic.get('pad', {'p': 0, 'a': 0, 'd': 0})
+
+            current_pad = {
+                'p': pad.get('p', 0),
+                'a': pad.get('a', 0),
+                'd': pad.get('d', 0),
+            }
+
+            current_hardware = {
+                'cpu_load': somatic.get('cpu_load', 0),
+                'gpu_load': somatic.get('gpu_load', 0),
+                'vram_used': somatic.get('memory_used', 0),
+                'fpga_temp': 45,  # Default
+            }
+
+            # Somatic RAG retrieval
+            memories = self.dreamer.somatic_recall(
+                query=query,
+                current_pad=current_pad,
+                current_hardware=current_hardware,
+                top_k=top_k
+            )
+
+            if not memories:
+                return None
+
+            self.metrics.narrative_recalls += 1
+
+            # Format as context string
+            context_lines = ["[Relevant past experiences:]"]
+            for mem in memories:
+                content = mem.get('content', '')[:200]
+                score = mem.get('score', 0)
+                context_lines.append(f"- ({score:.2f}) {content}")
+
+            self._narrative_context = "\n".join(context_lines)
+            return self._narrative_context
+
+        except Exception as e:
+            logger.debug(f"Narrative context retrieval failed: {e}")
+            return None
+
+    def get_budget(self, task_hint: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get current resource budget.
+
+        Args:
+            task_hint: Optional hint about intended task
+
+        Returns:
+            Budget dict with permissions and style guidance
+        """
+        if not self.budget:
+            return None
+
+        try:
+            budget = self.budget.compute_budget(task_hint=task_hint)
+            return {
+                'allow_heavy_llm': budget.allow_heavy_llm,
+                'allow_heavy_gpu': budget.allow_heavy_gpu,
+                'allow_fpga_burst': budget.allow_fpga_burst,
+                'suggested_style': budget.suggested_style,
+                'reason': budget.reason,
+                'pain': budget.pain,
+                'system_state': budget.system_state,
+            }
+        except Exception as e:
+            logger.debug(f"Budget check failed: {e}")
+            return None
+
+    def record_task(
+        self,
+        task_type: str,
+        cpu_used: float,
+        gpu_used: float,
+        duration_s: float,
+        success: bool
+    ) -> None:
+        """
+        Record a task execution for cost model learning.
+
+        Args:
+            task_type: Type of task (e.g., "llm_inference")
+            cpu_used: CPU utilization [0-1]
+            gpu_used: GPU utilization [0-1]
+            duration_s: Duration in seconds
+            success: Whether task succeeded
+        """
+        if self.dreamer:
+            try:
+                self.dreamer.record_task_execution(
+                    task_type=task_type,
+                    cpu_used=cpu_used,
+                    gpu_used=gpu_used,
+                    duration_s=duration_s,
+                    success=success
+                )
+            except Exception as e:
+                logger.debug(f"Task recording failed: {e}")
+
     def set_attention(self, attention: Dict[str, Any]) -> None:
         """
         Set current LLM attention patterns for descending projection.
@@ -422,6 +618,10 @@ class BicameralLoop:
             'ascending_spikes': self.metrics.ascending_spikes,
             'autonomic_updates': self.metrics.autonomic_updates,
             'system_state': self.metrics.last_system_state,
+            # Narrative Self metrics
+            'narrative_recalls': self.metrics.narrative_recalls,
+            'budget_checks': self.metrics.budget_checks,
+            'budget_style': self.metrics.last_budget_style,
         }
 
 

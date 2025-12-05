@@ -1,14 +1,25 @@
 #!/usr/bin/env python3
 """
 BANOS Dreamer - Memory Consolidation Daemon
+============================================
+
+Bio-Affective Neuromorphic Operating System
+REM sleep: turning raw sensation into embodied wisdom
 
 During sleep (CALM mode, low activity, high dominance), the Dreamer:
-1. Reads the hippocampus (daily log)
+1. Reads the hippocampus (JSONL daily log)
 2. Segments events into episodes based on affective contours
 3. Summarizes each episode using a local LLM
-4. Stores summaries in long-term memory (vector DB)
+4. Stores summaries in EpisodicMemory (SQLite + vectors)
 5. Extracts lessons ("scar tissue") from painful episodes
-6. Clears the hippocampus
+6. Builds cost models from task executions
+7. Clears the hippocampus
+
+NEW in v2:
+- Stores hardware state (CPU, GPU, VRAM, FPGA temp) with each memory
+- Builds learned cost models for different task types
+- Uses event PAD, not current sleep PAD for encoding
+- Somatic RAG: memories tagged with emotional + hardware state
 
 This is the organism's REM sleep: turning raw sensation into wisdom.
 """
@@ -17,12 +28,34 @@ import json
 import os
 import time
 import hashlib
+import logging
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from enum import Enum
 import threading
+
+logger = logging.getLogger(__name__)
+
+# Import EpisodicMemory for SQLite storage
+try:
+    from .episodic_memory import EpisodicMemory, Episode as EpisodicEpisode, get_episodic_memory
+    EPISODIC_AVAILABLE = True
+except ImportError:
+    try:
+        from episodic_memory import EpisodicMemory, Episode as EpisodicEpisode, get_episodic_memory
+        EPISODIC_AVAILABLE = True
+    except ImportError:
+        EPISODIC_AVAILABLE = False
+        logger.warning("EpisodicMemory not available, using JSONL fallback")
+
+# Import HAL for hardware state
+try:
+    from banos.hal.ara_hal import connect_somatic_bus
+    HAL_AVAILABLE = True
+except ImportError:
+    HAL_AVAILABLE = False
 
 
 @dataclass
@@ -42,14 +75,35 @@ class Episode:
     max_arousal: float
     min_dominance: float
 
+    # Average PAD (for encoding)
+    avg_pad_p: float = 0.0
+    avg_pad_a: float = 0.0
+    avg_pad_d: float = 0.0
+
+    # Hardware state (NEW: for embodied memory)
+    avg_cpu_load: float = 0.0
+    avg_gpu_load: float = 0.0
+    avg_vram_used: float = 0.0
+    avg_fpga_temp: float = 0.0
+    max_cpu_load: float = 0.0
+    max_gpu_load: float = 0.0
+
+    # Pain/entropy
+    avg_pain: float = 0.0
+    max_pain: float = 0.0
+    avg_entropy: float = 0.0
+
     # Mode info
-    modes_visited: List[str]
-    primary_mode: str
+    modes_visited: List[str] = field(default_factory=list)
+    primary_mode: str = "CALM"
 
     # Stressor info
-    primary_stressor: Optional[Dict[str, Any]]
-    events_count: int
-    critical_events: List[Dict[str, Any]]
+    primary_stressor: Optional[Dict[str, Any]] = None
+    events_count: int = 0
+    critical_events: List[Dict[str, Any]] = field(default_factory=list)
+
+    # Outcome classification
+    outcome: str = "neutral"  # positive, negative, neutral
 
     # Raw entries (for summarization)
     raw_entries: List[Dict[str, Any]] = field(default_factory=list)
@@ -83,7 +137,11 @@ class Dreamer:
     The organism's consolidation process.
 
     Runs when conditions are right (CALM, high D, low load).
-    Turns hippocampus logs into long-term memories.
+    Turns hippocampus logs into long-term memories with full embodiment:
+    - Emotional state (PAD)
+    - Hardware state (CPU, GPU, VRAM, FPGA temp)
+    - Outcome (positive/negative/neutral)
+    - Cost models (learned resource usage per task type)
     """
 
     # Episode boundary thresholds
@@ -94,20 +152,34 @@ class Dreamer:
     def __init__(self,
                  hippocampus_path: str = "/var/log/banos/hippocampus.jsonl",
                  ltm_path: str = "/var/lib/banos/long_term_memory.jsonl",
-                 scars_path: str = "/var/lib/banos/scar_tissue.json"):
+                 scars_path: str = "/var/lib/banos/scar_tissue.json",
+                 episodic_db_path: str = "/var/lib/banos/episodic_memory.db"):
         self.hippocampus_path = Path(hippocampus_path)
         self.ltm_path = Path(ltm_path)
         self.scars_path = Path(scars_path)
+        self.episodic_db_path = episodic_db_path
 
         # Ensure directories exist
         self.ltm_path.parent.mkdir(parents=True, exist_ok=True)
         self.scars_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # EpisodicMemory (SQLite + vectors) - primary storage
+        self._episodic: Optional[EpisodicMemory] = None
+        if EPISODIC_AVAILABLE:
+            try:
+                self._episodic = get_episodic_memory(episodic_db_path)
+                logger.info("Dreamer connected to EpisodicMemory")
+            except Exception as e:
+                logger.warning(f"EpisodicMemory unavailable: {e}")
 
         # LLM interface (lazy loaded)
         self._summarizer = None
 
         # Embedding model (lazy loaded)
         self._embedder = None
+
+        # Task cost accumulator (for building cost models)
+        self._task_costs: Dict[str, List[Dict[str, Any]]] = {}
 
     def should_dream(self, current_pad: Dict[str, Any]) -> bool:
         """
@@ -244,7 +316,7 @@ class Dreamer:
         return episodes
 
     def _create_episode(self, entries: List[Dict[str, Any]]) -> Optional[Episode]:
-        """Create an Episode from a list of entries"""
+        """Create an Episode from a list of entries with full embodiment"""
         if not entries:
             return None
 
@@ -259,11 +331,38 @@ class Dreamer:
         if duration_ms < self.MIN_EPISODE_DURATION_MS:
             return None
 
-        # Compute aggregates
+        # Compute PAD aggregates
         modes = list(set(e.get("mode", "CALM") for e in entries))
         pleasures = [e.get("pad", {}).get("P", 0) for e in entries]
         arousals = [e.get("pad", {}).get("A", 0) for e in entries]
         dominances = [e.get("pad", {}).get("D", 0) for e in entries]
+
+        # Compute averages (for encoding)
+        avg_p = sum(pleasures) / len(pleasures) if pleasures else 0
+        avg_a = sum(arousals) / len(arousals) if arousals else 0
+        avg_d = sum(dominances) / len(dominances) if dominances else 0
+
+        # Extract hardware state from metrics (if available)
+        cpu_loads = []
+        gpu_loads = []
+        vram_used = []
+        fpga_temps = []
+        pains = []
+        entropies = []
+
+        for e in entries:
+            metrics = e.get("metrics", {})
+            if metrics:
+                cpu_loads.append(metrics.get("cpu_load", 0))
+                gpu_loads.append(metrics.get("gpu_load", 0))
+                vram_used.append(metrics.get("vram_used_pct", 0))
+                fpga_temps.append(metrics.get("fpga_temp", 45))
+
+            # Also check diagnostics
+            diag = e.get("diagnostics", {})
+            if diag:
+                pains.append(diag.get("thermal_stress", 0))
+                entropies.append(diag.get("perceived_risk", 0))
 
         # Find critical events
         critical = [
@@ -273,6 +372,14 @@ class Dreamer:
 
         # Find primary stressor
         stressors = [e.get("primary_stressor") for e in entries if e.get("primary_stressor")]
+
+        # Determine outcome based on episode characteristics
+        outcome = "neutral"
+        min_p = min(pleasures) if pleasures else 0
+        if min_p < -0.3 or critical:
+            outcome = "negative"
+        elif min_p > 0.3 and not stressors:
+            outcome = "positive"
 
         episode_id = hashlib.sha256(
             f"{start_ns}:{end_ns}".encode()
@@ -290,13 +397,30 @@ class Dreamer:
             min_pleasure=min(pleasures) if pleasures else 0,
             max_arousal=max(arousals) if arousals else 0,
             min_dominance=min(dominances) if dominances else 0,
+            # Averages for encoding
+            avg_pad_p=avg_p,
+            avg_pad_a=avg_a,
+            avg_pad_d=avg_d,
+            # Hardware state
+            avg_cpu_load=sum(cpu_loads) / len(cpu_loads) if cpu_loads else 0,
+            avg_gpu_load=sum(gpu_loads) / len(gpu_loads) if gpu_loads else 0,
+            avg_vram_used=sum(vram_used) / len(vram_used) if vram_used else 0,
+            avg_fpga_temp=sum(fpga_temps) / len(fpga_temps) if fpga_temps else 45,
+            max_cpu_load=max(cpu_loads) if cpu_loads else 0,
+            max_gpu_load=max(gpu_loads) if gpu_loads else 0,
+            # Pain/entropy
+            avg_pain=sum(pains) / len(pains) if pains else 0,
+            max_pain=max(pains) if pains else 0,
+            avg_entropy=sum(entropies) / len(entropies) if entropies else 0,
+            # Mode info
             modes_visited=modes,
             primary_mode=max(set(e.get("mode", "CALM") for e in entries),
                              key=lambda m: sum(1 for e in entries if e.get("mode") == m)),
             primary_stressor=stressors[0] if stressors else None,
             events_count=len(entries),
-            critical_events=critical[:5],  # Keep first 5 critical events
-            raw_entries=entries[:20],  # Keep first 20 entries for context
+            critical_events=critical[:5],
+            outcome=outcome,
+            raw_entries=entries[:20],
         )
 
     def _is_boring(self, episode: Episode) -> bool:
@@ -325,6 +449,7 @@ class Dreamer:
         Compress an episode into a narrative memory.
 
         Uses a local LLM to summarize raw entries into first-person narrative.
+        Stores to both JSONL (fallback) and EpisodicMemory (SQLite + vectors).
         """
         # Build context for summarization
         context = self._build_summary_context(episode)
@@ -339,6 +464,39 @@ class Dreamer:
             f"{episode.episode_id}:{time.time_ns()}".encode()
         ).hexdigest()[:16]
 
+        # Compute importance based on episode characteristics
+        importance = self._compute_importance(episode)
+
+        # Store to EpisodicMemory (SQLite + vectors) if available
+        if self._episodic and EPISODIC_AVAILABLE:
+            try:
+                episodic_episode = EpisodicEpisode(
+                    content=narrative,
+                    vector=self._episodic.encode(narrative),
+                    # Use EVENT PAD, not current sleep PAD
+                    pad_p=episode.avg_pad_p,
+                    pad_a=episode.avg_pad_a,
+                    pad_d=episode.avg_pad_d,
+                    pain=episode.avg_pain,
+                    entropy=episode.avg_entropy,
+                    # Hardware state at encoding time
+                    cpu_load=episode.avg_cpu_load,
+                    gpu_load=episode.avg_gpu_load,
+                    vram_used=episode.avg_vram_used,
+                    fpga_temp=episode.avg_fpga_temp,
+                    # Metadata
+                    summary=context[:200],  # First 200 chars of context
+                    outcome=episode.outcome,
+                    importance=importance,
+                    episode_type="experience",
+                    tags=episode.modes_visited,
+                    timestamp=episode.start_time_ns / 1e9,
+                )
+                self._episodic.store(episodic_episode)
+                logger.debug(f"Stored episode to EpisodicMemory: {memory_id}")
+            except Exception as e:
+                logger.error(f"Failed to store to EpisodicMemory: {e}")
+
         return ConsolidatedMemory(
             memory_id=memory_id,
             timestamp=datetime.now().isoformat(),
@@ -350,6 +508,48 @@ class Dreamer:
             was_painful=episode.min_pleasure < -0.3,
             stressor_type=episode.primary_stressor.get("type") if episode.primary_stressor else None,
         )
+
+    def _compute_importance(self, episode: Episode) -> float:
+        """
+        Compute how important an episode is for long-term memory.
+
+        High importance:
+        - Negative outcomes (we remember pain)
+        - Critical events
+        - High arousal (exciting or scary)
+        - Stressors present
+
+        Low importance:
+        - Boring CALM periods
+        - Neutral outcomes
+        - Low arousal
+        """
+        importance = 0.5  # Base importance
+
+        # Outcome matters
+        if episode.outcome == "negative":
+            importance += 0.3
+        elif episode.outcome == "positive":
+            importance += 0.1
+
+        # Critical events are important
+        if episode.critical_events:
+            importance += min(0.2, len(episode.critical_events) * 0.05)
+
+        # Stressors are important
+        if episode.primary_stressor:
+            importance += 0.1
+
+        # High arousal is memorable
+        if episode.max_arousal > 0.5:
+            importance += 0.1
+
+        # Pain is very memorable
+        if episode.max_pain > 0.5:
+            importance += 0.2
+
+        # Clamp to [0, 1]
+        return max(0.0, min(1.0, importance))
 
     def _build_summary_context(self, episode: Episode) -> str:
         """Build context string for the summarizer"""
@@ -531,6 +731,165 @@ Summary:"""
                     continue
 
         return memories[:limit]
+
+    # =========================================================================
+    # COST MODEL BUILDING
+    # =========================================================================
+
+    def record_task_execution(
+        self,
+        task_type: str,
+        cpu_used: float,
+        gpu_used: float,
+        duration_s: float,
+        success: bool
+    ) -> None:
+        """
+        Record a task execution for cost model learning.
+
+        Call this after each significant task (LLM inference, rendering, etc.)
+        to learn what resources different operations require.
+
+        Args:
+            task_type: Type of task (e.g., "llm_inference", "maxwell_sim", "audio_viz")
+            cpu_used: Peak/average CPU utilization [0-1]
+            gpu_used: Peak/average GPU utilization [0-1]
+            duration_s: How long the task took
+            success: Whether it completed successfully
+        """
+        if self._episodic and EPISODIC_AVAILABLE:
+            try:
+                self._episodic.update_cost_model(
+                    task_type=task_type,
+                    cpu_used=cpu_used,
+                    gpu_used=gpu_used,
+                    duration_s=duration_s,
+                    success=success
+                )
+                logger.debug(f"Recorded task cost: {task_type} ({duration_s:.1f}s, success={success})")
+            except Exception as e:
+                logger.error(f"Failed to record task cost: {e}")
+
+    def get_task_cost_estimate(self, task_type: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the learned cost estimate for a task type.
+
+        Returns:
+            Dict with avg_cpu, avg_gpu, avg_duration_s, failure_rate, or None if unknown
+        """
+        if not self._episodic:
+            return None
+
+        model = self._episodic.get_cost_model(task_type)
+        if model:
+            return {
+                'avg_cpu': model.avg_cpu,
+                'avg_gpu': model.avg_gpu,
+                'avg_duration_s': model.avg_duration_s,
+                'failure_rate': model.failure_rate,
+                'sample_count': model.sample_count,
+            }
+        return None
+
+    def get_all_cost_estimates(self) -> Dict[str, Dict[str, Any]]:
+        """Get all learned cost estimates."""
+        if not self._episodic:
+            return {}
+
+        models = self._episodic.get_all_cost_models()
+        return {
+            m.task_type: {
+                'avg_cpu': m.avg_cpu,
+                'avg_gpu': m.avg_gpu,
+                'avg_duration_s': m.avg_duration_s,
+                'failure_rate': m.failure_rate,
+                'sample_count': m.sample_count,
+            }
+            for m in models
+        }
+
+    # =========================================================================
+    # SOMATIC RAG RETRIEVAL
+    # =========================================================================
+
+    def somatic_recall(
+        self,
+        query: str,
+        current_pad: Dict[str, float],
+        current_hardware: Optional[Dict[str, float]] = None,
+        top_k: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Somatic RAG: Retrieve memories by feeling + meaning.
+
+        This is mood-state dependent memory retrieval. We find memories that:
+        1. Semantically match the query
+        2. Emotionally resonate with current state
+        3. Were encoded in similar hardware conditions
+
+        Args:
+            query: What to search for
+            current_pad: Current PAD state {'p': float, 'a': float, 'd': float}
+            current_hardware: Current hardware state (optional)
+            top_k: Number of memories to return
+
+        Returns:
+            List of memory dicts with scores
+        """
+        if self._episodic and EPISODIC_AVAILABLE:
+            return self._episodic.recall(
+                query=query,
+                current_pad=current_pad,
+                current_hardware=current_hardware,
+                top_k=top_k
+            )
+
+        # Fallback to simple keyword search
+        memories = self.recall(query, limit=top_k)
+        return [
+            {'content': m.narrative, 'score': 0.5}
+            for m in memories
+        ]
+
+    def recall_failures(
+        self,
+        query: str,
+        current_hardware: Optional[Dict[str, float]] = None,
+        top_k: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        Specifically recall past failures related to query.
+
+        Useful for answering: "What went wrong last time I tried this?"
+        """
+        if self._episodic and EPISODIC_AVAILABLE:
+            return self._episodic.recall_by_outcome(
+                query=query,
+                outcome='negative',
+                current_hardware=current_hardware,
+                top_k=top_k
+            )
+        return []
+
+    def recall_successes(
+        self,
+        query: str,
+        current_hardware: Optional[Dict[str, float]] = None,
+        top_k: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        Specifically recall past successes related to query.
+
+        Useful for answering: "What worked well before?"
+        """
+        if self._episodic and EPISODIC_AVAILABLE:
+            return self._episodic.recall_by_outcome(
+                query=query,
+                outcome='positive',
+                current_hardware=current_hardware,
+                top_k=top_k
+            )
+        return []
 
 
 # =============================================================================
