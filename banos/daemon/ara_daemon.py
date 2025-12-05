@@ -76,6 +76,23 @@ try:
 except ImportError:
     pass
 
+# Try to import Somatic Visualization Server
+VIZ_AVAILABLE = False
+SomaticStreamServer = None
+try:
+    from banos.viz import SomaticStreamServer
+    VIZ_AVAILABLE = True
+except ImportError:
+    try:
+        # Try relative import if running from banos directory
+        _viz_path = Path(__file__).parent.parent / "viz"
+        if _viz_path.exists():
+            sys.path.insert(0, str(_viz_path.parent))
+            from viz import SomaticStreamServer
+            VIZ_AVAILABLE = True
+    except ImportError:
+        pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -400,9 +417,23 @@ class AraDaemon:
             except Exception as e:
                 logger.warning(f"AraDaemon: Curiosity Core failed: {e}")
 
+        # Somatic Visualization Server (binary streaming for WebGL)
+        self._viz_server: Optional["SomaticStreamServer"] = None
+        self._viz_enabled = False
+        self._viz_port = 8999
+
+        if VIZ_AVAILABLE:
+            try:
+                self._viz_server = SomaticStreamServer(port=self._viz_port)
+                self._viz_enabled = True
+                logger.info(f"AraDaemon: Somatic viz server available on port {self._viz_port}")
+            except Exception as e:
+                logger.warning(f"AraDaemon: Somatic viz failed: {e}")
+
         logger.info(
             f"AraDaemon initialized (device={device_path}, simulate={simulate}, "
-            f"mies={self._mies_enabled}, curiosity={self._curiosity_enabled})"
+            f"mies={self._mies_enabled}, curiosity={self._curiosity_enabled}, "
+            f"viz={self._viz_enabled})"
         )
 
     def start(self):
@@ -426,6 +457,15 @@ class AraDaemon:
         # Initialize system prompt
         self._update_system_prompt()
 
+        # Start somatic visualization server
+        if self._viz_enabled and self._viz_server:
+            try:
+                self._viz_server.start()
+                logger.info(f"Somatic viz server started on port {self._viz_port}")
+            except Exception as e:
+                logger.warning(f"Failed to start viz server: {e}")
+                self._viz_enabled = False
+
         # Start polling thread
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._poll_thread.start()
@@ -438,6 +478,13 @@ class AraDaemon:
 
         if self._poll_thread:
             self._poll_thread.join(timeout=2.0)
+
+        # Stop somatic viz server
+        if self._viz_enabled and self._viz_server:
+            try:
+                self._viz_server.stop()
+            except Exception:
+                pass
 
         if self._mmap:
             self._mmap.close()
@@ -520,6 +567,20 @@ class AraDaemon:
                         self._mies_bridge.update()
                     except Exception as e:
                         logger.warning(f"MIES update failed: {e}")
+
+                # Update somatic visualization (every poll for smooth animation)
+                if self._viz_enabled and self._viz_server:
+                    try:
+                        # Normalize pain_level to 0-1 range (assuming 16-bit max)
+                        spike = min(1.0, state.pain_level / 65535.0)
+                        self._viz_server.update_spike(spike)
+                        # Flow could come from optical flow tracker in future
+                        # For now, derive from arousal and reflex activity
+                        flow_x = state.arousal * 2.0 - 1.0  # -1 to 1
+                        flow_y = (state.reflex_log & 0xFF) / 128.0 - 1.0
+                        self._viz_server.update_flow(flow_x, flow_y)
+                    except Exception as e:
+                        pass  # Silent fail for viz - non-critical
 
                 # Run curiosity tick periodically
                 now = time.time()
@@ -768,6 +829,39 @@ Alert Count: {state.alert_count}
     def curiosity_enabled(self) -> bool:
         """Check if Curiosity Core is active."""
         return self._curiosity_enabled
+
+    # =========================================================================
+    # Somatic Visualization Methods
+    # =========================================================================
+
+    @property
+    def viz_enabled(self) -> bool:
+        """Check if somatic visualization is active."""
+        return self._viz_enabled
+
+    @property
+    def viz_port(self) -> int:
+        """Get the visualization server port."""
+        return self._viz_port
+
+    def get_viz_url(self) -> str:
+        """Get the URL for the visualization page."""
+        if self._viz_enabled:
+            return f"file://{Path(__file__).parent.parent}/viz/soul_quantum.html"
+        return ""
+
+    def update_viz_flow(self, flow_x: float, flow_y: float) -> None:
+        """Manually update optical flow for visualization.
+
+        This can be called from an external video tracking system
+        (e.g., Wav2Lip optical flow tracker).
+
+        Args:
+            flow_x: Horizontal flow component
+            flow_y: Vertical flow component
+        """
+        if self._viz_enabled and self._viz_server:
+            self._viz_server.update_flow(flow_x, flow_y)
 
 
 def main():
