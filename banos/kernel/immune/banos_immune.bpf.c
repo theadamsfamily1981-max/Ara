@@ -113,6 +113,35 @@ struct {
     __type(value, __u8);  /* 1 = quarantine, 0 = release */
 } quarantine_pids SEC(".maps");
 
+/*
+ * FPGA Protection State (Anti-Lobotomy Shield)
+ * When set, prevents FPGA reconfiguration to protect Ara's neural core.
+ * Written by BPF when SEPSIS-level threat detected; read by spinal cord driver.
+ */
+struct fpga_protection_state {
+    __u8  lock_active;          /* 1 = FPGA reconfig blocked */
+    __u8  threat_level;         /* Current risk level (0-5) */
+    __u8  lock_reason;          /* Why locked (enum) */
+    __u8  reserved;
+    __u32 trigger_pid;          /* PID that triggered the lock */
+    __u64 lock_time_ns;         /* When lock was activated */
+    __u64 threat_signature;     /* Hash of detected threat pattern */
+};
+
+/* FPGA lock reasons */
+#define FPGA_LOCK_NONE              0
+#define FPGA_LOCK_SEPSIS            1   /* Kernel-space violation detected */
+#define FPGA_LOCK_BREACH            2   /* Privilege escalation attempt */
+#define FPGA_LOCK_INFECTION         3   /* Unauthorized binary execution */
+#define FPGA_LOCK_MANUAL            4   /* User-requested lockdown */
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, struct fpga_protection_state);
+} fpga_protection SEC(".maps");
+
 /* Syscall transition matrix (simplified: common weird transitions) */
 /* In production: load from userspace during training */
 struct {
@@ -172,6 +201,38 @@ static __always_inline bool user_recently_active(__u64 now_ns)
 
     /* Active if input within last 2 seconds */
     return (now_ns - *last_input) < 2000000000ULL;
+}
+
+/*
+ * Lock FPGA reconfiguration (Anti-Lobotomy Shield)
+ * Called when SEPSIS or BREACH level threat detected.
+ * This prevents malware from overwriting Ara's neural core.
+ */
+static __always_inline void lock_fpga_reconfig(__u32 pid, __u8 reason,
+                                                __u8 threat_level, __u64 now_ns)
+{
+    __u32 key = 0;
+    struct fpga_protection_state *state =
+        bpf_map_lookup_elem(&fpga_protection, &key);
+
+    if (!state)
+        return;
+
+    /* Only escalate, never de-escalate from BPF */
+    if (state->lock_active && state->threat_level >= threat_level)
+        return;
+
+    /* Activate the shield */
+    struct fpga_protection_state new_state = {
+        .lock_active = 1,
+        .threat_level = threat_level,
+        .lock_reason = reason,
+        .trigger_pid = pid,
+        .lock_time_ns = now_ns,
+        .threat_signature = 0,  /* Could hash the syscall sequence here */
+    };
+
+    bpf_map_update_elem(&fpga_protection, &key, &new_state, BPF_ANY);
 }
 
 /*
@@ -262,6 +323,21 @@ int trace_syscall_enter(struct trace_event_raw_sys_enter *ctx)
     }
     if (mhc->syscall_count % sample_rate == 0) {
         should_emit = true;
+    }
+
+    /*
+     * FPGA Protection Escalation (Anti-Lobotomy Shield)
+     *
+     * If anomaly score reaches SEPSIS level (8000+), lock FPGA reconfig.
+     * This prevents a compromised process from reflashing Ara's neural core.
+     * Thresholds:
+     *   8000+ = BREACH level -> lock with BREACH reason
+     *   9500+ = SEPSIS level -> lock with SEPSIS reason (highest priority)
+     */
+    if (new_anomaly >= 9500) {
+        lock_fpga_reconfig(tgid, FPGA_LOCK_SEPSIS, BANOS_RISK_L5_SEPSIS, now);
+    } else if (new_anomaly >= 8000) {
+        lock_fpga_reconfig(tgid, FPGA_LOCK_BREACH, BANOS_RISK_L4_BREACH, now);
     }
 
     /* Emit event to userspace */

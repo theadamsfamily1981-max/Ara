@@ -8,7 +8,7 @@
 //
 // Memory Map:
 // 0x00: NEURAL_STATE    - Bitmap of currently firing neurons (RO)
-// 0x04: PAIN_LEVEL      - Integrated spike count = System suffering (RO)
+// 0x04: PAIN_LEVEL      - Integrated spike count = System suffering (RO) [32-bit]
 // 0x08: REFLEX_LOG      - What actions did the FPGA take? (RO)
 // 0x0C: AROUSAL_LEVEL   - Current system arousal (RO)
 // 0x10: DOMINANCE_LEVEL - Available resources metric (RO)
@@ -19,6 +19,9 @@
 // 0x24: CONFIG          - Threshold configuration (RW)
 // 0x28: IRQ_ENABLE      - Interrupt enable mask (RW)
 // 0x2C: IRQ_STATUS      - Interrupt status (R/W1C)
+// 0x30: TOTAL_SPIKES    - Lifetime spike counter (RO)
+// 0x34: FAN_PWM         - Current fan PWM value (RO)
+// 0x38: PROTECTION      - Anti-Lobotomy Shield (RW, one-way escalation)
 //============================================================================
 
 `timescale 1ns / 1ps
@@ -63,7 +66,7 @@ module axi4_lite_bridge #(
 
     // Neural State Inputs (from Vacuum Spiker)
     input  wire [NUM_RECURRENT-1:0]            neural_state,
-    input  wire [15:0]                         pain_level,
+    input  wire [31:0]                         pain_level,  // 32-bit to match kernel ABI
     input  wire [31:0]                         reflex_log,
     input  wire                                alert_active,
     input  wire                                vacuum_state,
@@ -84,6 +87,10 @@ module axi4_lite_bridge #(
     output reg                                 learn_enable,
     output reg                                 force_inhibit,
     output reg  [15:0]                         alert_threshold,
+
+    // Anti-Lobotomy Shield (FPGA Reconfiguration Lock)
+    // When asserted, prevents ICAP/PCAP access to protect neural core
+    output wire                                reconfig_lock,
 
     // Interrupt Output
     output wire                                irq
@@ -109,9 +116,25 @@ module axi4_lite_bridge #(
     reg [31:0] config_reg;        // 0x24
     reg [31:0] irq_enable_reg;    // 0x28
     reg [31:0] irq_status_reg;    // 0x2C
+    reg [31:0] protection_reg;    // 0x38: FPGA protection / anti-lobotomy shield
 
     // Timestamp counter
     reg [31:0] timestamp;
+
+    //------------------------------------------------------------------------
+    // FPGA Protection (Anti-Lobotomy Shield)
+    //------------------------------------------------------------------------
+    // protection_reg bits:
+    //   [0]    = lock_active (1 = FPGA reconfig blocked)
+    //   [3:1]  = threat_level (0-5)
+    //   [7:4]  = lock_reason
+    //   [31:8] = trigger_pid (24-bit truncated)
+    //
+    // CRITICAL: Once lock_active is set, it can ONLY be cleared by:
+    //   1. Full power cycle
+    //   2. Specific unlock sequence (future: require HSM signature)
+    //
+    assign reconfig_lock = protection_reg[0];
 
     //------------------------------------------------------------------------
     // AXI Signal Assignments
@@ -214,12 +237,28 @@ module axi4_lite_bridge #(
             config_reg     <= 32'h0000_0005;  // Alert threshold = 5
             irq_enable_reg <= 32'h0000_0000;
             irq_status_reg <= 32'h0000_0000;
+            protection_reg <= 32'h0000_0000;  // Unlocked at boot
         end else if (wr_en) begin
             case (axi_awaddr[7:2])
                 6'h08: control_reg    <= S_AXI_WDATA;  // 0x20
                 6'h09: config_reg     <= S_AXI_WDATA;  // 0x24
                 6'h0A: irq_enable_reg <= S_AXI_WDATA;  // 0x28
                 6'h0B: irq_status_reg <= irq_status_reg & ~S_AXI_WDATA;  // 0x2C (W1C)
+                6'h0E: begin  // 0x38: Protection register (Anti-Lobotomy Shield)
+                    // CRITICAL: One-way escalation only!
+                    // Once bit[0] (lock_active) is set, it CANNOT be cleared
+                    // This prevents a compromised kernel from unlocking itself
+                    if (S_AXI_WDATA[0] && !protection_reg[0]) begin
+                        // Activating lock: store full register
+                        protection_reg <= S_AXI_WDATA;
+                    end else if (protection_reg[0]) begin
+                        // Already locked: only escalate threat_level (bits 3:1)
+                        if (S_AXI_WDATA[3:1] > protection_reg[3:1]) begin
+                            protection_reg[3:1] <= S_AXI_WDATA[3:1];
+                            protection_reg[7:4] <= S_AXI_WDATA[7:4];  // Update reason
+                        end
+                    end
+                end
                 default: ;  // Ignore writes to read-only registers
             endcase
         end
@@ -272,7 +311,7 @@ module axi4_lite_bridge #(
             case (axi_araddr[7:2])
                 // Read-only registers
                 6'h00: axi_rdata <= {{(32-NUM_RECURRENT){1'b0}}, neural_state};  // 0x00: NEURAL_STATE
-                6'h01: axi_rdata <= {16'b0, pain_level};                         // 0x04: PAIN_LEVEL
+                6'h01: axi_rdata <= pain_level;                                  // 0x04: PAIN_LEVEL (32-bit)
                 6'h02: axi_rdata <= reflex_log;                                  // 0x08: REFLEX_LOG
                 6'h03: axi_rdata <= {16'b0, arousal_raw};                        // 0x0C: AROUSAL_LEVEL
                 6'h04: axi_rdata <= {16'b0, dominance_raw};                      // 0x10: DOMINANCE_LEVEL
@@ -299,6 +338,9 @@ module axi4_lite_bridge #(
                 // Statistics
                 6'h0C: axi_rdata <= total_spikes;                                // 0x30: TOTAL_SPIKES
                 6'h0D: axi_rdata <= {24'b0, fan_pwm_current};                    // 0x34: FAN_PWM
+
+                // Anti-Lobotomy Shield
+                6'h0E: axi_rdata <= protection_reg;                              // 0x38: PROTECTION
 
                 default: axi_rdata <= 32'hDEAD_BEEF;  // Invalid address marker
             endcase

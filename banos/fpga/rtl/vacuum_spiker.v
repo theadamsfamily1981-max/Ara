@@ -51,7 +51,7 @@ module vacuum_spiker #(
 
     // Alert output
     output reg                     alert,
-    output reg  [$clog2(NUM_RECURRENT*WINDOW_CYCLES):0] pain_level,
+    output reg  [31:0]             pain_level,  // 32-bit to match kernel ABI
 
     // Status
     output wire                    vacuum_state,  // True if network is silent
@@ -63,6 +63,10 @@ module vacuum_spiker #(
     // W[i][j] = weight from input i to recurrent j
     //------------------------------------------------------------------------
 
+    // Synthesis attribute: Force BRAM, not distributed LUT RAM
+    // For VU7P+ with URAM available, use: (* ram_style = "ultra" *)
+    // For smaller FPGAs, use: (* ram_style = "block" *)
+    (* ram_style = "block" *)
     reg signed [WEIGHT_BITS-1:0] weights [0:NUM_INPUTS*NUM_RECURRENT-1];
 
     // Initialize weights to small negative values (inhibitory bias)
@@ -239,8 +243,8 @@ module vacuum_spiker #(
     //------------------------------------------------------------------------
 
     reg [$clog2(WINDOW_CYCLES)-1:0] window_counter;
-    reg [$clog2(NUM_RECURRENT*WINDOW_CYCLES):0] window_spikes;
-    reg [$clog2(NUM_RECURRENT*WINDOW_CYCLES):0] prev_window_spikes;
+    reg [31:0] window_spikes;       // 32-bit to match pain_level ABI
+    reg [31:0] prev_window_spikes;  // 32-bit to match pain_level ABI
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
