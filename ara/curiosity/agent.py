@@ -34,6 +34,14 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
+# Optional idea board integration
+IDEA_BOARD_AVAILABLE = False
+try:
+    from ara.ideas import IdeaBoard, CuriosityBridge
+    IDEA_BOARD_AVAILABLE = True
+except ImportError:
+    pass
+
 
 class TicketStatus(Enum):
     """Status of a curiosity investigation ticket."""
@@ -152,6 +160,7 @@ class CuriosityAgent:
         max_discoveries_per_sweep: int = 50,
         max_tickets_per_hour: int = 10,
         default_investigation_depth: int = 3,
+        idea_board: Optional["IdeaBoard"] = None,
     ):
         """Initialize the curiosity agent.
 
@@ -160,6 +169,7 @@ class CuriosityAgent:
             max_discoveries_per_sweep: Limit on new objects per sweep
             max_tickets_per_hour: Rate limit on investigations
             default_investigation_depth: Max follow-up depth
+            idea_board: Optional IdeaBoard for spawning ideas from discoveries
         """
         self.world = world_model
         self.max_discoveries = max_discoveries_per_sweep
@@ -174,6 +184,17 @@ class CuriosityAgent:
         self._report_counter = 0
         self._tickets_this_hour = 0
         self._hour_start = time.time()
+
+        # Idea Board integration
+        self._idea_board = idea_board
+        self._curiosity_bridge: Optional["CuriosityBridge"] = None
+        if IDEA_BOARD_AVAILABLE and idea_board is not None:
+            self._curiosity_bridge = CuriosityBridge(
+                board=idea_board,
+                min_curiosity_score=0.5,
+                auto_submit=True,
+            )
+            logger.info("CuriosityBridge connected to IdeaBoard")
 
     def _check_rate_limit(self) -> bool:
         """Check if we're within ticket rate limits."""
@@ -612,6 +633,13 @@ class CuriosityAgent:
             if discoveries:
                 state.discoveries_today = sum(len(v) for v in discoveries.values())
 
+                # Spawn ideas from discoveries if bridge is connected
+                if self._curiosity_bridge:
+                    for category_discoveries in discoveries.values():
+                        for obj in category_discoveries:
+                            score = curiosity_score(obj)
+                            self._curiosity_bridge.process_discovery(obj, score)
+
         # Investigation phase
         candidates = self.world.get_curiosity_candidates(top_n=3)
         investigated = False
@@ -628,9 +656,35 @@ class CuriosityAgent:
 
         # Report if we investigated
         if investigated:
-            return self.generate_report()
+            report = self.generate_report()
+
+            # Process report through bridge to spawn ideas
+            if self._curiosity_bridge and report:
+                ideas = self._curiosity_bridge.process_report(report)
+                if ideas:
+                    logger.info(f"Spawned {len(ideas)} ideas from curiosity report")
+
+            return report
 
         return None
+
+    def attach_idea_board(self, board: "IdeaBoard") -> None:
+        """Attach an IdeaBoard after initialization.
+
+        Args:
+            board: IdeaBoard to connect
+        """
+        if not IDEA_BOARD_AVAILABLE:
+            logger.warning("IdeaBoard not available, cannot attach")
+            return
+
+        self._idea_board = board
+        self._curiosity_bridge = CuriosityBridge(
+            board=board,
+            min_curiosity_score=0.5,
+            auto_submit=True,
+        )
+        logger.info("CuriosityBridge attached to IdeaBoard")
 
     def _generate_question(self, obj: WorldObject) -> str:
         """Generate a curiosity question about an object."""
