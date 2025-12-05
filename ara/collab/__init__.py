@@ -102,6 +102,26 @@ from .workflow import (
     get_state_info,
 )
 
+from .orchestrator import (
+    CouncilOrchestrator,
+    Issue,
+    ModelDispatcher,
+    create_orchestrator,
+    run_issue_through_council,
+    # Prompt builders
+    triage_prompt,
+    ideate_prompt,
+    specify_prompt,
+    implement_prompt,
+    verify_prompt,
+    report_prompt,
+    # Default dispatchers
+    DEFAULT_DISPATCHERS,
+    stub_nova,
+    stub_claude,
+    stub_gemini,
+)
+
 __all__ = [
     # Models
     "DevMode",
@@ -161,4 +181,20 @@ __all__ = [
     "FinalReport",
     "create_workflow",
     "get_state_info",
+    # Orchestrator
+    "CouncilOrchestrator",
+    "Issue",
+    "ModelDispatcher",
+    "create_orchestrator",
+    "run_issue_through_council",
+    "triage_prompt",
+    "ideate_prompt",
+    "specify_prompt",
+    "implement_prompt",
+    "verify_prompt",
+    "report_prompt",
+    "DEFAULT_DISPATCHERS",
+    "stub_nova",
+    "stub_claude",
+    "stub_gemini",
 ]
