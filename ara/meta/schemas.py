@@ -31,6 +31,22 @@ class InteractionRecord(BaseModel):
     """Complete record of one interaction where Ara handled a query.
 
     This is the atomic unit of Ara's meta-learning dataset.
+    Example JSONL entry:
+    {
+      "ts": "2025-12-05T13:42:10.123Z",
+      "session_id": "ara-2025-12-05-xyz",
+      "user_intent": "debug_code",
+      "question_summary": "Fix TypeError in Python async function",
+      "teachers": ["claude", "nova"],
+      "primary_teacher": "claude",
+      "pattern_id": "claude->nova_review.v1",
+      "prompt_style": "concise_technical",
+      "outcome_rating": 0.92,
+      "was_repeated": false,
+      "latency_sec": 18.3,
+      "ara_reflection": "Claude nailed async semantics; Nova added simplification.",
+      "user_feedback": "thumbs_up"
+    }
     """
 
     id: str = Field(default_factory=lambda: f"INT-{uuid.uuid4().hex[:12]}")
@@ -38,12 +54,20 @@ class InteractionRecord(BaseModel):
 
     # What the user asked
     user_query: str = ""
-    context_tags: List[str] = Field(default_factory=list)  # ["code", "hardware", "fpga"]
+    question_summary: str = ""  # Short 1-line summary
+    user_intent: str = ""  # Classified intent: "debug_code", "design_arch", "research", etc.
+    context_tags: List[str] = Field(default_factory=list)  # ["code", "python", "async"]
 
     # What strategy Ara chose
     chosen_strategy: str = ""  # "ask_claude_first", "gemini_then_nova", etc.
+    pattern_id: Optional[str] = None  # "claude->nova_review.v1" - links to PatternCard
+    prompt_style: str = "default"  # "concise_technical", "exploratory", "step_by_step"
 
-    # Tools/teachers used
+    # Teachers used
+    teachers: List[str] = Field(default_factory=list)  # ["claude", "nova"]
+    primary_teacher: Optional[str] = None  # Which one did the heavy lifting
+
+    # Tools/teachers used (detailed)
     tools_used: List[ToolCall] = Field(default_factory=list)
 
     # Outcome
@@ -51,10 +75,20 @@ class InteractionRecord(BaseModel):
     turns_to_solution: Optional[int] = None
     user_followup_needed: bool = False
     backtrack_count: int = 0
+    was_repeated: bool = False  # Did user have to ask same thing again?
+    latency_sec: Optional[float] = None  # Total wall-clock time
+
+    # User feedback
+    user_feedback: Optional[str] = None  # "thumbs_up", "thumbs_down", "neutral"
+    user_feedback_text: Optional[str] = None  # Freeform feedback
+
+    # Auto-detected issues
+    auto_detected_issues: List[str] = Field(default_factory=list)
+    # e.g., ["long_latency", "multiple_backtracks", "teacher_disagreement"]
 
     # Reflective notes
     notes: Optional[str] = None  # From Ara or user
-    ara_reflection: Optional[str] = None  # Ara's self-assessment
+    ara_reflection: Optional[str] = None  # Ara's self-assessment after the interaction
 
     # Link to other systems
     issue_id: Optional[str] = None
@@ -82,6 +116,126 @@ class InteractionRecord(BaseModel):
             return 0.0
         successes = sum(1 for t in self.tools_used if t.success)
         return successes / len(self.tools_used)
+
+
+class PatternStep(BaseModel):
+    """A single step in a pattern workflow."""
+
+    call: str  # "claude", "nova", "gemini"
+    role: str = "primary"  # "primary", "refiner", "arbiter", "reviewer"
+    style_hint: str = ""  # "be explicit, show diffs"
+
+    class Config:
+        extra = "allow"
+
+
+class PatternCard(BaseModel):
+    """A golden path pattern card - a proven workflow.
+
+    When a workflow emerges with high success rate, Ara mints a card:
+
+    id: code_debug.claude->nova
+    intent: debug_code
+    teachers: [claude, nova]
+    sequence:
+      - call: claude
+        role: primary_debugger
+        style_hint: "be explicit, show diffs"
+      - call: nova
+        role: refiner
+        style_hint: "simplify, explain, add comments"
+    success_rate: 0.89
+    """
+
+    id: str  # "code_debug.claude->nova.v1"
+    version: int = 1
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
+
+    # What this pattern is for
+    intent: str = ""  # "debug_code", "design_arch", "refactor"
+    description: str = ""
+    context_tags: List[str] = Field(default_factory=list)
+
+    # The workflow
+    teachers: List[str] = Field(default_factory=list)  # ["claude", "nova"]
+    sequence: List[PatternStep] = Field(default_factory=list)
+
+    # Performance
+    success_rate: float = 0.0
+    sample_count: int = 0
+    avg_latency_sec: Optional[float] = None
+    avg_turns: Optional[float] = None
+
+    # Status
+    status: str = "experimental"  # "experimental", "golden", "deprecated"
+    promoted_at: Optional[datetime] = None  # When it became golden
+    deprecated_at: Optional[datetime] = None
+    deprecation_reason: Optional[str] = None
+
+    # Thresholds for promotion/demotion
+    GOLDEN_THRESHOLD: float = 0.8
+    MIN_SAMPLES_FOR_GOLDEN: int = 10
+    DEMOTION_THRESHOLD: float = 0.6
+
+    class Config:
+        extra = "allow"
+
+    def should_promote(self) -> bool:
+        """Check if this pattern should be promoted to golden."""
+        return (
+            self.status == "experimental"
+            and self.success_rate >= self.GOLDEN_THRESHOLD
+            and self.sample_count >= self.MIN_SAMPLES_FOR_GOLDEN
+        )
+
+    def should_demote(self) -> bool:
+        """Check if this golden pattern should be demoted."""
+        return (
+            self.status == "golden"
+            and self.success_rate < self.DEMOTION_THRESHOLD
+            and self.sample_count >= 5  # Need enough data to demote
+        )
+
+    def update_stats(self, success: bool, latency_sec: Optional[float] = None, turns: Optional[int] = None) -> None:
+        """Update stats with a new observation."""
+        self.sample_count += 1
+        # Exponential moving average for success rate
+        alpha = 1.0 / self.sample_count
+        new_success = 1.0 if success else 0.0
+        self.success_rate = alpha * new_success + (1 - alpha) * self.success_rate
+
+        if latency_sec is not None:
+            if self.avg_latency_sec is None:
+                self.avg_latency_sec = latency_sec
+            else:
+                self.avg_latency_sec = alpha * latency_sec + (1 - alpha) * self.avg_latency_sec
+
+        if turns is not None:
+            if self.avg_turns is None:
+                self.avg_turns = float(turns)
+            else:
+                self.avg_turns = alpha * turns + (1 - alpha) * self.avg_turns
+
+        self.last_updated = datetime.utcnow()
+
+    def to_yaml_dict(self) -> Dict[str, Any]:
+        """Convert to YAML-friendly dict for pattern card files."""
+        return {
+            "id": self.id,
+            "version": self.version,
+            "intent": self.intent,
+            "description": self.description,
+            "teachers": self.teachers,
+            "sequence": [
+                {"call": s.call, "role": s.role, "style_hint": s.style_hint}
+                for s in self.sequence
+            ],
+            "success_rate": round(self.success_rate, 3),
+            "sample_count": self.sample_count,
+            "status": self.status,
+            "last_updated": self.last_updated.isoformat(),
+        }
 
 
 class PatternSuggestion(BaseModel):

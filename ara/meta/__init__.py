@@ -29,6 +29,8 @@ from .schemas import (
     ResearchQuestion,
     Experiment,
     ResearchAgenda,
+    PatternCard,
+    PatternStep,
 )
 
 from .meta_logger import (
@@ -72,6 +74,32 @@ from .config import (
     save_meta_config,
 )
 
+from .pattern_cards import (
+    PatternCardManager,
+    get_pattern_manager,
+    get_pattern_card,
+    get_golden_patterns,
+    find_patterns_for_intent,
+    seed_default_patterns,
+)
+
+from .reflection import (
+    AutoReflector,
+    get_reflector,
+    generate_reflection,
+    enrich_record,
+    classify_intent,
+    detect_issues,
+)
+
+from .copilot import (
+    CoPilot,
+    WorkflowProposal,
+    get_copilot,
+    propose_workflow,
+    interactive_suggest,
+)
+
 __all__ = [
     # Schemas
     "ToolCall",
@@ -80,6 +108,8 @@ __all__ = [
     "ResearchQuestion",
     "Experiment",
     "ResearchAgenda",
+    "PatternCard",
+    "PatternStep",
     # Logger
     "MetaLogger",
     "get_meta_logger",
@@ -111,4 +141,24 @@ __all__ = [
     "load_meta_config",
     "get_meta_config",
     "save_meta_config",
+    # Pattern cards
+    "PatternCardManager",
+    "get_pattern_manager",
+    "get_pattern_card",
+    "get_golden_patterns",
+    "find_patterns_for_intent",
+    "seed_default_patterns",
+    # Reflection
+    "AutoReflector",
+    "get_reflector",
+    "generate_reflection",
+    "enrich_record",
+    "classify_intent",
+    "detect_issues",
+    # Co-pilot
+    "CoPilot",
+    "WorkflowProposal",
+    "get_copilot",
+    "propose_workflow",
+    "interactive_suggest",
 ]

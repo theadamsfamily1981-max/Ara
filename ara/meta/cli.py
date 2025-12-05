@@ -1,10 +1,12 @@
 """CLI for Ara Meta-Learning Layer.
 
 Provides commands:
-- ara meta status: Show meta-learning status
-- ara meta suggest: Get and review suggestions
-- ara meta analyze: Run pattern analysis
-- ara meta agenda: View research agenda
+- ara-meta status: Show meta-learning status
+- ara-meta suggest: Get and review suggestions
+- ara-meta copilot: Interactive workflow selection
+- ara-meta patterns: Manage pattern cards
+- ara-meta analyze: Run pattern analysis
+- ara-meta agenda: View research agenda
 """
 
 from __future__ import annotations
@@ -12,10 +14,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import Optional
+from typing import Optional, List
 
 from .meta_brain import get_meta_brain
 from .pattern_miner import get_miner
+from .pattern_cards import get_pattern_manager, seed_default_patterns
+from .copilot import CoPilot, WorkflowProposal, InteractiveSession
+from .reflection import classify_intent
 from .natural_prompts import (
     verbalize_status,
     verbalize_suggestion,
@@ -30,10 +35,28 @@ def cmd_status(args: argparse.Namespace) -> int:
     brain = get_meta_brain()
     status = brain.get_status()
 
+    # Also get pattern card status
+    pm = get_pattern_manager()
+    pattern_status = pm.get_status_summary()
+
     if args.json:
-        print(json.dumps(status, indent=2, default=str))
+        combined = {**status, "pattern_cards": pattern_status}
+        print(json.dumps(combined, indent=2, default=str))
     else:
         print(verbalize_status(status))
+        print()
+
+        # Pattern cards section
+        if pattern_status["golden_paths"] > 0:
+            print("GOLDEN PATHS")
+            for p in pattern_status["golden_list"]:
+                print(f"  {p['id']}: {p['success_rate']:.0%} (N={p['samples']})")
+            print()
+
+        if pattern_status["experimental"] > 0:
+            print("EXPERIMENTAL")
+            for p in pattern_status["experimental_list"]:
+                print(f"  {p['id']}: {p['success_rate']:.0%} (N={p['samples']})")
 
     return 0
 
@@ -100,6 +123,151 @@ def _interactive_suggestions(brain, suggestions) -> int:
                 return 0
 
     print("\nDone reviewing suggestions.")
+    return 0
+
+
+def cmd_copilot(args: argparse.Namespace) -> int:
+    """Interactive workflow co-pilot."""
+    task = args.task
+
+    if not task:
+        # Interactive mode - ask for task
+        task = input("What are you trying to do? > ").strip()
+        if not task:
+            print("No task provided.")
+            return 1
+
+    # Detect intent
+    intent = classify_intent(task)
+    print(f"\nDetected intent: {intent}")
+
+    # Create session
+    session = InteractiveSession()
+    message, proposals = session.start(task)
+
+    print()
+    print(message)
+
+    if not proposals:
+        # Auto-picked
+        summary = session.get_execution_summary()
+        if summary:
+            print(f"\nReady to execute with: {' → '.join(summary['teachers'])}")
+        return 0
+
+    # Interactive selection
+    while True:
+        choice = input("\nYour choice: ").strip().lower()
+
+        if choice == 'q':
+            print("Cancelled.")
+            return 0
+        elif choice == 'a':
+            # Auto-pick best
+            session.select(1, proposals)
+            break
+        else:
+            try:
+                idx = int(choice)
+                if session.select(idx, proposals):
+                    break
+                else:
+                    print("Invalid choice. Try again.")
+            except ValueError:
+                print("Enter a number, 'a' for auto, or 'q' to quit.")
+
+    # Show what will be executed
+    summary = session.get_execution_summary()
+    if summary:
+        print(f"\nSelected: {' → '.join(summary['teachers'])}")
+        print(f"Pattern: {summary['pattern_id']}")
+        print(f"Confidence: {summary['confidence']:.0%}")
+
+    return 0
+
+
+def cmd_patterns(args: argparse.Namespace) -> int:
+    """Manage pattern cards."""
+    pm = get_pattern_manager()
+
+    if args.seed:
+        count = seed_default_patterns(pm)
+        print(f"Seeded {count} default patterns.")
+        return 0
+
+    if args.list:
+        cards = pm.get_all_cards()
+        if not cards:
+            print("No pattern cards found. Run with --seed to create defaults.")
+            return 0
+
+        if args.json:
+            print(json.dumps([c.to_yaml_dict() for c in cards], indent=2, default=str))
+        else:
+            golden = [c for c in cards if c.status == "golden"]
+            experimental = [c for c in cards if c.status == "experimental"]
+            deprecated = [c for c in cards if c.status == "deprecated"]
+
+            if golden:
+                print("GOLDEN PATHS")
+                print("-" * 40)
+                for c in golden:
+                    print(f"  {c.id}")
+                    print(f"    Intent: {c.intent}")
+                    print(f"    Teachers: {' → '.join(c.teachers)}")
+                    print(f"    Success: {c.success_rate:.0%} (N={c.sample_count})")
+                    print()
+
+            if experimental:
+                print("EXPERIMENTAL")
+                print("-" * 40)
+                for c in experimental:
+                    print(f"  {c.id}")
+                    print(f"    Intent: {c.intent}")
+                    print(f"    Teachers: {' → '.join(c.teachers)}")
+                    print(f"    Success: {c.success_rate:.0%} (N={c.sample_count})")
+                    print()
+
+            if deprecated:
+                print(f"DEPRECATED ({len(deprecated)} cards)")
+
+        return 0
+
+    if args.show:
+        card = pm.get_card(args.show)
+        if not card:
+            print(f"Pattern card not found: {args.show}")
+            return 1
+
+        if args.json:
+            print(json.dumps(card.to_yaml_dict(), indent=2, default=str))
+        else:
+            print(f"Pattern: {card.id}")
+            print(f"Status: {card.status}")
+            print(f"Intent: {card.intent}")
+            print(f"Description: {card.description}")
+            print(f"Teachers: {' → '.join(card.teachers)}")
+            print()
+            print("Sequence:")
+            for step in card.sequence:
+                print(f"  - {step.call} ({step.role})")
+                if step.style_hint:
+                    print(f"    Style: {step.style_hint}")
+            print()
+            print(f"Success rate: {card.success_rate:.0%}")
+            print(f"Sample count: {card.sample_count}")
+            if card.avg_latency_sec:
+                print(f"Avg latency: {card.avg_latency_sec:.1f}s")
+        return 0
+
+    # Default: show summary
+    status = pm.get_status_summary()
+    print(f"Total pattern cards: {status['total_cards']}")
+    print(f"  Golden: {status['golden_paths']}")
+    print(f"  Experimental: {status['experimental']}")
+    print(f"  Deprecated: {status['deprecated']}")
+    print()
+    print("Use --list to see all patterns, --seed to create defaults.")
     return 0
 
 
@@ -197,6 +365,20 @@ def main(argv: Optional[list] = None) -> int:
     suggest_parser.add_argument("-i", "--interactive", action="store_true",
                                 help="Interactive review mode")
     suggest_parser.set_defaults(func=cmd_suggest)
+
+    # Co-pilot command
+    copilot_parser = subparsers.add_parser("copilot", help="Interactive workflow selection")
+    copilot_parser.add_argument("task", nargs="?", default="",
+                                help="Task description (or enter interactively)")
+    copilot_parser.set_defaults(func=cmd_copilot)
+
+    # Patterns command
+    patterns_parser = subparsers.add_parser("patterns", help="Manage pattern cards")
+    patterns_parser.add_argument("--list", action="store_true", help="List all patterns")
+    patterns_parser.add_argument("--show", type=str, help="Show a specific pattern")
+    patterns_parser.add_argument("--seed", action="store_true", help="Seed default patterns")
+    patterns_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    patterns_parser.set_defaults(func=cmd_patterns)
 
     # Analyze command
     analyze_parser = subparsers.add_parser("analyze", help="Run pattern analysis")
