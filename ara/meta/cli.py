@@ -15,6 +15,9 @@ Provides commands:
 - ara-meta templates: Manage prompt templates
 - ara-meta reflect: Run self-reflection
 - ara-meta playbook: Generate teacher playbooks
+- ara-meta capsules: Manage skill capsules
+- ara-meta forge: Manage agent blueprints
+- ara-meta tournament: Run agent tournaments
 """
 
 from __future__ import annotations
@@ -850,6 +853,235 @@ def cmd_playbook(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_capsules(args: argparse.Namespace) -> int:
+    """Manage skill capsules."""
+    from .toolsmith.capsules import get_capsule_manager, seed_default_capsules
+
+    manager = get_capsule_manager()
+
+    if args.seed:
+        count = seed_default_capsules(manager)
+        print(f"Seeded {count} default skill capsules.")
+        return 0
+
+    if args.show:
+        capsule = manager.get_capsule(args.show)
+        if not capsule:
+            print(f"Capsule not found: {args.show}")
+            return 1
+
+        if args.json:
+            print(json.dumps(capsule.to_dict(), indent=2, default=str))
+        else:
+            print(capsule.format_yaml())
+        return 0
+
+    if args.find:
+        matches = manager.find_matching_capsules(args.find, limit=5)
+        if not matches:
+            print("No matching capsules found.")
+            return 0
+
+        print(f"Capsules matching: '{args.find}'")
+        print("-" * 40)
+        for capsule, confidence in matches:
+            print(f"  [{capsule.id}] {capsule.name}")
+            print(f"    Confidence: {confidence:.0%}")
+            print(f"    Intent: {capsule.intent}")
+            print(f"    Success rate: {capsule.success_rate:.0%}")
+            print()
+        return 0
+
+    # Default: show summary
+    summary = manager.get_summary()
+
+    if args.json:
+        print(json.dumps(summary, indent=2, default=str))
+    else:
+        print("Skill Capsules")
+        print("=" * 40)
+        print(f"Total capsules: {summary['total_capsules']}")
+        print(f"Active: {summary['active']}")
+        print(f"Drafts: {summary['drafts']}")
+        print(f"Deprecated: {summary['deprecated']}")
+        print()
+
+        if summary['top_performers']:
+            print("Top performers:")
+            for cap in summary['top_performers']:
+                rate = cap['success_rate']
+                rate_str = f"{rate:.0%}" if rate is not None else "N/A"
+                print(f"  {cap['name']}: {rate_str} ({cap['samples']} samples)")
+        else:
+            print("No capsules yet. Run --seed to create defaults.")
+
+    return 0
+
+
+def cmd_forge(args: argparse.Namespace) -> int:
+    """Manage agent blueprints."""
+    from .toolsmith.forge import get_agent_forge, seed_default_blueprints
+
+    forge = get_agent_forge()
+
+    if args.seed:
+        count = seed_default_blueprints(forge)
+        print(f"Seeded {count} default agent blueprints.")
+        return 0
+
+    if args.show:
+        blueprint = forge.get_blueprint(args.show)
+        if not blueprint:
+            print(f"Blueprint not found: {args.show}")
+            return 1
+
+        if args.json:
+            print(json.dumps(blueprint.to_dict(), indent=2, default=str))
+        else:
+            print(blueprint.format_spec())
+        return 0
+
+    if args.list:
+        blueprints = forge.get_all_blueprints()
+        if not blueprints:
+            print("No blueprints found. Run --seed to create defaults.")
+            return 0
+
+        if args.json:
+            print(json.dumps([bp.to_dict() for bp in blueprints], indent=2, default=str))
+        else:
+            print("Agent Blueprints")
+            print("-" * 40)
+            for bp in blueprints:
+                status_mark = {"active": "●", "draft": "○", "archived": "✗"}[bp.status]
+                print(f"  {status_mark} [{bp.id}] {bp.name}")
+                print(f"    Purpose: {bp.purpose[:50]}...")
+                if bp.success_rate is not None:
+                    print(f"    Success: {bp.success_rate:.0%} ({bp.total_invocations} invocations)")
+                print()
+        return 0
+
+    # Default: show summary
+    summary = forge.get_summary()
+
+    if args.json:
+        print(json.dumps(summary, indent=2, default=str))
+    else:
+        print("Agent Forge")
+        print("=" * 40)
+        print(f"Total blueprints: {summary['total_blueprints']}")
+        print(f"Active: {summary['active']}")
+        print(f"Drafts: {summary['drafts']}")
+        print()
+
+        if summary['top_performers']:
+            print("Top performers:")
+            for bp in summary['top_performers']:
+                rate = bp['success_rate']
+                rate_str = f"{rate:.0%}" if rate is not None else "N/A"
+                print(f"  {bp['name']}: {rate_str} ({bp['invocations']} invocations)")
+        else:
+            print("No blueprints yet. Run --seed to create defaults.")
+
+    return 0
+
+
+def cmd_tournament(args: argparse.Namespace) -> int:
+    """Run agent tournaments."""
+    from .toolsmith.tournaments import get_tournament_manager, seed_default_benchmarks
+
+    manager = get_tournament_manager()
+
+    if args.seed_benchmarks:
+        count = seed_default_benchmarks(manager)
+        print(f"Seeded {count} default benchmarks.")
+        return 0
+
+    if args.benchmarks:
+        benchmarks = manager.get_all_benchmarks()
+        if not benchmarks:
+            print("No benchmarks found. Run --seed-benchmarks to create defaults.")
+            return 0
+
+        if args.json:
+            print(json.dumps([b.to_dict() for b in benchmarks], indent=2, default=str))
+        else:
+            print("Benchmarks")
+            print("-" * 40)
+            for bm in benchmarks:
+                print(f"  [{bm.id}] {bm.name}")
+                print(f"    Tasks: {len(bm.tasks)}")
+                print(f"    Tags: {', '.join(bm.tags)}")
+                print()
+        return 0
+
+    if args.show:
+        tournament = manager.get_tournament(args.show)
+        if not tournament:
+            print(f"Tournament not found: {args.show}")
+            return 1
+
+        if args.json:
+            print(json.dumps(tournament.to_dict(), indent=2, default=str))
+        else:
+            print(tournament.format_leaderboard())
+        return 0
+
+    if args.simulate:
+        # Simulate a tournament
+        parts = args.simulate.split(":")
+        if len(parts) != 2:
+            print("Usage: --simulate BENCHMARK_ID:participant1,participant2,...")
+            return 1
+
+        benchmark_id, participants_str = parts
+        participants = [p.strip() for p in participants_str.split(",")]
+
+        benchmark = manager.get_benchmark(benchmark_id)
+        if not benchmark:
+            print(f"Benchmark not found: {benchmark_id}")
+            print("Run --seed-benchmarks to create defaults.")
+            return 1
+
+        print(f"Simulating tournament with {len(participants)} participants...")
+        tournament = manager.create_tournament(
+            name=f"Simulated: {benchmark.name}",
+            description=f"Simulated tournament for {benchmark_id}",
+            benchmark_id=benchmark_id,
+            participants=participants,
+        )
+
+        winner = manager.simulate_tournament(tournament.id)
+        print()
+        print(tournament.format_leaderboard())
+        return 0
+
+    # Default: show summary
+    summary = manager.get_summary()
+
+    if args.json:
+        print(json.dumps(summary, indent=2, default=str))
+    else:
+        print("Tournaments")
+        print("=" * 40)
+        print(f"Total tournaments: {summary['total_tournaments']}")
+        print(f"Completed: {summary['completed']}")
+        print(f"Benchmarks available: {summary['total_benchmarks']}")
+        print()
+
+        if summary['recent_winners']:
+            print("Recent winners:")
+            for w in summary['recent_winners']:
+                score = w['score']
+                score_str = f"{score:.0%}" if score is not None else "N/A"
+                print(f"  {w['tournament']}: {w['winner']} ({score_str})")
+        else:
+            print("No completed tournaments yet.")
+            print("Run --simulate BENCHMARK:participant1,participant2 to simulate one.")
+
+    return 0
+
+
 def main(argv: Optional[list] = None) -> int:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -977,6 +1209,33 @@ def main(argv: Optional[list] = None) -> int:
     playbook_parser.add_argument("--export", action="store_true", help="Export as markdown")
     playbook_parser.add_argument("--json", action="store_true", help="Output as JSON")
     playbook_parser.set_defaults(func=cmd_playbook)
+
+    # Capsules command (Toolsmith)
+    capsules_parser = subparsers.add_parser("capsules", help="Manage skill capsules")
+    capsules_parser.add_argument("--show", type=str, help="Show a specific capsule")
+    capsules_parser.add_argument("--find", type=str, help="Find capsules matching query")
+    capsules_parser.add_argument("--seed", action="store_true", help="Seed default capsules")
+    capsules_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    capsules_parser.set_defaults(func=cmd_capsules)
+
+    # Forge command (Toolsmith)
+    forge_parser = subparsers.add_parser("forge", help="Manage agent blueprints")
+    forge_parser.add_argument("--show", type=str, help="Show a specific blueprint")
+    forge_parser.add_argument("--list", action="store_true", help="List all blueprints")
+    forge_parser.add_argument("--seed", action="store_true", help="Seed default blueprints")
+    forge_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    forge_parser.set_defaults(func=cmd_forge)
+
+    # Tournament command (Toolsmith)
+    tournament_parser = subparsers.add_parser("tournament", help="Run agent tournaments")
+    tournament_parser.add_argument("--show", type=str, help="Show a specific tournament")
+    tournament_parser.add_argument("--benchmarks", action="store_true", help="List benchmarks")
+    tournament_parser.add_argument("--seed-benchmarks", action="store_true",
+                                   help="Seed default benchmarks")
+    tournament_parser.add_argument("--simulate", type=str,
+                                   help="Simulate tournament: BENCHMARK:participant1,participant2")
+    tournament_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    tournament_parser.set_defaults(func=cmd_tournament)
 
     args = parser.parse_args(argv)
 
