@@ -7,6 +7,14 @@ Provides commands:
 - ara-meta patterns: Manage pattern cards
 - ara-meta analyze: Run pattern analysis
 - ara-meta agenda: View research agenda
+- ara-meta plan: Plan workflow using shadow models
+- ara-meta shadow: Manage shadow teacher profiles
+- ara-meta curiosity: View curiosity hotspots
+- ara-meta research: View research programs
+- ara-meta experiments: Manage experiments
+- ara-meta templates: Manage prompt templates
+- ara-meta reflect: Run self-reflection
+- ara-meta playbook: Generate teacher playbooks
 """
 
 from __future__ import annotations
@@ -479,6 +487,369 @@ def cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_research(args: argparse.Namespace) -> int:
+    """View research programs."""
+    from .research.programs import get_program_manager, seed_default_programs
+
+    pm = get_program_manager()
+
+    if args.seed:
+        count = seed_default_programs(pm)
+        print(f"Seeded {count} default research programs.")
+        return 0
+
+    if args.show:
+        prog = pm.get_program(args.show)
+        if not prog:
+            print(f"Program not found: {args.show}")
+            return 1
+
+        if args.json:
+            print(json.dumps(prog.to_dict(), indent=2, default=str))
+        else:
+            print(f"Program: {prog.name}")
+            print(f"ID: {prog.id}")
+            print(f"Goal: {prog.goal}")
+            print(f"Status: {prog.status}")
+            print(f"Episodes: {prog.episode_count}")
+            print()
+            print("Hypotheses:")
+            for h in prog.hypotheses:
+                print(f"  [{h.id}] {h.statement}")
+                print(f"      Status: {h.status}")
+                if h.control_avg is not None:
+                    print(f"      Control: {h.control_avg:.0%} (N={h.control_samples})")
+                if h.treatment_avg is not None:
+                    print(f"      Treatment: {h.treatment_avg:.0%} (N={h.treatment_samples})")
+                if h.effect_size is not None:
+                    print(f"      Effect size: {h.effect_size:+.0%}")
+                print()
+        return 0
+
+    # Default: show summary
+    summary = pm.get_summary()
+
+    if args.json:
+        print(json.dumps(summary, indent=2, default=str))
+    else:
+        print("Research Programs")
+        print("=" * 40)
+        print(f"Total programs: {summary['total_programs']}")
+        print(f"Active: {summary['active_programs']}")
+        print(f"Total hypotheses: {summary['total_hypotheses']}")
+        print(f"Active hypotheses: {summary['active_hypotheses']}")
+        print()
+
+        if summary['programs']:
+            print("Programs:")
+            for p in summary['programs']:
+                status_mark = "●" if p['status'] == 'active' else "○"
+                print(f"  {status_mark} {p['id']}: {p['name']}")
+                print(f"      Episodes: {p['episode_count']}, Hypotheses: {p['hypotheses']}")
+        else:
+            print("No programs found. Run with --seed to create defaults.")
+
+    return 0
+
+
+def cmd_experiments(args: argparse.Namespace) -> int:
+    """Manage experiments."""
+    from .research.experiments import get_experiment_controller
+
+    controller = get_experiment_controller()
+
+    if args.show:
+        exp = controller.get_experiment(args.show)
+        if not exp:
+            print(f"Experiment not found: {args.show}")
+            return 1
+
+        if args.json:
+            print(json.dumps(exp.to_dict(), indent=2, default=str))
+        else:
+            print(f"Experiment: {exp.id}")
+            print(f"Description: {exp.description}")
+            print(f"Program: {exp.program_id}")
+            print(f"Hypothesis: {exp.hypothesis_id}")
+            print(f"Status: {exp.status}")
+            print(f"Trigger: {exp.trigger_intent}")
+            print()
+            print("Arms:")
+            for arm in exp.arms:
+                print(f"  [{arm.name}] {' → '.join(arm.workflow)}")
+                print(f"    Assignments: {arm.assignments}")
+                print(f"    Completions: {arm.completions}")
+                if arm.avg_reward is not None:
+                    print(f"    Avg reward: {arm.avg_reward:.0%}")
+            print()
+            print(f"Ready for conclusion: {exp.is_ready_for_conclusion()}")
+        return 0
+
+    # Default: show summary
+    summary = controller.get_summary()
+
+    if args.json:
+        print(json.dumps(summary, indent=2, default=str))
+    else:
+        print("Experiments")
+        print("=" * 40)
+        print(f"Total experiments: {summary['total_experiments']}")
+        print(f"Active: {summary['active']}")
+        print(f"Concluded: {summary['concluded']}")
+        print()
+
+        if summary['experiments']:
+            print("Active experiments:")
+            active = [e for e in summary['experiments'] if e['status'] == 'active']
+            for e in active:
+                print(f"  [{e['id']}] {e['description'][:40]}...")
+                print(f"    Arms: {e['arms']}, Completions: {e['total_completions']}")
+        else:
+            print("No experiments found.")
+
+    return 0
+
+
+def cmd_templates(args: argparse.Namespace) -> int:
+    """Manage prompt templates."""
+    from .research.templates import get_template_learner, seed_default_templates
+
+    learner = get_template_learner()
+
+    if args.seed:
+        count = seed_default_templates(learner)
+        print(f"Seeded {count} default templates.")
+        return 0
+
+    if args.teacher:
+        templates = learner.get_templates_for(args.teacher, "*")
+        if not templates:
+            print(f"No templates found for teacher: {args.teacher}")
+            return 0
+
+        if args.json:
+            print(json.dumps([t.to_dict() for t in templates], indent=2, default=str))
+        else:
+            print(f"Templates for {args.teacher}:")
+            print("-" * 40)
+            for t in templates:
+                print(f"  [{t.id}] {t.name}")
+                print(f"    Intent: {t.intent}")
+                print(f"    Style: {', '.join(t.tags)}")
+                if t.success_rate is not None:
+                    print(f"    Success: {t.success_rate:.0%} (N={t.sample_count})")
+                print()
+        return 0
+
+    if args.show:
+        template = learner.get_template(args.show)
+        if not template:
+            print(f"Template not found: {args.show}")
+            return 1
+
+        if args.json:
+            print(json.dumps(template.to_dict(), indent=2, default=str))
+        else:
+            print(f"Template: {template.id}")
+            print(f"Name: {template.name}")
+            print(f"Teacher: {template.teacher}")
+            print(f"Intent: {template.intent}")
+            print(f"Version: v{template.version}")
+            if template.parent_id:
+                print(f"Evolved from: {template.parent_id}")
+            print()
+            print("Skeleton:")
+            print("-" * 40)
+            print(template.skeleton[:500])
+            print("-" * 40)
+            print()
+            print(f"Sections: {', '.join(template.sections)}")
+            print(f"Tags: {', '.join(template.tags)}")
+            if template.success_rate is not None:
+                print(f"Success rate: {template.success_rate:.0%}")
+            print(f"Samples: {template.sample_count}")
+        return 0
+
+    # Default: show summary
+    summary = learner.get_summary()
+
+    if args.json:
+        print(json.dumps(summary, indent=2, default=str))
+    else:
+        print("Prompt Templates")
+        print("=" * 40)
+        print(f"Total templates: {summary['total_templates']}")
+        print()
+        print("By teacher:")
+        for teacher, count in summary['by_teacher'].items():
+            print(f"  {teacher}: {count}")
+        print()
+        print("By intent:")
+        for intent, count in summary['by_intent'].items():
+            print(f"  {intent}: {count}")
+        print()
+
+        if summary['top_templates']:
+            print("Top performing:")
+            for t in summary['top_templates']:
+                rate = t['success_rate']
+                rate_str = f"{rate:.0%}" if rate is not None else "N/A"
+                print(f"  {t['id']}: {rate_str} ({t['samples']} samples)")
+
+    return 0
+
+
+def cmd_reflect(args: argparse.Namespace) -> int:
+    """Run self-reflection."""
+    from .research.self_reflection import get_self_reflector
+
+    reflector = get_self_reflector()
+
+    if args.run:
+        days = args.days or 7
+        print(f"Running reflection for the last {days} days...")
+        episode = reflector.create_reflection(period_days=days)
+
+        if args.json:
+            print(json.dumps(episode.to_dict(), indent=2, default=str))
+        else:
+            print()
+            print(episode.narrative)
+            print()
+            print(f"Reflection ID: {episode.id}")
+            print(f"Interactions analyzed: {episode.interactions_analyzed}")
+            print(f"Insights generated: {len(episode.insights)}")
+            if episode.success_rate is not None:
+                print(f"Overall success rate: {episode.success_rate:.0%}")
+        return 0
+
+    if args.actionable:
+        insights = reflector.get_actionable_insights(limit=args.limit)
+        if not insights:
+            print("No actionable insights found.")
+            return 0
+
+        if args.json:
+            print(json.dumps([i.to_dict() for i in insights], indent=2, default=str))
+        else:
+            print("Actionable Insights")
+            print("=" * 40)
+            for i in insights:
+                priority_mark = {"high": "!!", "medium": "!", "low": " "}[i.priority]
+                print(f"[{priority_mark}] {i.summary}")
+                print(f"    → {i.suggested_action}")
+                print(f"    Confidence: {i.confidence:.0%}")
+                print()
+        return 0
+
+    # Default: show summary
+    latest = reflector.get_latest_reflection()
+
+    if args.json:
+        print(json.dumps(reflector.get_summary(), indent=2, default=str))
+    else:
+        summary = reflector.get_summary()
+        print("Self-Reflection")
+        print("=" * 40)
+        print(f"Total episodes: {summary['total_episodes']}")
+        print(f"Total insights: {summary['total_insights']}")
+        print(f"Actionable: {summary['actionable_insights']}")
+        print()
+
+        if latest:
+            print("Latest reflection:")
+            print(f"  ID: {latest.id}")
+            print(f"  Period: {latest.period_start.date()} to {latest.period_end.date()}")
+            print(f"  Interactions: {latest.interactions_analyzed}")
+            print(f"  Insights: {len(latest.insights)}")
+            print()
+            print("Run with --run to create a new reflection.")
+        else:
+            print("No reflections yet. Run with --run to create one.")
+
+    return 0
+
+
+def cmd_playbook(args: argparse.Namespace) -> int:
+    """Generate teacher playbooks."""
+    from .research.playbook import get_playbook_generator
+
+    generator = get_playbook_generator()
+
+    if args.generate:
+        teacher = args.generate
+        print(f"Generating playbook for {teacher}...")
+        playbook = generator.generate_playbook(teacher, force_regenerate=True)
+
+        if args.json:
+            print(json.dumps(playbook.to_dict(), indent=2, default=str))
+        else:
+            print()
+            print(playbook.format_markdown())
+        return 0
+
+    if args.generate_all:
+        print("Generating playbooks for all teachers...")
+        playbooks = generator.generate_all_playbooks()
+        print(f"Generated {len(playbooks)} playbooks.")
+
+        if args.export:
+            paths = generator.export_markdown()
+            print(f"Exported to:")
+            for p in paths:
+                print(f"  {p}")
+        return 0
+
+    if args.show:
+        playbook = generator.get_playbook(args.show)
+        if not playbook:
+            print(f"Playbook not found: {args.show}")
+            print("Run with --generate <teacher> to create one.")
+            return 1
+
+        if args.json:
+            print(json.dumps(playbook.to_dict(), indent=2, default=str))
+        else:
+            print(playbook.format_markdown())
+        return 0
+
+    if args.export:
+        paths = generator.export_markdown()
+        if paths:
+            print(f"Exported playbooks:")
+            for p in paths:
+                print(f"  {p}")
+        else:
+            print("No playbooks to export. Run --generate-all first.")
+        return 0
+
+    # Default: show summary
+    summary = generator.get_summary()
+
+    if args.json:
+        print(json.dumps(summary, indent=2, default=str))
+    else:
+        print("Teacher Playbooks")
+        print("=" * 40)
+        print(f"Total playbooks: {summary['total_playbooks']}")
+        print()
+
+        if summary['playbooks']:
+            for pb in summary['playbooks']:
+                rate = pb['success_rate']
+                rate_str = f"{rate:.0%}" if rate is not None else "N/A"
+                print(f"  {pb['teacher'].title()} (v{pb['version']})")
+                print(f"    Interactions: {pb['interactions']}")
+                print(f"    Success rate: {rate_str}")
+                print(f"    Strengths: {pb['strengths']}, Weaknesses: {pb['weaknesses']}")
+                print()
+        else:
+            print("No playbooks generated yet.")
+            print("Run --generate <teacher> or --generate-all to create them.")
+
+    return 0
+
+
 def main(argv: Optional[list] = None) -> int:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -565,6 +936,47 @@ def main(argv: Optional[list] = None) -> int:
     config_parser.add_argument("--create", action="store_true",
                                help="Create default config file")
     config_parser.set_defaults(func=cmd_config)
+
+    # Research command (Research Director)
+    research_parser = subparsers.add_parser("research", help="View research programs")
+    research_parser.add_argument("--show", type=str, help="Show a specific program")
+    research_parser.add_argument("--seed", action="store_true", help="Seed default programs")
+    research_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    research_parser.set_defaults(func=cmd_research)
+
+    # Experiments command
+    experiments_parser = subparsers.add_parser("experiments", help="Manage experiments")
+    experiments_parser.add_argument("--show", type=str, help="Show a specific experiment")
+    experiments_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    experiments_parser.set_defaults(func=cmd_experiments)
+
+    # Templates command
+    templates_parser = subparsers.add_parser("templates", help="Manage prompt templates")
+    templates_parser.add_argument("--teacher", type=str, help="Filter by teacher")
+    templates_parser.add_argument("--show", type=str, help="Show a specific template")
+    templates_parser.add_argument("--seed", action="store_true", help="Seed default templates")
+    templates_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    templates_parser.set_defaults(func=cmd_templates)
+
+    # Reflect command
+    reflect_parser = subparsers.add_parser("reflect", help="Run self-reflection")
+    reflect_parser.add_argument("--run", action="store_true", help="Run a new reflection")
+    reflect_parser.add_argument("--days", type=int, default=7, help="Days to analyze")
+    reflect_parser.add_argument("--actionable", action="store_true",
+                                help="Show actionable insights")
+    reflect_parser.add_argument("--limit", type=int, default=10, help="Max items to show")
+    reflect_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    reflect_parser.set_defaults(func=cmd_reflect)
+
+    # Playbook command
+    playbook_parser = subparsers.add_parser("playbook", help="Generate teacher playbooks")
+    playbook_parser.add_argument("--generate", type=str, help="Generate for specific teacher")
+    playbook_parser.add_argument("--generate-all", action="store_true",
+                                 help="Generate for all teachers")
+    playbook_parser.add_argument("--show", type=str, help="Show a specific playbook")
+    playbook_parser.add_argument("--export", action="store_true", help="Export as markdown")
+    playbook_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    playbook_parser.set_defaults(func=cmd_playbook)
 
     args = parser.parse_args(argv)
 
