@@ -78,6 +78,30 @@ from .idea_bridge import (
     mode_for_idea_category,
 )
 
+from .council import (
+    Council,
+    CouncilMember,
+    CouncilRole,
+    DEFAULT_COUNCIL,
+    load_council_config,
+    save_council_config,
+)
+
+from .workflow import (
+    WorkflowState,
+    WorkflowContext,
+    WorkflowEngine,
+    ProblemTicket,
+    TaskSpec,
+    CandidateApproach,
+    ImplementationSpec,
+    ImplementationResult,
+    VerificationReport,
+    FinalReport,
+    create_workflow,
+    get_state_info,
+)
+
 __all__ = [
     # Models
     "DevMode",
@@ -117,4 +141,24 @@ __all__ = [
     "RefinementResult",
     "refine_idea_with_session",
     "mode_for_idea_category",
+    # Council
+    "Council",
+    "CouncilMember",
+    "CouncilRole",
+    "DEFAULT_COUNCIL",
+    "load_council_config",
+    "save_council_config",
+    # Workflow
+    "WorkflowState",
+    "WorkflowContext",
+    "WorkflowEngine",
+    "ProblemTicket",
+    "TaskSpec",
+    "CandidateApproach",
+    "ImplementationSpec",
+    "ImplementationResult",
+    "VerificationReport",
+    "FinalReport",
+    "create_workflow",
+    "get_state_info",
 ]
