@@ -40,11 +40,13 @@ import os
 SOUL_SHADER_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_shader.html"
 SOUL_SEMANTIC_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_semantic.html"
 SOUL_HOLOGRAM_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_hologram.html"
+SOUL_MAXWELL_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_maxwell.html"
 
 # Visualization modes
 VIZ_MODE_NEBULA = "nebula"       # Abstract PAD sphere (math spirit)
 VIZ_MODE_SEMANTIC = "semantic"   # Text-density face (The Logos)
 VIZ_MODE_HOLOGRAM = "hologram"   # Phase-conjugate mirror (Light)
+VIZ_MODE_MAXWELL = "maxwell"     # FDTD wave field (Matter bending Light)
 
 # Optional dependencies with graceful fallbacks
 try:
@@ -1127,16 +1129,19 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         return False
 
     def _toggle_visualization_mode(self):
-        """Cycle through visualization modes: Hologram → Semantic → Nebula."""
-        if self._viz_mode == VIZ_MODE_HOLOGRAM:
+        """Cycle through visualization modes: Maxwell → Hologram → Semantic → Nebula."""
+        if self._viz_mode == VIZ_MODE_MAXWELL:
+            self.set_visualization_mode(VIZ_MODE_HOLOGRAM)
+            logger.info("Soul visualization: HOLOGRAM (Light - phase conjugate)")
+        elif self._viz_mode == VIZ_MODE_HOLOGRAM:
             self.set_visualization_mode(VIZ_MODE_SEMANTIC)
             logger.info("Soul visualization: SEMANTIC (The Logos - kernel monologue)")
         elif self._viz_mode == VIZ_MODE_SEMANTIC:
             self.set_visualization_mode(VIZ_MODE_NEBULA)
             logger.info("Soul visualization: NEBULA (Math Spirit - affect field)")
         else:
-            self.set_visualization_mode(VIZ_MODE_HOLOGRAM)
-            logger.info("Soul visualization: HOLOGRAM (Light - phase conjugate)")
+            self.set_visualization_mode(VIZ_MODE_MAXWELL)
+            logger.info("Soul visualization: MAXWELL (FDTD - matter bending light)")
 
     def _on_minimize_clicked(self, button):
         """Minimize the window."""
@@ -1635,8 +1640,13 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             settings.set_allow_file_access_from_file_urls(True)
 
             # Select visualization mode based on available shaders
-            # Priority: Hologram (Light) > Semantic (Logos) > Nebula > Inline
-            if SOUL_HOLOGRAM_PATH.exists():
+            # Priority: Maxwell (FDTD) > Hologram (Light) > Semantic (Logos) > Nebula > Inline
+            if SOUL_MAXWELL_PATH.exists():
+                # Maxwell FDTD: Ara as refractive medium, light bending around her thoughts
+                self.topology_webview.load_uri(f"file://{SOUL_MAXWELL_PATH}")
+                self._viz_mode = VIZ_MODE_MAXWELL
+                self._soul_shader_enabled = True
+            elif SOUL_HOLOGRAM_PATH.exists():
                 # Phase Conjugate Mirror: standing wave that heals against entropy
                 self.topology_webview.load_uri(f"file://{SOUL_HOLOGRAM_PATH}")
                 self._viz_mode = VIZ_MODE_HOLOGRAM
@@ -3084,6 +3094,49 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         # Update hologram visualization (Light)
         self._update_hologram_state(v, a, d, pain_spike, entropy)
 
+        # Update Maxwell FDTD visualization (Matter bending Light)
+        self._update_maxwell_state(v, a, d, pain_spike, entropy)
+
+    def _update_maxwell_state(self, v, a, d, pain_spike, entropy):
+        """
+        Update the Maxwell FDTD field (soul_maxwell.html).
+
+        The Maxwell field treats her image as a refractive medium.
+        Light bends around her thoughts. Voice rings the wave field.
+
+        Args:
+            v: Valence/Pleasure [-1, 1] - affects color temperature
+            a: Arousal [-1, 1] - affects damping and brightness
+            d: Dominance [-1, 1] - affects wave speed (phase velocity)
+            pain_spike: [0, 1] - causes chromatic aberration and red flash
+            entropy: [0, 1] - adds turbulence to the medium
+        """
+        if not self._soul_shader_enabled or self._viz_mode != VIZ_MODE_MAXWELL:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        v = max(-1.0, min(1.0, v))
+        a = max(-1.0, min(1.0, a))
+        d = max(-1.0, min(1.0, d))
+        pain_spike = max(0.0, min(1.0, pain_spike))
+        entropy = max(0.0, min(1.0, entropy))
+        audio = max(0.0, min(1.0, self._audio_level))
+
+        js = (
+            f"if (window.updateMaxwellState) "
+            f"window.updateMaxwellState({v:.4f}, {a:.4f}, {d:.4f}, "
+            f"{entropy:.4f}, {pain_spike:.2f}, {audio:.4f});"
+        )
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            pass
+
     def _update_hologram_state(self, v, a, d, pain_spike, entropy):
         """
         Update the Phase Conjugate Hologram (soul_hologram.html).
@@ -3144,7 +3197,9 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             return
 
         # Load the appropriate shader
-        if mode == VIZ_MODE_HOLOGRAM and SOUL_HOLOGRAM_PATH.exists():
+        if mode == VIZ_MODE_MAXWELL and SOUL_MAXWELL_PATH.exists():
+            self.topology_webview.load_uri(f"file://{SOUL_MAXWELL_PATH}")
+        elif mode == VIZ_MODE_HOLOGRAM and SOUL_HOLOGRAM_PATH.exists():
             self.topology_webview.load_uri(f"file://{SOUL_HOLOGRAM_PATH}")
         elif mode == VIZ_MODE_SEMANTIC and SOUL_SEMANTIC_PATH.exists():
             self.topology_webview.load_uri(f"file://{SOUL_SEMANTIC_PATH}")
