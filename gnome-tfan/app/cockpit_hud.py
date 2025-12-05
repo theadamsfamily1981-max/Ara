@@ -183,16 +183,20 @@ class AraBrainClient:
 class MetricsCollector:
     """Collects system metrics for HUD display."""
 
-    # Demo data state for smooth animations
-    _demo_time = 0
+    # Start time for stateless animation (thread-safe)
+    _start_time = time.time()
+
+    @staticmethod
+    def _get_animation_time() -> float:
+        """Get animation time in a thread-safe manner."""
+        return time.time() - MetricsCollector._start_time
 
     @staticmethod
     def get_cpu_metrics():
         """Get CPU usage, temps, frequency."""
         if not PSUTIL_AVAILABLE:
-            # Return realistic demo data
-            MetricsCollector._demo_time += 0.1
-            t = MetricsCollector._demo_time
+            # Return realistic demo data (stateless, thread-safe)
+            t = MetricsCollector._get_animation_time()
             base_usage = 25 + math.sin(t * 0.3) * 15
             return {
                 'usage_per_core': [base_usage + random.uniform(-5, 10) for _ in range(16)],
@@ -225,7 +229,7 @@ class MetricsCollector:
     def get_ram_metrics():
         """Get RAM usage."""
         if not PSUTIL_AVAILABLE:
-            t = MetricsCollector._demo_time
+            t = MetricsCollector._get_animation_time()
             used = 24 + math.sin(t * 0.15) * 4
             return {
                 'total_gb': 64,
@@ -245,8 +249,8 @@ class MetricsCollector:
     def get_gpu_metrics():
         """Get GPU usage, VRAM, temp, power."""
         if not GPU_AVAILABLE:
-            # Return impressive demo GPU data
-            t = MetricsCollector._demo_time
+            # Return impressive demo GPU data (stateless, thread-safe)
+            t = MetricsCollector._get_animation_time()
             return [
                 {
                     'id': 0,
@@ -323,6 +327,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         self._viz_mode = VIZ_MODE_NEBULA
         self._log_stream_thread = None    # Kernel log streaming thread
         self._log_stream_running = False  # Log streaming active flag
+
+        # GLib timer IDs for cleanup
+        self._update_timers = []
+
+        # Connect close handler for cleanup
+        self.connect("close-request", self._on_window_close)
 
         # Apply cockpit theme
         self._load_cockpit_css()
@@ -1167,6 +1177,24 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         self._cleanup_resources()
         self.close()
 
+    def _on_window_close(self, *args):
+        """Handle window close event with full cleanup."""
+        logger.info("[COCKPIT] Window closing, cleaning up resources...")
+
+        # 1. Cancel GLib timers
+        for timer_id in self._update_timers:
+            try:
+                GLib.source_remove(timer_id)
+            except Exception as e:
+                logger.debug(f"Timer removal: {e}")
+        self._update_timers.clear()
+
+        # 2. Cleanup other resources
+        self._cleanup_resources()
+
+        logger.info("[COCKPIT] Cleanup complete")
+        return False  # Continue with close
+
     def _cleanup_resources(self):
         """Clean up all resources before closing."""
         # Stop somatic stream server
@@ -1178,6 +1206,8 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 logger.warning(f"Error stopping somatic server: {e}")
 
         # Stop log streaming
+        if hasattr(self, '_log_stream_running'):
+            self._log_stream_running = False
         if hasattr(self, '_stop_log_streaming'):
             try:
                 self._stop_log_streaming()
@@ -2756,10 +2786,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 return {'disks': disks}
             MetricsCollector.get_storage_metrics = get_storage_metrics
 
-        # Start update timers
-        GLib.timeout_add_seconds(2, update_ara_status)
-        GLib.timeout_add_seconds(1, update_kitten_status)
-        GLib.timeout_add_seconds(2, update_system_metrics)
+        # Start update timers (store IDs for cleanup)
+        self._update_timers.extend([
+            GLib.timeout_add_seconds(2, update_ara_status),
+            GLib.timeout_add_seconds(1, update_kitten_status),
+            GLib.timeout_add_seconds(2, update_system_metrics),
+        ])
 
         # Initial updates
         GLib.idle_add(update_ara_status)
@@ -2980,6 +3012,7 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             """Background thread that reads dmesg -w and feeds to JS."""
             try:
                 import subprocess
+                import select
 
                 # Try dmesg -w first (live stream), fall back to journalctl
                 try:
@@ -3000,12 +3033,23 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                         bufsize=1
                     )
 
+                # Non-blocking read loop with select timeout
                 while self._log_stream_running and process.poll() is None:
-                    line = process.stdout.readline()
-                    if line:
-                        self._send_log_line(line.strip())
+                    # Wait up to 1.0s for data (allows checking _log_stream_running)
+                    readable, _, _ = select.select([process.stdout], [], [], 1.0)
+                    if readable:
+                        line = process.stdout.readline()
+                        if line:
+                            self._send_log_line(line.strip())
 
+                # Clean shutdown
                 process.terminate()
+                try:
+                    process.wait(timeout=2.0)
+                except subprocess.TimeoutExpired:
+                    logger.warning("Log process did not terminate, killing...")
+                    process.kill()
+                    process.wait()
 
             except Exception as e:
                 # If real logs fail, generate synthetic BANOS logs

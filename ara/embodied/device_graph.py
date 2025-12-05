@@ -21,12 +21,17 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class DeviceType(Enum):
@@ -113,8 +118,8 @@ class Device:
     connected_to: List[str] = field(default_factory=list)  # Other device IDs
 
     # Metadata
-    discovered_at: datetime = field(default_factory=datetime.utcnow)
-    last_seen: datetime = field(default_factory=datetime.utcnow)
+    discovered_at: datetime = field(default_factory=_utcnow)
+    last_seen: datetime = field(default_factory=_utcnow)
     tags: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -231,7 +236,7 @@ class DeviceGraph:
         """Save device data to disk."""
         data = {
             "version": 1,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": _utcnow().isoformat(),
             "devices": [d.to_dict() for d in self._devices.values()],
             "links": [l.to_dict() for l in self._links],
         }
@@ -280,7 +285,7 @@ class DeviceGraph:
             return False
 
         device.status = status
-        device.last_seen = datetime.utcnow()
+        device.last_seen = _utcnow()
 
         if health_score is not None:
             device.health_score = health_score
@@ -436,7 +441,7 @@ class DeviceGraph:
 
         return {
             "version": 1,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": _utcnow().isoformat(),
             "total_devices": len(self._devices),
             "total_links": len(self._links),
             "organs": organs,

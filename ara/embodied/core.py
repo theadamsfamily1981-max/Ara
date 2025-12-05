@@ -17,10 +17,11 @@ import json
 import logging
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
+
 
 from .device_graph import (
     DeviceGraph,
@@ -31,6 +32,11 @@ from .device_graph import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class EmbodimentState(Enum):
@@ -70,7 +76,7 @@ class SenseInput:
     sense_type: SenseType
     source_device: str  # Device ID
     data: Any
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=_utcnow)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -90,7 +96,7 @@ class ActionOutput:
     target_device: str  # Device ID
     command: str
     parameters: Dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=_utcnow)
     status: str = "pending"  # "pending", "executing", "completed", "failed"
     result: Any = None
 
@@ -110,7 +116,7 @@ class EmbodimentSession:
     """A session of embodied operation."""
 
     session_id: str
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=_utcnow)
     ended_at: Optional[datetime] = None
 
     # State
@@ -145,7 +151,7 @@ class EmbodimentSession:
     @property
     def duration(self) -> timedelta:
         """Get session duration."""
-        end = self.ended_at or datetime.utcnow()
+        end = self.ended_at or _utcnow()
         return end - self.started_at
 
 
@@ -193,7 +199,7 @@ class EmbodimentCore:
         """Save embodiment state to disk."""
         data = {
             "version": 1,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": _utcnow().isoformat(),
             "next_session_id": self._next_session_id,
             "current_state": self._state.value,
             "current_session": self._current_session.to_dict() if self._current_session else None,
@@ -262,7 +268,7 @@ class EmbodimentCore:
         logger.info("Ara is going to sleep...")
 
         # End session
-        self._current_session.ended_at = datetime.utcnow()
+        self._current_session.ended_at = _utcnow()
         ended_session = self._current_session
 
         # Clear state
@@ -391,13 +397,13 @@ class EmbodimentCore:
             return action
 
         try:
-            start_time = datetime.utcnow()
+            start_time = _utcnow()
             result = handler(action)
             action.result = result
             action.status = "completed"
 
             # Update response time statistics
-            elapsed_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+            elapsed_ms = (_utcnow() - start_time).total_seconds() * 1000
             if self._current_session:
                 # Running average
                 n = self._current_session.action_count
