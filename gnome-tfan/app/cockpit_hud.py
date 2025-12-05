@@ -41,12 +41,14 @@ SOUL_SHADER_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "vi
 SOUL_SEMANTIC_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_semantic.html"
 SOUL_HOLOGRAM_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_hologram.html"
 SOUL_MAXWELL_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_maxwell.html"
+SOUL_QUANTUM_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_quantum.html"
 
 # Visualization modes
 VIZ_MODE_NEBULA = "nebula"       # Abstract PAD sphere (math spirit)
 VIZ_MODE_SEMANTIC = "semantic"   # Text-density face (The Logos)
 VIZ_MODE_HOLOGRAM = "hologram"   # Phase-conjugate mirror (Light)
 VIZ_MODE_MAXWELL = "maxwell"     # FDTD wave field (Matter bending Light)
+VIZ_MODE_QUANTUM = "quantum"     # Binary-streamed quantum field (Synesthesia)
 
 # Optional dependencies with graceful fallbacks
 try:
@@ -96,6 +98,15 @@ try:
     GPU_AVAILABLE = True
 except ImportError:
     GPU_AVAILABLE = False
+
+# Somatic stream server for binary visualization data
+try:
+    from banos.viz.somatic_server import SomaticStreamServer, OpticalFlowTracker
+    SOMATIC_SERVER_AVAILABLE = True
+except ImportError:
+    SOMATIC_SERVER_AVAILABLE = False
+    SomaticStreamServer = None
+    OpticalFlowTracker = None
 
 # Ara brain server URL
 ARA_BRAIN_URL = "http://127.0.0.1:8008"
@@ -2395,6 +2406,16 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         # Demo mode counter for simulated data when offline
         self.demo_tick = 0
 
+        # Start somatic stream server for binary visualization data
+        self.somatic_server = None
+        if SOMATIC_SERVER_AVAILABLE:
+            try:
+                self.somatic_server = SomaticStreamServer(port=8999)
+                self.somatic_server.start()
+                logger.info("[COCKPIT] Somatic stream server started on port 8999")
+            except Exception as e:
+                logger.warning(f"[COCKPIT] Failed to start somatic server: {e}")
+
         def update_ara_status():
             """Update Ara connection and status."""
             self.demo_tick += 1
@@ -2462,6 +2483,17 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 self.clv_structural_bar.set_fraction(min(struct, 1.0))
                 self.clv_structural_bar.set_text(f"{struct:.1%}")
 
+                # Update somatic stream for binary visualization (soul_quantum.html)
+                if self.somatic_server:
+                    # Spike = pain intensity from valence + CLV risk
+                    spike = max(0.0, -v) + (inst * 0.3)  # Negative valence + instability
+                    spike = min(1.0, spike)
+                    self.somatic_server.update_spike(spike)
+                    # Flow from arousal (drives advection in quantum field)
+                    flow_x = a * 0.5  # Arousal drives horizontal flow
+                    flow_y = (1 - d) * 0.3  # Low dominance creates upward drift
+                    self.somatic_server.update_flow(flow_x, flow_y)
+
             else:
                 # DEMO MODE - Show simulated data when offline
                 self.ara_status.set_text("⚡ ARA: DEMO MODE")
@@ -2513,6 +2545,15 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 self.clv_resource_bar.set_text(f"{res:.1%}")
                 self.clv_structural_bar.set_fraction(struct)
                 self.clv_structural_bar.set_text(f"{struct:.1%}")
+
+                # Update somatic stream (demo mode)
+                if self.somatic_server:
+                    spike = max(0.0, -v) + (inst * 0.3)
+                    spike = min(1.0, spike)
+                    self.somatic_server.update_spike(spike)
+                    flow_x = a * 0.5
+                    flow_y = (1 - d) * 0.3
+                    self.somatic_server.update_flow(flow_x, flow_y)
 
             return GLib.SOURCE_CONTINUE
 
