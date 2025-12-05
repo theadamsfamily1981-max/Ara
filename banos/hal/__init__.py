@@ -547,6 +547,32 @@ def get_pain_level() -> int:
         return som.pain_level
 
 
+# Also export high-performance HAL with posix_ipc
+try:
+    from .ara_hal import (
+        AraHAL,
+        create_somatic_bus,
+        connect_somatic_bus,
+        read_pain as read_pain_hal,
+        read_pad,
+        DREAM_AWAKE,
+        DREAM_REM,
+        DREAM_DEEP,
+    )
+    _HAL_EXPORTS = [
+        'AraHAL',
+        'create_somatic_bus',
+        'connect_somatic_bus',
+        'read_pain_hal',
+        'read_pad',
+        'DREAM_AWAKE',
+        'DREAM_REM',
+        'DREAM_DEEP',
+    ]
+except ImportError:
+    _HAL_EXPORTS = []
+
+
 __all__ = [
     'AraSomatic',
     'AraSomaticSnapshot',
@@ -555,4 +581,4 @@ __all__ = [
     'AraPadQuadrant',
     'get_somatic_snapshot',
     'get_pain_level',
-]
+] + _HAL_EXPORTS

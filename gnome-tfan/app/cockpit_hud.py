@@ -108,6 +108,14 @@ except ImportError:
     SomaticStreamServer = None
     OpticalFlowTracker = None
 
+# Ara Somatic HAL for zero-copy shared memory access
+try:
+    from banos.hal.ara_hal import AraHAL, connect_somatic_bus
+    HAL_AVAILABLE = True
+except ImportError:
+    HAL_AVAILABLE = False
+    AraHAL = None
+
 # Ara brain server URL
 ARA_BRAIN_URL = "http://127.0.0.1:8008"
 
@@ -2454,6 +2462,16 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         # Demo mode counter for simulated data when offline
         self.demo_tick = 0
 
+        # Connect to Somatic HAL for zero-copy state access
+        self.somatic_hal = None
+        if HAL_AVAILABLE:
+            try:
+                self.somatic_hal = connect_somatic_bus()
+                logger.info("[COCKPIT] Connected to Somatic HAL (zero-copy)")
+            except Exception as e:
+                logger.warning(f"[COCKPIT] HAL unavailable, using fallback: {e}")
+                self.somatic_hal = None
+
         # Start somatic stream server for binary visualization data
         self.somatic_server = None
         if SOMATIC_SERVER_AVAILABLE:
@@ -2532,15 +2550,29 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 self.clv_structural_bar.set_text(f"{struct:.1%}")
 
                 # Update somatic stream for binary visualization (soul_quantum.html)
+                # First try to read from HAL (zero-copy), then fall back to computed values
+                if self.somatic_hal:
+                    try:
+                        hal_state = self.somatic_hal.read_somatic()
+                        spike = hal_state.get('pain', max(0.0, -v) + (inst * 0.3))
+                        flow_x = hal_state.get('flow', (a * 0.5, 0))[0]
+                        flow_y = hal_state.get('flow', (0, (1 - d) * 0.3))[1]
+                    except Exception as e:
+                        logger.debug(f"HAL read failed, using computed: {e}")
+                        spike = max(0.0, -v) + (inst * 0.3)
+                        flow_x = a * 0.5
+                        flow_y = (1 - d) * 0.3
+                else:
+                    # Compute from PAD values
+                    spike = max(0.0, -v) + (inst * 0.3)  # Negative valence + instability
+                    flow_x = a * 0.5  # Arousal drives horizontal flow
+                    flow_y = (1 - d) * 0.3  # Low dominance creates upward drift
+
+                spike = min(1.0, spike)
+
                 if self.somatic_server:
                     try:
-                        # Spike = pain intensity from valence + CLV risk
-                        spike = max(0.0, -v) + (inst * 0.3)  # Negative valence + instability
-                        spike = min(1.0, spike)
                         self.somatic_server.update_spike(spike)
-                        # Flow from arousal (drives advection in quantum field)
-                        flow_x = a * 0.5  # Arousal drives horizontal flow
-                        flow_y = (1 - d) * 0.3  # Low dominance creates upward drift
                         self.somatic_server.update_flow(flow_x, flow_y)
                     except Exception as e:
                         logger.error(f"Somatic server update failed: {e}")
