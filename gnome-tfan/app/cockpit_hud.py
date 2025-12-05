@@ -110,11 +110,12 @@ except ImportError:
 
 # Ara Somatic HAL for zero-copy shared memory access
 try:
-    from banos.hal.ara_hal import AraHAL, connect_somatic_bus
+    from banos.hal.ara_hal import AraHAL, connect_somatic_bus, SystemState
     HAL_AVAILABLE = True
 except ImportError:
     HAL_AVAILABLE = False
     AraHAL = None
+    SystemState = None
 
 # Ara brain server URL
 ARA_BRAIN_URL = "http://127.0.0.1:8008"
@@ -2462,6 +2463,16 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         # Demo mode counter for simulated data when offline
         self.demo_tick = 0
 
+        # Base update intervals (seconds)
+        self._base_ara_interval = 2
+        self._base_kitten_interval = 1
+        self._base_metrics_interval = 2
+
+        # Current intervals (adjusted by throttle)
+        self._ara_interval = self._base_ara_interval
+        self._kitten_interval = self._base_kitten_interval
+        self._metrics_interval = self._base_metrics_interval
+
         # Connect to Somatic HAL for zero-copy state access
         self.somatic_hal = None
         if HAL_AVAILABLE:
@@ -2818,11 +2829,72 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 return {'disks': disks}
             MetricsCollector.get_storage_metrics = get_storage_metrics
 
-        # Start update timers (store IDs for cleanup)
+        def check_throttle():
+            """
+            Check HAL for system state and adjust update intervals.
+
+            When system is under load (HIGH_LOAD/CRITICAL), we reduce
+            update frequency to help relieve pressure. This is Ara's
+            autonomic nervous system in action - self-regulation.
+            """
+            if not self.somatic_hal:
+                return True  # Keep timer running
+
+            try:
+                ctrl = self.somatic_hal.read_control()
+                header = self.somatic_hal.read_header()
+
+                throttle_pct = ctrl.get('throttle_pct', 0.0)
+                system_state = header.get('system_state', None)
+
+                # Calculate interval multiplier based on throttle
+                # 0% throttle = 1x interval, 70% throttle = 3.3x interval
+                multiplier = 1.0 + (throttle_pct * 3.0)
+
+                # Clamp to reasonable range
+                multiplier = max(1.0, min(10.0, multiplier))
+
+                # Update intervals
+                self._ara_interval = int(self._base_ara_interval * multiplier)
+                self._kitten_interval = int(self._base_kitten_interval * multiplier)
+                self._metrics_interval = int(self._base_metrics_interval * multiplier)
+
+                # Log state changes
+                if system_state and SystemState:
+                    state_name = system_state.name if hasattr(system_state, 'name') else str(system_state)
+                    if throttle_pct > 0:
+                        logger.debug(f"[COCKPIT] State: {state_name}, Throttle: {throttle_pct:.0%}")
+
+            except Exception as e:
+                logger.debug(f"[COCKPIT] Throttle check failed: {e}")
+
+            return True  # Keep timer running
+
+        # Throttle-aware update wrappers
+        def throttled_ara_status():
+            update_ara_status()
+            # Reschedule with current interval
+            GLib.timeout_add_seconds(self._ara_interval, throttled_ara_status)
+            return False  # Don't repeat automatically
+
+        def throttled_kitten_status():
+            update_kitten_status()
+            GLib.timeout_add_seconds(self._kitten_interval, throttled_kitten_status)
+            return False
+
+        def throttled_metrics():
+            update_system_metrics()
+            GLib.timeout_add_seconds(self._metrics_interval, throttled_metrics)
+            return False
+
+        # Start throttle checker (every 5 seconds)
+        self._update_timers.append(GLib.timeout_add_seconds(5, check_throttle))
+
+        # Start update timers with throttle-aware scheduling
         self._update_timers.extend([
-            GLib.timeout_add_seconds(2, update_ara_status),
-            GLib.timeout_add_seconds(1, update_kitten_status),
-            GLib.timeout_add_seconds(2, update_system_metrics),
+            GLib.timeout_add_seconds(self._ara_interval, throttled_ara_status),
+            GLib.timeout_add_seconds(self._kitten_interval, throttled_kitten_status),
+            GLib.timeout_add_seconds(self._metrics_interval, throttled_metrics),
         ])
 
         # Initial updates

@@ -550,14 +550,26 @@ def get_pain_level() -> int:
 # Also export high-performance HAL with posix_ipc
 try:
     from .ara_hal import (
+        # Core HAL
         AraHAL,
         create_somatic_bus,
         connect_somatic_bus,
         read_pain as read_pain_hal,
         read_pad,
+        read_system_state,
+        # Enums
+        SystemState,
+        DreamState,
         DREAM_AWAKE,
         DREAM_REM,
         DREAM_DEEP,
+        # Autonomic controller
+        AutonomicController,
+        # Constants
+        MAGIC,
+        VERSION,
+        SHM_NAME,
+        SHM_SIZE,
     )
     _HAL_EXPORTS = [
         'AraHAL',
@@ -565,11 +577,20 @@ try:
         'connect_somatic_bus',
         'read_pain_hal',
         'read_pad',
+        'read_system_state',
+        'SystemState',
+        'DreamState',
         'DREAM_AWAKE',
         'DREAM_REM',
         'DREAM_DEEP',
+        'AutonomicController',
+        'MAGIC',
+        'VERSION',
+        'SHM_NAME',
+        'SHM_SIZE',
     ]
-except ImportError:
+except ImportError as e:
+    logger.debug(f"ara_hal not available: {e}")
     _HAL_EXPORTS = []
 
 

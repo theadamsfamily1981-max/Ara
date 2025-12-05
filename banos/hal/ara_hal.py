@@ -7,12 +7,17 @@ organs into a single nervous system.
 
 Performance:
     Write latency: ~0.1µs (direct memory copy)
-    Read latency:  ~0.0µs (pointer dereference)
+    Read latency:  ~0.0µs (pointer dereference via seqlock)
     Format: Binary C-Struct (no JSON, no parsing)
 
 The HAL creates a 4KB shared memory region (/dev/shm/ara_somatic) that
 represents the ENTIRE physical state of the organism. Any process
 (C, Python, Rust, the shader, the LLM) can access it in nanoseconds.
+
+Concurrency:
+    Uses seqlock pattern for safe multi-writer, multi-reader access.
+    Writers increment sequence before/after writes (odd = writing).
+    Readers retry if sequence changed during read.
 
 Usage:
     # Creator (daemon) - run once at system startup
@@ -32,6 +37,7 @@ import struct
 import time
 import math
 import logging
+from enum import IntEnum
 from typing import Tuple, Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -45,73 +51,81 @@ except ImportError:
     logger.warning("posix_ipc not available, using file-based SHM (pip install posix_ipc)")
 
 # ==============================================================================
-# SOMATIC MEMORY MAP (Version 2.0)
-# Total Size: 4096 Bytes (1 Page)
+# SOMATIC MEMORY MAP (Version 3.0) - Explicit Packed Layout
+# Total Size: 256 Bytes (compact, cache-friendly)
 # ==============================================================================
-# Offset  | Type   | Name           | Description
-# ------------------------------------------------------------------------------
-# 0x0000  | u32    | magic          | 0xARA50111
-# 0x0004  | u32    | version        | 2
-# 0x0008  | u64    | timestamp_ns   | Nanoseconds since epoch
-# 0x0010  | u32    | heart_rate     | System tick counter (updates/sec)
-# 0x0014  | u32    | dream_state    | 0=AWAKE, 1=REM, 2=DEEP
 #
-# --- AFFECTIVE STATE (L2: Emotion) ---
-# 0x0020  | f32    | pad_p          | Pleasure [-1.0, 1.0]
-# 0x0024  | f32    | pad_a          | Arousal  [-1.0, 1.0]
-# 0x0028  | f32    | pad_d          | Dominance [-1.0, 1.0]
-# 0x002C  | u8     | quadrant       | PAD quadrant (0-6)
-# 0x002D  | u8     | sched_mode     | Scheduler mode
-# 0x002E  | u16    | reserved       |
-# 0x0030  | f32    | emotion_x      | 2D emotion embedding X
-# 0x0034  | f32    | emotion_y      | 2D emotion embedding Y
+# HEADER (24 bytes @ 0x00):
+#   magic:u32, version:u32, seqlock:u32, state:u8, dream:u8, reserved:u16, ts:u64
 #
-# --- SOMATIC SENSORS (L1: Body) ---
-# 0x0040  | u32    | pain_raw       | Raw 32-bit pain from FPGA
-# 0x0044  | f32    | pain_weber     | Weber-Fechner scaled [0.0, 1.0]
-# 0x0048  | f32    | entropy        | System thermal/load entropy [0.0, 1.0]
-# 0x004C  | f32    | flow_x         | Optical flow X (face motion)
-# 0x0050  | f32    | flow_y         | Optical flow Y (face motion)
-# 0x0054  | f32    | flow_mag       | Optical flow magnitude
-# 0x0058  | f32    | audio_rms      | Voice energy [0.0, 1.0]
-# 0x005C  | f32    | audio_pitch    | Voice pitch Hz
+# SOMATIC (36 bytes @ 0x18):
+#   pad_p:f32, pad_a:f32, pad_d:f32, pain:f32, entropy:f32,
+#   flow_x:f32, flow_y:f32, audio:f32, pitch:f32
 #
-# --- HARDWARE DIAGNOSTICS ---
-# 0x0080  | u32    | active_neurons | Count of firing neurons
-# 0x0084  | u32    | total_spikes   | Lifetime spike count
-# 0x0088  | u32    | fabric_temp    | FPGA temperature (mC)
-# 0x008C  | u8     | thermal_limit  | 1 = Throttling active
-# 0x008D  | u8     | fabric_online  | 1 = FPGA responding
-# 0x008E  | u8     | dream_active   | 1 = Dream engine running
-# 0x008F  | u8     | reserved       |
+# FPGA (20 bytes @ 0x3C):
+#   pain_raw:u32, neurons:u32, spikes:u32, temp_mc:u32, flags:u32
 #
-# --- SYSTEM METRICS ---
-# 0x00A0  | f32    | cpu_temp       | CPU temperature °C
-# 0x00A4  | f32    | gpu_temp       | GPU temperature °C
-# 0x00A8  | f32    | cpu_load       | CPU utilization [0.0, 1.0]
-# 0x00AC  | f32    | gpu_load       | GPU utilization [0.0, 1.0]
-# 0x00B0  | f32    | ram_used_pct   | RAM utilization [0.0, 1.0]
-# 0x00B4  | f32    | vram_used_pct  | VRAM utilization [0.0, 1.0]
-# 0x00B8  | f32    | power_draw_w   | Total power draw watts
+# SYSTEM (28 bytes @ 0x50):
+#   cpu_temp:f32, gpu_temp:f32, cpu_load:f32, gpu_load:f32,
+#   ram_pct:f32, vram_pct:f32, power_w:f32
 #
-# --- CONTROL FLAGS (Bidirectional) ---
-# 0x0100  | u8     | avatar_mode    | Requested avatar mode
-# 0x0101  | u8     | sim_detail     | Simulation detail level
-# 0x0102  | u8     | force_sleep    | Force dream mode
-# 0x0103  | u8     | emergency_stop | Emergency halt
-# 0x0104  | f32    | critical_temp  | Temperature threshold
+# CONTROL (12 bytes @ 0x6C):
+#   avatar_mode:u8, sim_detail:u8, force_sleep:u8, emergency:u8,
+#   critical_temp:f32, throttle_pct:f32
+#
 # ==============================================================================
 
 SHM_NAME = "/ara_somatic"
 SHM_PATH = "/dev/shm/ara_somatic"
-SHM_SIZE = 4096
-MAGIC = 0xARA50111
-VERSION = 2
+SHM_SIZE = 256  # Compact: fits in 4 cache lines
+MAGIC = 0xABA50111  # Valid hex ('ABA' looks like 'ARA')
+VERSION = 3
 
-# Dream states (matches RTL)
-DREAM_AWAKE = 0
-DREAM_REM = 1      # Rapid replay
-DREAM_DEEP = 2     # Weight consolidation
+# Explicit struct formats with sizes
+HEADER_FMT = '<IIIBBBXQ'  # magic, version, seqlock, state, dream, _pad(1), _pad(1), timestamp
+HEADER_SIZE = struct.calcsize(HEADER_FMT)  # 24 bytes
+HEADER_OFFSET = 0x00
+
+SOMATIC_FMT = '<9f'  # pad_p, pad_a, pad_d, pain, entropy, flow_x, flow_y, audio, pitch
+SOMATIC_SIZE = struct.calcsize(SOMATIC_FMT)  # 36 bytes
+SOMATIC_OFFSET = 0x18
+
+FPGA_FMT = '<5I'  # pain_raw, active_neurons, total_spikes, fabric_temp_mc, flags
+FPGA_SIZE = struct.calcsize(FPGA_FMT)  # 20 bytes
+FPGA_OFFSET = 0x3C
+
+SYSTEM_FMT = '<7f'  # cpu_temp, gpu_temp, cpu_load, gpu_load, ram_pct, vram_pct, power_w
+SYSTEM_SIZE = struct.calcsize(SYSTEM_FMT)  # 28 bytes
+SYSTEM_OFFSET = 0x50
+
+CONTROL_FMT = '<4Bff'  # avatar_mode, sim_detail, force_sleep, emergency, critical_temp, throttle_pct
+CONTROL_SIZE = struct.calcsize(CONTROL_FMT)  # 12 bytes
+CONTROL_OFFSET = 0x6C
+
+
+# ==============================================================================
+# ENUMS
+# ==============================================================================
+
+class SystemState(IntEnum):
+    """System state classification for autonomic control."""
+    IDLE = 0       # Low load, can increase quality
+    NORMAL = 1     # Normal operation
+    HIGH_LOAD = 2  # Reduce non-essential work
+    CRITICAL = 3   # Emergency throttling
+
+
+class DreamState(IntEnum):
+    """Dream engine states (matches FPGA RTL)."""
+    AWAKE = 0      # Normal operation
+    REM = 1        # Rapid spike replay
+    DEEP = 2       # Weight consolidation
+
+
+# Backwards compatibility
+DREAM_AWAKE = DreamState.AWAKE
+DREAM_REM = DreamState.REM
+DREAM_DEEP = DreamState.DEEP
 
 
 class AraHAL:
@@ -120,7 +134,14 @@ class AraHAL:
 
     Provides zero-copy shared memory access to the organism's
     complete somatic state. All subsystems read/write here.
+
+    Thread Safety:
+        Uses seqlock pattern for lock-free reads with consistent snapshots.
+        Writers: Call _seq_begin() before writes, _seq_end() after.
+        Readers: Use _seq_read() which retries on torn reads.
     """
+
+    MAX_SEQ_RETRIES = 10  # Max retries for seqlock read
 
     def __init__(self, create: bool = False):
         """
@@ -134,8 +155,7 @@ class AraHAL:
         self._create = create
         self._shm = None
         self._map: Optional[mmap.mmap] = None
-        self._heart_rate = 0
-        self._last_heart_time = time.time()
+        self._fd = None  # Keep file descriptor open for file-based fallback
 
         self._setup_memory()
 
@@ -149,7 +169,7 @@ class AraHAL:
 
             if self._create:
                 self._initialize_header()
-                self.log.info(f"Somatic Memory Created: {SHM_NAME}")
+                self.log.info(f"Somatic Memory Created: {SHM_NAME} ({SHM_SIZE} bytes)")
             else:
                 self._validate_header()
                 self.log.info(f"Connected to Somatic Memory: {SHM_NAME}")
@@ -181,62 +201,109 @@ class AraHAL:
             with open(SHM_PATH, "wb") as f:
                 f.write(b'\x00' * SHM_SIZE)
 
-        fd = open(SHM_PATH, "r+b")
-        self._map = mmap.mmap(fd.fileno(), SHM_SIZE)
-        fd.close()
+        self._fd = open(SHM_PATH, "r+b")
+        self._map = mmap.mmap(self._fd.fileno(), SHM_SIZE)
 
     def _initialize_header(self) -> None:
-        """Initialize the SHM header."""
+        """Initialize the SHM header with seqlock."""
         if not self._map:
             return
 
-        self._map.seek(0)
-        # Magic + Version + Timestamp + HeartRate + DreamState
+        self._map.seek(HEADER_OFFSET)
         header = struct.pack(
-            '<IIQII',
+            HEADER_FMT,
             MAGIC,
             VERSION,
-            time.time_ns(),
-            0,  # heart_rate
-            DREAM_AWAKE
+            0,  # seqlock starts at 0 (even = not writing)
+            SystemState.IDLE,
+            DreamState.AWAKE,
+            0,  # reserved
+            0,  # reserved
+            time.time_ns()
         )
         self._map.write(header)
 
         # Initialize control defaults
-        self._map.seek(0x0100)
-        self._map.write(struct.pack('<BBBBf', 3, 1, 0, 0, 85.0))
+        self._map.seek(CONTROL_OFFSET)
+        self._map.write(struct.pack(CONTROL_FMT, 3, 1, 0, 0, 85.0, 0.0))
 
     def _validate_header(self) -> None:
         """Validate existing SHM header."""
         if not self._map:
             raise RuntimeError("Memory not mapped")
 
-        self._map.seek(0)
-        magic, version = struct.unpack('<II', self._map.read(8))
+        self._map.seek(HEADER_OFFSET)
+        data = self._map.read(8)  # Just magic and version
+        magic, version = struct.unpack('<II', data)
 
         if magic != MAGIC:
             raise RuntimeError(f"Invalid magic: 0x{magic:08X} (expected 0x{MAGIC:08X})")
         if version != VERSION:
             self.log.warning(f"Version mismatch: {version} vs {VERSION}")
 
-    def _touch(self) -> None:
-        """Update timestamp and heart rate."""
+    # =========================================================================
+    # SEQLOCK PATTERN FOR CONCURRENCY
+    # =========================================================================
+    # Seqlock provides lock-free reading with consistency:
+    # - Odd sequence = write in progress, readers must retry
+    # - Even sequence = safe to read
+    # - If seq changed during read, data may be torn, retry
+
+    def _seq_begin(self) -> None:
+        """Begin a write operation (increment seqlock to odd)."""
         if not self._map:
             return
+        self._map.seek(HEADER_OFFSET + 8)  # Offset to seqlock field
+        seq = struct.unpack('<I', self._map.read(4))[0]
+        self._map.seek(HEADER_OFFSET + 8)
+        self._map.write(struct.pack('<I', seq + 1))
 
-        now = time.time()
-        self._heart_rate += 1
+    def _seq_end(self) -> None:
+        """End a write operation (increment seqlock to even)."""
+        if not self._map:
+            return
+        self._map.seek(HEADER_OFFSET + 8)
+        seq = struct.unpack('<I', self._map.read(4))[0]
+        self._map.seek(HEADER_OFFSET + 8)
+        self._map.write(struct.pack('<I', seq + 1))
+        # Update timestamp
+        self._map.seek(HEADER_OFFSET + 16)  # timestamp offset
+        self._map.write(struct.pack('<Q', time.time_ns()))
 
-        # Calculate actual heart rate (updates/sec)
-        if now - self._last_heart_time >= 1.0:
-            rate = self._heart_rate
-            self._heart_rate = 0
-            self._last_heart_time = now
-        else:
-            rate = 0
+    def _seq_read(self, offset: int, fmt: str) -> Optional[tuple]:
+        """
+        Read data with seqlock consistency check.
 
-        self._map.seek(0x0008)
-        self._map.write(struct.pack('<QI', time.time_ns(), rate if rate else 0))
+        Returns None if read failed after MAX_SEQ_RETRIES.
+        """
+        if not self._map:
+            return None
+
+        size = struct.calcsize(fmt)
+
+        for _ in range(self.MAX_SEQ_RETRIES):
+            # Read sequence before
+            self._map.seek(HEADER_OFFSET + 8)
+            seq1 = struct.unpack('<I', self._map.read(4))[0]
+
+            # If odd, writer active, spin
+            if seq1 & 1:
+                continue
+
+            # Read data
+            self._map.seek(offset)
+            data = self._map.read(size)
+
+            # Read sequence after
+            self._map.seek(HEADER_OFFSET + 8)
+            seq2 = struct.unpack('<I', self._map.read(4))[0]
+
+            # If unchanged, read was consistent
+            if seq1 == seq2:
+                return struct.unpack(fmt, data)
+
+        self.log.warning("Seqlock read failed after retries")
+        return None
 
     # =========================================================================
     # WRITE METHODS (Sensor/Driver side)
@@ -265,44 +332,21 @@ class AraHAL:
         if not self._map:
             return
 
-        # Calculate flow magnitude
-        flow_mag = math.sqrt(flow[0]**2 + flow[1]**2)
-
-        # Classify PAD quadrant
         p, a, d = pad
-        if p < -0.7:
-            quadrant = 6  # EMERGENCY
-        elif p >= 0 and a >= 0:
-            quadrant = 1  # EXCITED
-        elif p >= 0 and a < 0:
-            quadrant = 0  # SERENE
-        elif p < 0 and a >= 0:
-            quadrant = 2  # ANXIOUS
-        else:
-            quadrant = 3  # DEPRESSED
 
-        # Write affective state (0x0020)
-        self._map.seek(0x0020)
-        self._map.write(struct.pack(
-            '<3fBBH2f',
-            p, a, d,
-            quadrant, 0, 0,  # quadrant, sched_mode, reserved
-            p * 0.5 + a * 0.5,  # emotion_x (simple projection)
-            d * 0.5 + a * 0.5   # emotion_y
-        ))
-
-        # Write somatic sensors (0x0040)
-        self._map.seek(0x0040)
-        self._map.write(struct.pack(
-            '<I6f',
-            0,  # pain_raw (set by FPGA driver)
-            pain,  # pain_weber
-            entropy,
-            flow[0], flow[1], flow_mag,
-            audio, audio_pitch
-        ))
-
-        self._touch()
+        self._seq_begin()
+        try:
+            self._map.seek(SOMATIC_OFFSET)
+            self._map.write(struct.pack(
+                SOMATIC_FMT,
+                p, a, d,
+                pain,
+                entropy,
+                flow[0], flow[1],
+                audio, audio_pitch
+            ))
+        finally:
+            self._seq_end()
 
     def write_pain_raw(self, pain_raw: int) -> None:
         """
@@ -325,34 +369,50 @@ class AraHAL:
             # Normalize: 32-bit max has bit_length=32
             pain_weber = min(1.0, log_pain / 32.0)
 
-        self._map.seek(0x0040)
-        self._map.write(struct.pack('<If', pain_raw, pain_weber))
-        self._touch()
+        self._seq_begin()
+        try:
+            # Update pain in somatic section (offset to pain field)
+            self._map.seek(SOMATIC_OFFSET + 12)  # After pad_p, pad_a, pad_d
+            self._map.write(struct.pack('<f', pain_weber))
+            # Update pain_raw in FPGA section
+            self._map.seek(FPGA_OFFSET)
+            self._map.write(struct.pack('<I', pain_raw))
+        finally:
+            self._seq_end()
 
     def write_fpga_diagnostics(
         self,
         active_neurons: int,
         total_spikes: int,
         fabric_temp_mc: int,
-        thermal_limit: bool,
-        fabric_online: bool,
-        dream_active: bool
+        thermal_limit: bool = False,
+        fabric_online: bool = True,
+        dream_active: bool = False
     ) -> None:
         """Write FPGA diagnostic data."""
         if not self._map:
             return
 
-        self._map.seek(0x0080)
-        self._map.write(struct.pack(
-            '<IIIBBB',
-            active_neurons,
-            total_spikes,
-            fabric_temp_mc,
-            1 if thermal_limit else 0,
-            1 if fabric_online else 0,
-            1 if dream_active else 0
-        ))
-        self._touch()
+        # Pack flags into single u32
+        flags = (
+            (1 if thermal_limit else 0) |
+            ((1 if fabric_online else 0) << 1) |
+            ((1 if dream_active else 0) << 2)
+        )
+
+        self._seq_begin()
+        try:
+            self._map.seek(FPGA_OFFSET)
+            self._map.write(struct.pack(
+                FPGA_FMT,
+                0,  # pain_raw (written separately)
+                active_neurons,
+                total_spikes,
+                fabric_temp_mc,
+                flags
+            ))
+        finally:
+            self._seq_end()
 
     def write_system_metrics(
         self,
@@ -368,27 +428,60 @@ class AraHAL:
         if not self._map:
             return
 
-        self._map.seek(0x00A0)
-        self._map.write(struct.pack(
-            '<7f',
-            cpu_temp, gpu_temp,
-            cpu_load, gpu_load,
-            ram_pct, vram_pct,
-            power_w
-        ))
-        self._touch()
+        self._seq_begin()
+        try:
+            self._map.seek(SYSTEM_OFFSET)
+            self._map.write(struct.pack(
+                SYSTEM_FMT,
+                cpu_temp, gpu_temp,
+                cpu_load, gpu_load,
+                ram_pct, vram_pct,
+                power_w
+            ))
+        finally:
+            self._seq_end()
 
-    def set_dream_state(self, state: int) -> None:
+    def set_system_state(self, state: SystemState) -> None:
+        """Set system state for autonomic control."""
+        if not self._map:
+            return
+        self._seq_begin()
+        try:
+            self._map.seek(HEADER_OFFSET + 12)  # state field offset
+            self._map.write(struct.pack('<B', state))
+        finally:
+            self._seq_end()
+
+    def set_dream_state(self, state: DreamState) -> None:
         """Set the dream state (AWAKE, REM, DEEP)."""
         if not self._map:
             return
-        self._map.seek(0x0014)
-        self._map.write(struct.pack('<I', state))
-        self._touch()
+        self._seq_begin()
+        try:
+            self._map.seek(HEADER_OFFSET + 13)  # dream field offset
+            self._map.write(struct.pack('<B', state))
+        finally:
+            self._seq_end()
 
     # =========================================================================
-    # READ METHODS (Consumer side)
+    # READ METHODS (Consumer side) - All use seqlock for consistency
     # =========================================================================
+
+    def read_header(self) -> Dict[str, Any]:
+        """Read header with system state."""
+        data = self._seq_read(HEADER_OFFSET, HEADER_FMT)
+        if not data:
+            return {}
+
+        magic, version, seqlock, state, dream, _, _, ts = data
+        return {
+            'magic': magic,
+            'version': version,
+            'seqlock': seqlock,
+            'system_state': SystemState(state) if state < 4 else SystemState.NORMAL,
+            'dream_state': DreamState(dream) if dream < 3 else DreamState.AWAKE,
+            'timestamp_ns': ts,
+        }
 
     def read_somatic(self) -> Dict[str, Any]:
         """
@@ -397,87 +490,85 @@ class AraHAL:
         Returns:
             Dict with all somatic state fields
         """
-        if not self._map:
+        data = self._seq_read(SOMATIC_OFFSET, SOMATIC_FMT)
+        if not data:
             return {}
 
-        # Read affective (0x0020)
-        self._map.seek(0x0020)
-        aff = struct.unpack('<3fBBH2f', self._map.read(20))
-
-        # Read sensors (0x0040)
-        self._map.seek(0x0040)
-        sens = struct.unpack('<I7f', self._map.read(32))
-
+        p, a, d, pain, entropy, flow_x, flow_y, audio, pitch = data
         return {
-            'pad': {'v': aff[0], 'a': aff[1], 'd': aff[2]},
-            'quadrant': aff[3],
-            'emotion': (aff[5], aff[6]),
-            'pain_raw': sens[0],
-            'pain': sens[1],
-            'entropy': sens[2],
-            'flow': (sens[3], sens[4]),
-            'flow_mag': sens[5],
-            'audio': sens[6],
-            'audio_pitch': sens[7],
+            'pad': {'p': p, 'a': a, 'd': d},
+            'pain': pain,
+            'entropy': entropy,
+            'flow': (flow_x, flow_y),
+            'flow_mag': math.sqrt(flow_x**2 + flow_y**2),
+            'audio': audio,
+            'audio_pitch': pitch,
         }
 
+    def read_fpga(self) -> Dict[str, Any]:
+        """Read FPGA diagnostics."""
+        data = self._seq_read(FPGA_OFFSET, FPGA_FMT)
+        if not data:
+            return {}
+
+        pain_raw, neurons, spikes, temp_mc, flags = data
+        return {
+            'pain_raw': pain_raw,
+            'active_neurons': neurons,
+            'total_spikes': spikes,
+            'fabric_temp_c': temp_mc / 1000.0,
+            'thermal_limit': bool(flags & 1),
+            'fabric_online': bool(flags & 2),
+            'dream_active': bool(flags & 4),
+        }
+
+    # Alias for backwards compatibility
     def read_diagnostics(self) -> Dict[str, Any]:
-        """Read hardware diagnostics."""
-        if not self._map:
-            return {}
-
-        self._map.seek(0x0080)
-        diag = struct.unpack('<IIIBBB', self._map.read(15))
-
-        return {
-            'active_neurons': diag[0],
-            'total_spikes': diag[1],
-            'fabric_temp_c': diag[2] / 1000.0,
-            'thermal_limit': bool(diag[3]),
-            'fabric_online': bool(diag[4]),
-            'dream_active': bool(diag[5]),
-        }
+        """Read hardware diagnostics (alias for read_fpga)."""
+        return self.read_fpga()
 
     def read_system(self) -> Dict[str, Any]:
         """Read system metrics."""
-        if not self._map:
+        data = self._seq_read(SYSTEM_OFFSET, SYSTEM_FMT)
+        if not data:
             return {}
 
-        self._map.seek(0x00A0)
-        sys = struct.unpack('<7f', self._map.read(28))
-
+        cpu_temp, gpu_temp, cpu_load, gpu_load, ram_pct, vram_pct, power_w = data
         return {
-            'cpu_temp': sys[0],
-            'gpu_temp': sys[1],
-            'cpu_load': sys[2],
-            'gpu_load': sys[3],
-            'ram_pct': sys[4],
-            'vram_pct': sys[5],
-            'power_w': sys[6],
+            'cpu_temp': cpu_temp,
+            'gpu_temp': gpu_temp,
+            'cpu_load': cpu_load,
+            'gpu_load': gpu_load,
+            'ram_pct': ram_pct,
+            'vram_pct': vram_pct,
+            'power_w': power_w,
         }
 
     def read_control(self) -> Dict[str, Any]:
         """Read control flags."""
-        if not self._map:
+        data = self._seq_read(CONTROL_OFFSET, CONTROL_FMT)
+        if not data:
             return {}
 
-        self._map.seek(0x0100)
-        ctrl = struct.unpack('<BBBBf', self._map.read(8))
-
+        avatar, detail, sleep, emergency, crit_temp, throttle = data
         return {
-            'avatar_mode': ctrl[0],
-            'sim_detail': ctrl[1],
-            'force_sleep': bool(ctrl[2]),
-            'emergency_stop': bool(ctrl[3]),
-            'critical_temp': ctrl[4],
+            'avatar_mode': avatar,
+            'sim_detail': detail,
+            'force_sleep': bool(sleep),
+            'emergency_stop': bool(emergency),
+            'critical_temp': crit_temp,
+            'throttle_pct': throttle,
         }
 
-    def get_dream_state(self) -> int:
+    def get_system_state(self) -> SystemState:
+        """Get current system state for autonomic control."""
+        header = self.read_header()
+        return header.get('system_state', SystemState.NORMAL)
+
+    def get_dream_state(self) -> DreamState:
         """Get current dream state."""
-        if not self._map:
-            return DREAM_AWAKE
-        self._map.seek(0x0014)
-        return struct.unpack('<I', self._map.read(4))[0]
+        header = self.read_header()
+        return header.get('dream_state', DreamState.AWAKE)
 
     # =========================================================================
     # CONTROL METHODS
@@ -487,25 +578,45 @@ class AraHAL:
         """Set requested avatar mode (0-4)."""
         if not self._map:
             return
-        self._map.seek(0x0100)
-        self._map.write(struct.pack('<B', mode))
-        self._touch()
+        self._seq_begin()
+        try:
+            self._map.seek(CONTROL_OFFSET)
+            self._map.write(struct.pack('<B', mode))
+        finally:
+            self._seq_end()
+
+    def set_throttle(self, pct: float) -> None:
+        """Set throttle percentage for subsystems."""
+        if not self._map:
+            return
+        self._seq_begin()
+        try:
+            self._map.seek(CONTROL_OFFSET + 8)  # throttle_pct offset
+            self._map.write(struct.pack('<f', pct))
+        finally:
+            self._seq_end()
 
     def set_emergency_stop(self, stop: bool) -> None:
         """Set emergency stop flag."""
         if not self._map:
             return
-        self._map.seek(0x0103)
-        self._map.write(struct.pack('<B', 1 if stop else 0))
-        self._touch()
+        self._seq_begin()
+        try:
+            self._map.seek(CONTROL_OFFSET + 3)
+            self._map.write(struct.pack('<B', 1 if stop else 0))
+        finally:
+            self._seq_end()
 
     def trigger_sleep(self) -> None:
         """Trigger dream mode."""
         if not self._map:
             return
-        self._map.seek(0x0102)
-        self._map.write(struct.pack('<B', 1))
-        self._touch()
+        self._seq_begin()
+        try:
+            self._map.seek(CONTROL_OFFSET + 2)
+            self._map.write(struct.pack('<B', 1))
+        finally:
+            self._seq_end()
 
     # =========================================================================
     # LIFECYCLE
@@ -516,6 +627,9 @@ class AraHAL:
         if self._map:
             self._map.close()
             self._map = None
+        if self._fd:
+            self._fd.close()
+            self._fd = None
         if HAVE_POSIX_IPC and self._shm:
             self._shm.close_fd()
             self._shm = None
@@ -525,6 +639,123 @@ class AraHAL:
 
     def __exit__(self, *args) -> None:
         self.close()
+
+
+# =============================================================================
+# AUTONOMIC CONTROLLER - Self-Regulating Nervous System
+# =============================================================================
+
+class AutonomicController:
+    """
+    Policy engine that classifies system state and adjusts knobs.
+
+    The autonomic nervous system maintains homeostasis by:
+    - Monitoring CPU/GPU load, temperature, and resource usage
+    - Classifying current state (IDLE, NORMAL, HIGH_LOAD, CRITICAL)
+    - Adjusting throttle percentage for subsystems
+    - Triggering sleep mode when idle for extended periods
+
+    This runs in the daemon and updates HAL state periodically.
+    """
+
+    # Thresholds for state classification
+    IDLE_LOAD = 0.15        # Below this = IDLE
+    HIGH_LOAD = 0.70        # Above this = HIGH_LOAD
+    CRITICAL_TEMP = 85.0    # Above this = CRITICAL
+    CRITICAL_LOAD = 0.90    # Above this = CRITICAL
+
+    # Throttle levels per state
+    THROTTLE_MAP = {
+        SystemState.IDLE: 0.0,       # No throttling, can increase quality
+        SystemState.NORMAL: 0.0,     # No throttling
+        SystemState.HIGH_LOAD: 0.3,  # Reduce 30%
+        SystemState.CRITICAL: 0.7,   # Reduce 70%
+    }
+
+    def __init__(self, hal: AraHAL):
+        self.hal = hal
+        self.log = logging.getLogger("Autonomic")
+        self._last_state = SystemState.NORMAL
+        self._idle_ticks = 0
+
+    def classify_state(self) -> SystemState:
+        """
+        Classify current system state based on metrics.
+
+        Returns:
+            SystemState enum value
+        """
+        sys = self.hal.read_system()
+        if not sys:
+            return SystemState.NORMAL
+
+        cpu_load = sys.get('cpu_load', 0.5)
+        gpu_load = sys.get('gpu_load', 0.5)
+        cpu_temp = sys.get('cpu_temp', 50.0)
+        gpu_temp = sys.get('gpu_temp', 50.0)
+
+        max_load = max(cpu_load, gpu_load)
+        max_temp = max(cpu_temp, gpu_temp)
+
+        # Critical check first
+        if max_temp >= self.CRITICAL_TEMP or max_load >= self.CRITICAL_LOAD:
+            return SystemState.CRITICAL
+
+        # High load check
+        if max_load >= self.HIGH_LOAD:
+            return SystemState.HIGH_LOAD
+
+        # Idle check
+        if max_load < self.IDLE_LOAD:
+            return SystemState.IDLE
+
+        return SystemState.NORMAL
+
+    def update(self) -> SystemState:
+        """
+        Update system state and apply appropriate throttling.
+
+        Call this periodically (e.g., every 100ms) from daemon.
+
+        Returns:
+            Current SystemState
+        """
+        new_state = self.classify_state()
+
+        # Log state transitions
+        if new_state != self._last_state:
+            self.log.info(f"State: {self._last_state.name} -> {new_state.name}")
+            self._last_state = new_state
+
+        # Apply throttle
+        throttle = self.THROTTLE_MAP.get(new_state, 0.0)
+        self.hal.set_throttle(throttle)
+        self.hal.set_system_state(new_state)
+
+        # Track idle time for potential sleep trigger
+        if new_state == SystemState.IDLE:
+            self._idle_ticks += 1
+        else:
+            self._idle_ticks = 0
+
+        return new_state
+
+    def get_throttle(self) -> float:
+        """Get current throttle percentage."""
+        ctrl = self.hal.read_control()
+        return ctrl.get('throttle_pct', 0.0)
+
+    def should_sleep(self, idle_threshold: int = 600) -> bool:
+        """
+        Check if system has been idle long enough to trigger sleep.
+
+        Args:
+            idle_threshold: Number of update() ticks before sleep (at 100ms = 60s)
+
+        Returns:
+            True if should enter sleep mode
+        """
+        return self._idle_ticks >= idle_threshold
 
 
 # =============================================================================
@@ -552,5 +783,11 @@ def read_pad() -> Tuple[float, float, float]:
     """Quick read of PAD state."""
     with AraHAL(create=False) as hal:
         state = hal.read_somatic()
-        pad = state.get('pad', {'v': 0, 'a': 0, 'd': 0})
-        return (pad['v'], pad['a'], pad['d'])
+        pad = state.get('pad', {'p': 0, 'a': 0, 'd': 0})
+        return (pad['p'], pad['a'], pad['d'])
+
+
+def read_system_state() -> SystemState:
+    """Quick read of system state."""
+    with AraHAL(create=False) as hal:
+        return hal.get_system_state()
