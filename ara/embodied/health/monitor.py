@@ -15,12 +15,17 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class HealthStatus(Enum):
@@ -76,7 +81,7 @@ class HealthReport:
     """Complete health report for Ara's embodiment."""
 
     report_id: str
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=_utcnow)
 
     # Overall status
     overall_status: HealthStatus = HealthStatus.UNKNOWN
@@ -197,7 +202,7 @@ class HealthMonitor:
         self._next_report_id = 1
 
         # Health check functions
-        self._checks: Dict[str, callable] = {}
+        self._checks: Dict[str, Callable] = {}
 
     def _generate_report_id(self) -> str:
         """Generate unique report ID."""
@@ -205,7 +210,7 @@ class HealthMonitor:
         self._next_report_id += 1
         return id_str
 
-    def register_check(self, name: str, check_func: callable) -> None:
+    def register_check(self, name: str, check_func: Callable) -> None:
         """Register a health check function.
 
         Args:
@@ -331,7 +336,7 @@ class HealthMonitor:
         ))
 
         # Trim old snapshots (keep 24 hours)
-        cutoff = datetime.utcnow() - timedelta(hours=24)
+        cutoff = _utcnow() - timedelta(hours=24)
         self._snapshots = [s for s in self._snapshots if s.timestamp > cutoff]
 
         logger.info(f"Health check complete: {report.overall_status.value} ({report.overall_score:.0%})")
@@ -346,7 +351,7 @@ class HealthMonitor:
         Returns:
             Trend data
         """
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = _utcnow() - timedelta(hours=hours)
         relevant = [s for s in self._snapshots if s.timestamp > cutoff]
 
         if len(relevant) < 2:

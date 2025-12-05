@@ -212,4 +212,82 @@ module kitten_fabric_tile
         .out_west_flit  (noc_west_out_flit)
     );
 
+    // =========================================================================
+    // DREAM ENGINE - Hebbian Learning During Sleep
+    // =========================================================================
+    // When snn_enable is low, the Dream Engine takes over and performs
+    // memory consolidation by replaying spike patterns and applying STDP.
+
+    // Dream engine control signals (directly from cfg interface)
+    logic snn_enable_reg;
+    logic dream_trigger_reg;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            snn_enable_reg <= 1'b1;   // Default: awake
+            dream_trigger_reg <= 1'b0;
+        end else if (cfg_we && cfg_sel == 2'b11) begin
+            // Config select 3 = dream control
+            snn_enable_reg <= cfg_wdata[0];
+            dream_trigger_reg <= cfg_wdata[1];
+        end else begin
+            dream_trigger_reg <= 1'b0;  // Auto-clear trigger
+        end
+    end
+
+    // Dream engine outputs
+    logic [1:0]  dream_state;
+    logic        dream_active;
+    logic [31:0] dream_replay_count;
+    logic [31:0] dream_weight_updates;
+    logic [31:0] dream_cycles;
+
+    // Memory interface (stub - connect to actual DDR4 controller in top-level)
+    logic        dream_mem_rd_valid;
+    logic [31:0] dream_mem_rd_addr;
+    logic        dream_mem_rd_ready;
+    logic [127:0] dream_mem_rd_data;
+    logic        dream_mem_rd_data_valid;
+
+    // Weight update interface
+    logic        dream_weight_we;
+    logic [KF_SYNAPSE_ID_BITS-1:0] dream_weight_addr;
+    logic signed [W_WIDTH-1:0] dream_weight_delta;
+    logic signed [W_WIDTH-1:0] dream_current_weight;
+
+    // Stub connections for simulation (replace in actual implementation)
+    assign dream_mem_rd_ready = 1'b1;
+    assign dream_mem_rd_data = 128'h0;
+    assign dream_mem_rd_data_valid = dream_mem_rd_valid;  // Immediate response
+    assign dream_current_weight = 8'sd0;
+
+    kf_dream_engine u_dream_engine (
+        .clk                (clk),
+        .rst_n              (rst_n),
+
+        // Control
+        .snn_enable         (snn_enable_reg),
+        .dream_trigger      (dream_trigger_reg),
+        .dream_state        (dream_state),
+        .dream_active       (dream_active),
+
+        // DDR4 Memory Interface (spike log)
+        .mem_rd_valid       (dream_mem_rd_valid),
+        .mem_rd_addr        (dream_mem_rd_addr),
+        .mem_rd_ready       (dream_mem_rd_ready),
+        .mem_rd_data        (dream_mem_rd_data),
+        .mem_rd_data_valid  (dream_mem_rd_data_valid),
+
+        // Weight Memory Interface
+        .weight_we          (dream_weight_we),
+        .weight_addr        (dream_weight_addr),
+        .weight_delta       (dream_weight_delta),
+        .current_weight     (dream_current_weight),
+
+        // Statistics
+        .replay_count       (dream_replay_count),
+        .weight_updates     (dream_weight_updates),
+        .dream_cycles       (dream_cycles)
+    );
+
 endmodule : kitten_fabric_tile

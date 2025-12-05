@@ -16,12 +16,17 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable
 from collections import deque
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 @dataclass
@@ -33,7 +38,7 @@ class TelemetryReading:
     unit: str
     device_id: str
 
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=_utcnow)
     tags: Dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -58,7 +63,7 @@ class TelemetryAlert:
     value: float
     threshold: float
 
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=_utcnow)
     acknowledged: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
@@ -352,7 +357,7 @@ class TelemetryAdapter:
         Returns:
             Telemetry summary
         """
-        now = datetime.utcnow()
+        now = _utcnow()
         cutoff = now - timedelta(minutes=period_minutes)
 
         buffer = self._readings.get(device_id, deque())

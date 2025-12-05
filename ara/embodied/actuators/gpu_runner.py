@@ -14,12 +14,17 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class JobStatus(Enum):
@@ -65,7 +70,7 @@ class GpuJob:
     error_message: str = ""
 
     # Timing
-    queued_at: datetime = field(default_factory=datetime.utcnow)
+    queued_at: datetime = field(default_factory=_utcnow)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
@@ -228,7 +233,7 @@ class GpuRunner:
         # Assign GPU
         job.assigned_gpu = gpu_id
         job.status = JobStatus.RUNNING
-        job.started_at = datetime.utcnow()
+        job.started_at = _utcnow()
 
         if gpu_id in self._gpus:
             self._gpus[gpu_id]["current_job"] = job_id
@@ -250,7 +255,7 @@ class GpuRunner:
             logger.error(f"GPU job failed: {job_id}: {e}")
 
         # Cleanup
-        job.completed_at = datetime.utcnow()
+        job.completed_at = _utcnow()
         if job.started_at:
             job.actual_time_sec = (job.completed_at - job.started_at).total_seconds()
 
@@ -319,7 +324,7 @@ class GpuRunner:
             "queued": len(self._queue),
             "by_status": by_status,
             "registered_gpus": len(self._gpus),
-            "handlers_registered": list(self._handlers.keys()),
+            "handlers_registered": [jt.value for jt in self._handlers.keys()],
         }
 
 

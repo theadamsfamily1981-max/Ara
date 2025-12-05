@@ -18,8 +18,8 @@ Usage:
     server = SomaticStreamServer(port=8999)
     server.start()
 
-    # Update from BANOS state
-    server.update_spike(pain_level / 65535.0)
+    # Update from BANOS state (32-bit pain_level)
+    server.update_spike(pain_level / 4294967295.0)
 
     # Track optical flow from video frames
     tracker = OpticalFlowTracker()

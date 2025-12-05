@@ -63,10 +63,10 @@ module vacuum_spiker #(
     // W[i][j] = weight from input i to recurrent j
     //------------------------------------------------------------------------
 
-    // Synthesis attribute: Force BRAM, not distributed LUT RAM
-    // For VU7P+ with URAM available, use: (* ram_style = "ultra" *)
-    // For smaller FPGAs, use: (* ram_style = "block" *)
-    (* ram_style = "block" *)
+    // Synthesis attribute: Force URAM on VU7P+ for maximum density
+    // SB-852 has 270Mb of UltraRAM - use it!
+    // For smaller FPGAs without URAM, change to: (* ram_style = "block" *)
+    (* ram_style = "ultra" *)
     reg signed [WEIGHT_BITS-1:0] weights [0:NUM_INPUTS*NUM_RECURRENT-1];
 
     // Initialize weights to small negative values (inhibitory bias)

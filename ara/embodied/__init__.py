@@ -78,6 +78,18 @@ from .health import (
     is_healthy,
 )
 
+# Resource Gate
+from .resource_gate import (
+    ResourceLevel,
+    VideoQuality,
+    ResourceCheckResult,
+    ResourceGate,
+    get_resource_gate,
+    can_generate_video,
+    get_recommended_quality,
+    check_resources,
+)
+
 __all__ = [
     # Device Graph
     "DeviceType",
@@ -130,4 +142,13 @@ __all__ = [
     "check_health",
     "get_health_status",
     "is_healthy",
+    # Resource Gate
+    "ResourceLevel",
+    "VideoQuality",
+    "ResourceCheckResult",
+    "ResourceGate",
+    "get_resource_gate",
+    "can_generate_video",
+    "get_recommended_quality",
+    "check_resources",
 ]
