@@ -1,0 +1,172 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ara"
+version = "0.2.0"
+description = "Ara: Autonomous Research Agent - A unified AI system with meta-learning, embodiment, and self-improvement"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Ara Framework Team"}
+]
+keywords = [
+    "ai",
+    "artificial-intelligence",
+    "meta-learning",
+    "autonomous-agents",
+    "multi-agent-systems",
+    "research-automation",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.9"
+
+dependencies = [
+    # Core
+    "pyyaml>=6.0",
+    "pydantic>=2.0.0",
+
+    # Data processing
+    "numpy>=1.24.0",
+
+    # Utilities
+    "tqdm>=4.65.0",
+]
+
+[project.optional-dependencies]
+# Full installation with all features
+full = [
+    # Deep learning
+    "torch>=2.0.0",
+    "scipy>=1.10.0",
+    "transformers>=4.30.0",
+    "timm>=0.9.0",
+
+    # Topological data analysis
+    "gudhi>=3.8.0",
+    "persim>=0.3.1",
+
+    # Hyperbolic geometry
+    "geoopt>=0.5.0",
+
+    # Formal verification
+    "z3-solver>=4.12.0",
+
+    # Optimization
+    "pymoo>=0.6.0",
+
+    # Monitoring
+    "prometheus-client>=0.17.0",
+
+    # Visualization
+    "matplotlib>=3.7.0",
+    "plotly>=5.14.0",
+]
+
+# Meta-learning layer only
+meta = [
+    "pyyaml>=6.0",
+    "pydantic>=2.0.0",
+]
+
+# Avatar/conversational features
+avatar = [
+    "aiohttp>=3.8.0",
+    "websockets>=11.0",
+]
+
+# Development tools
+dev = [
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.4.0",
+    "pytest>=7.4.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+# Documentation
+docs = [
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=1.3.0",
+    "myst-parser>=2.0.0",
+]
+
+[project.scripts]
+# Main CLI entry points
+ara = "ara.main:main"           # Comprehensive system CLI
+ara-chat = "ara.cli:main"       # Interactive conversational interface
+ara-meta = "ara.meta.cli:main"  # Meta-learning subsystem CLI
+
+[project.urls]
+Homepage = "https://github.com/theadamsfamily1981-max/Ara"
+Documentation = "https://github.com/theadamsfamily1981-max/Ara#readme"
+Repository = "https://github.com/theadamsfamily1981-max/Ara"
+Issues = "https://github.com/theadamsfamily1981-max/Ara/issues"
+
+[tool.setuptools]
+packages = ["ara"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ara*"]
+
+[tool.setuptools.package-data]
+ara = ["*.yaml", "*.yml", "*.json"]
+
+# Black configuration
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.mypy_cache
+    | \.pytest_cache
+    | \.venv
+    | build
+    | dist
+)/
+'''
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["ara"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
