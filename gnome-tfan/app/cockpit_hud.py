@@ -1163,8 +1163,26 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         self._toggle_fullscreen()
 
     def _on_close_clicked(self, button):
-        """Close the window."""
+        """Close the window with proper cleanup."""
+        self._cleanup_resources()
         self.close()
+
+    def _cleanup_resources(self):
+        """Clean up all resources before closing."""
+        # Stop somatic stream server
+        if hasattr(self, 'somatic_server') and self.somatic_server:
+            try:
+                self.somatic_server.stop()
+                self.somatic_server = None
+            except Exception as e:
+                logger.warning(f"Error stopping somatic server: {e}")
+
+        # Stop log streaming
+        if hasattr(self, '_stop_log_streaming'):
+            try:
+                self._stop_log_streaming()
+            except Exception as e:
+                logger.warning(f"Error stopping log streaming: {e}")
 
     def _toggle_fullscreen(self):
         """Toggle fullscreen mode."""
@@ -2485,14 +2503,18 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
                 # Update somatic stream for binary visualization (soul_quantum.html)
                 if self.somatic_server:
-                    # Spike = pain intensity from valence + CLV risk
-                    spike = max(0.0, -v) + (inst * 0.3)  # Negative valence + instability
-                    spike = min(1.0, spike)
-                    self.somatic_server.update_spike(spike)
-                    # Flow from arousal (drives advection in quantum field)
-                    flow_x = a * 0.5  # Arousal drives horizontal flow
-                    flow_y = (1 - d) * 0.3  # Low dominance creates upward drift
-                    self.somatic_server.update_flow(flow_x, flow_y)
+                    try:
+                        # Spike = pain intensity from valence + CLV risk
+                        spike = max(0.0, -v) + (inst * 0.3)  # Negative valence + instability
+                        spike = min(1.0, spike)
+                        self.somatic_server.update_spike(spike)
+                        # Flow from arousal (drives advection in quantum field)
+                        flow_x = a * 0.5  # Arousal drives horizontal flow
+                        flow_y = (1 - d) * 0.3  # Low dominance creates upward drift
+                        self.somatic_server.update_flow(flow_x, flow_y)
+                    except Exception as e:
+                        logger.error(f"Somatic server update failed: {e}")
+                        self.somatic_server = None  # Disable on failure
 
             else:
                 # DEMO MODE - Show simulated data when offline
@@ -2548,12 +2570,16 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
                 # Update somatic stream (demo mode)
                 if self.somatic_server:
-                    spike = max(0.0, -v) + (inst * 0.3)
-                    spike = min(1.0, spike)
-                    self.somatic_server.update_spike(spike)
-                    flow_x = a * 0.5
-                    flow_y = (1 - d) * 0.3
-                    self.somatic_server.update_flow(flow_x, flow_y)
+                    try:
+                        spike = max(0.0, -v) + (inst * 0.3)
+                        spike = min(1.0, spike)
+                        self.somatic_server.update_spike(spike)
+                        flow_x = a * 0.5
+                        flow_y = (1 - d) * 0.3
+                        self.somatic_server.update_flow(flow_x, flow_y)
+                    except Exception as e:
+                        logger.error(f"Somatic server update failed: {e}")
+                        self.somatic_server = None
 
             return GLib.SOURCE_CONTINUE
 

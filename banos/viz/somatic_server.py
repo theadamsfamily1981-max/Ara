@@ -216,19 +216,33 @@ class SomaticStreamServer:
         logger.info(f"SomaticStreamServer started on {self.host}:{self.port}")
 
     def stop(self) -> None:
-        """Stop the server."""
+        """Stop the server gracefully."""
         self._running = False
         if self._server:
             self._server.shutdown()
+            self._server.server_close()
             self._server = None
+        # Join threads with timeout
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5.0)
+            if self._thread.is_alive():
+                logger.warning("HTTP server thread did not terminate cleanly")
+        if self._fluid_thread and self._fluid_thread.is_alive():
+            self._fluid_thread.join(timeout=2.0)
+            if self._fluid_thread.is_alive():
+                logger.warning("Fluid simulation thread did not terminate cleanly")
         logger.info("SomaticStreamServer stopped")
 
     def _fluid_loop(self) -> None:
         """Background thread for fluid simulation."""
         import time
         while self._running:
-            SomaticDataStore.step_fluid(dt=0.016)  # ~60Hz
-            time.sleep(0.016)
+            try:
+                SomaticDataStore.step_fluid(dt=0.016)  # ~60Hz
+                time.sleep(0.016)
+            except Exception as e:
+                logger.error(f"Fluid simulation error: {e}")
+                time.sleep(0.1)  # Back off on error
 
     def update_spike(self, value: float) -> None:
         """Update pain/spike level."""

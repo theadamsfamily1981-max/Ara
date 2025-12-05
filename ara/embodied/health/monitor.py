@@ -17,7 +17,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -197,7 +197,7 @@ class HealthMonitor:
         self._next_report_id = 1
 
         # Health check functions
-        self._checks: Dict[str, callable] = {}
+        self._checks: Dict[str, Callable] = {}
 
     def _generate_report_id(self) -> str:
         """Generate unique report ID."""
@@ -205,7 +205,7 @@ class HealthMonitor:
         self._next_report_id += 1
         return id_str
 
-    def register_check(self, name: str, check_func: callable) -> None:
+    def register_check(self, name: str, check_func: Callable) -> None:
         """Register a health check function.
 
         Args:

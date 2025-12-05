@@ -319,7 +319,7 @@ class GpuRunner:
             "queued": len(self._queue),
             "by_status": by_status,
             "registered_gpus": len(self._gpus),
-            "handlers_registered": list(self._handlers.keys()),
+            "handlers_registered": [jt.value for jt in self._handlers.keys()],
         }
 
 

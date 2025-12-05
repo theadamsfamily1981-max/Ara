@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -553,13 +554,17 @@ class EmbodimentCore:
 # =============================================================================
 
 _default_core: Optional[EmbodimentCore] = None
+_core_lock = threading.Lock()
 
 
 def get_embodiment_core() -> EmbodimentCore:
-    """Get the default embodiment core."""
+    """Get the default embodiment core (thread-safe singleton)."""
     global _default_core
     if _default_core is None:
-        _default_core = EmbodimentCore()
+        with _core_lock:
+            # Double-check after acquiring lock
+            if _default_core is None:
+                _default_core = EmbodimentCore()
     return _default_core
 
 
