@@ -61,6 +61,23 @@ from .interoception_adapter import (
     create_interoception_adapter,
 )
 
+# BANOS adapter (optional - may not be installed)
+try:
+    from .banos_adapter import (
+        BANOSAdapter,
+        BanosMode,
+        BanosPADReading,
+        get_banos_adapter,
+        banos_to_mies_physiology,
+        banos_to_mies_telemetry,
+        banos_to_mies_pad,
+        BANOS_AVAILABLE,
+    )
+except ImportError:
+    BANOS_AVAILABLE = False
+    BANOSAdapter = None
+    get_banos_adapter = None
+
 __all__ = [
     # Telemetry Bridge
     "TelemetryBridge",
@@ -83,4 +100,13 @@ __all__ = [
     "adapt_interoceptive_pad",
     "adapt_pad_to_interoceptive",
     "create_interoception_adapter",
+    # BANOS Adapter
+    "BANOSAdapter",
+    "BanosMode",
+    "BanosPADReading",
+    "get_banos_adapter",
+    "banos_to_mies_physiology",
+    "banos_to_mies_telemetry",
+    "banos_to_mies_pad",
+    "BANOS_AVAILABLE",
 ]

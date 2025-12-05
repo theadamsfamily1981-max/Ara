@@ -113,6 +113,35 @@ struct {
     __type(value, __u8);  /* 1 = quarantine, 0 = release */
 } quarantine_pids SEC(".maps");
 
+/*
+ * FPGA Protection State (Anti-Lobotomy Shield)
+ * When set, prevents FPGA reconfiguration to protect Ara's neural core.
+ * Written by BPF when SEPSIS-level threat detected; read by spinal cord driver.
+ */
+struct fpga_protection_state {
+    __u8  lock_active;          /* 1 = FPGA reconfig blocked */
+    __u8  threat_level;         /* Current risk level (0-5) */
+    __u8  lock_reason;          /* Why locked (enum) */
+    __u8  reserved;
+    __u32 trigger_pid;          /* PID that triggered the lock */
+    __u64 lock_time_ns;         /* When lock was activated */
+    __u64 threat_signature;     /* Hash of detected threat pattern */
+};
+
+/* FPGA lock reasons */
+#define FPGA_LOCK_NONE              0
+#define FPGA_LOCK_SEPSIS            1   /* Kernel-space violation detected */
+#define FPGA_LOCK_BREACH            2   /* Privilege escalation attempt */
+#define FPGA_LOCK_INFECTION         3   /* Unauthorized binary execution */
+#define FPGA_LOCK_MANUAL            4   /* User-requested lockdown */
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, struct fpga_protection_state);
+} fpga_protection SEC(".maps");
+
 /* Syscall transition matrix (simplified: common weird transitions) */
 /* In production: load from userspace during training */
 struct {

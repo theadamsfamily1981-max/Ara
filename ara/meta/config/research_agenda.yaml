@@ -1,0 +1,102 @@
+# Ara Research Agenda
+# "Ara runs a research lab on Ara"
+#
+# This is Ara's lab notebook header - her high-level goals,
+# open questions, and experiments she's running.
+
+version: 1
+high_level_goal: "Become a better collaborator and learner"
+
+# Open research questions
+open_questions:
+  - id: "RQ-001"
+    title: "Which teacher is best for code vs architecture?"
+    hypothesis: "Claude excels at implementation, Nova at architecture review"
+    status: "active"
+    metrics:
+      - "success_rate_by_task_type"
+      - "quality_by_tool"
+      - "user_satisfaction"
+    notes: |
+      Track interactions where task_type contains "code" or "implement"
+      vs "architecture" or "design" and compare tool success rates.
+
+  - id: "RQ-002"
+    title: "When should I ask for a second opinion?"
+    hypothesis: "High-stakes or low-confidence situations benefit from consensus"
+    status: "active"
+    metrics:
+      - "backtrack_rate"
+      - "multi_teacher_success_rate"
+      - "consensus_quality"
+    notes: |
+      Compare outcomes where I used a single teacher vs. multiple.
+      Track when I had to backtrack and whether second opinions helped.
+
+  - id: "RQ-003"
+    title: "How can I reduce round-trips to teachers?"
+    hypothesis: "Better first prompts reduce clarification needs"
+    status: "active"
+    metrics:
+      - "turns_to_solution"
+      - "prompt_exemplar_score"
+      - "first_try_success_rate"
+    notes: |
+      Track which prompt templates work best.
+      Measure turns needed before getting a usable answer.
+
+  - id: "RQ-004"
+    title: "What skills can I internalize?"
+    hypothesis: "Repeated successful patterns can become skills"
+    status: "active"
+    metrics:
+      - "skill_reuse_rate"
+      - "skill_success_rate"
+      - "teacher_bypass_rate"
+    notes: |
+      Track when I use skills from my library vs calling teachers.
+      Measure how often skills work without teacher assistance.
+
+  - id: "RQ-005"
+    title: "How do context tags affect outcomes?"
+    hypothesis: "Good tagging leads to better tool selection"
+    status: "active"
+    metrics:
+      - "tag_prediction_accuracy"
+      - "tag_to_success_correlation"
+    notes: |
+      Analyze whether certain context tags predict which tool will work.
+
+# Experiments
+experiments:
+  - id: "EXP-001"
+    question_id: "RQ-001"
+    description: "A/B test Claude vs Nova for architecture reviews"
+    status: "planned"
+    design: |
+      For 20 architecture review requests:
+      - Randomly assign to Claude or Nova
+      - Compare user satisfaction and backtrack rate
+    notes: "Need to implement random assignment in router"
+
+  - id: "EXP-002"
+    question_id: "RQ-003"
+    description: "Test prompt template variations for FPGA tasks"
+    status: "planned"
+    design: |
+      Create 3 variations of FPGA prompt templates:
+      - Detailed context upfront
+      - Minimal context, clarify as needed
+      - Structured template with sections
+      Compare turns_to_solution.
+    notes: "Start after collecting 10 baseline FPGA interactions"
+
+# Meta-notes
+meta:
+  created_at: "2024-01-01"
+  last_review: null
+  review_cadence: "weekly"
+  notes: |
+    This agenda should be reviewed weekly.
+    Add new questions as they emerge from pattern analysis.
+    Close questions when we have enough data to answer them.

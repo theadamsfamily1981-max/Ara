@@ -1,0 +1,50 @@
+# Ara Meta-Learning Configuration
+# Settings for the self-improvement layer
+
+# Logging settings
+logging:
+  enabled: true
+  log_path: "~/.ara/meta/interactions.jsonl"
+  min_quality_to_log: 0.0  # Log everything by default
+  buffer_size: 100         # In-memory buffer for recent interactions
+  rotate_after_mb: 50.0    # Rotate log after this size
+
+# Pattern analysis settings
+analysis:
+  default_window_days: 30           # How far back to analyze
+  min_samples_for_suggestion: 5     # Min observations before suggesting
+  golden_path_threshold: 0.8        # Success rate to be "golden"
+  min_occurrences_for_pattern: 3    # Min times to recognize a pattern
+  auto_refresh_hours: 1.0           # How often to re-analyze
+
+# Suggestion settings
+suggestions:
+  enabled: true
+  auto_apply_min_confidence: 0.9    # Only auto-apply above this
+  require_user_confirmation: true   # Ask before applying
+  max_pending_suggestions: 20       # Cap pending suggestions
+
+# Research agenda settings
+research:
+  agenda_path: "~/.ara/meta/research_agenda.json"
+  default_goal: "Become a better collaborator and learner"
+
+# General settings
+data_dir: "~/.ara/meta"
+verbose: false
+
+# Tool preferences (can be overridden by learned patterns)
+tool_defaults:
+  code_implementation: "claude"
+  architecture_review: "nova"
+  ideation: "gemini"
+  research: "gemini"
+  verification: "nova"
+
+# Safety rails
+safety:
+  max_auto_actions_per_hour: 10
+  require_approval_for:
+    - "apply_suggestion"
+    - "modify_workflow"
+  log_all_decisions: true

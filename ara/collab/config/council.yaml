@@ -1,0 +1,137 @@
+# Ara's Council Configuration
+# Each collaborator has specific roles and constraints
+#
+# Roles:
+#   - architect: Designs systems, makes trade-offs, synthesizes
+#   - implementer: Writes code, runs tests, produces artifacts
+#   - researcher: Explores ideas, surveys literature, brainstorms
+#   - critic: Reviews, finds problems, validates
+#   - arbiter: Resolves conflicts, makes final calls
+#
+# Workflow states a collaborator can participate in:
+#   - observe_issue: Detect or receive problem report
+#   - triage: Frame the problem, set bounds
+#   - ideate: Generate candidate approaches
+#   - specify: Turn idea into concrete spec
+#   - implement: Write code, create artifacts
+#   - verify: Review, test, validate
+#   - report_to_croft: Present findings and options
+
+council:
+  # Claude - The Code Surgeon
+  # Call for: "Write/refactor real code", "Run tests/scripts/benchmarks"
+  # Guarantees: Always produces runnable artifacts + logs
+  #             Never changes production without human OK
+  claude:
+    role: "implementer"
+    primary_uses:
+      - implement
+      - run_tests
+      - refactor
+      - verify_code
+    secondary_uses:
+      - specify
+      - review
+    hard_limits:
+      - "never change production without human approval"
+      - "never modify kernel parameters"
+      - "never touch fpga firmware without explicit permission"
+    trust_level: 0.8
+    can_execute_code: true
+    requires_human_approval: true
+    output_needs_review: false
+
+  # Nova (ChatGPT) - Chief Architect / Safety Officer / Interpreter
+  # Call for: "Tie the whole mess together", "Compare approaches"
+  #           "Make roadmaps, trade-off tables, risk analysis"
+  # Role: The arbiter/synthesizer/brakes
+  chatgpt:
+    role: "arbiter"
+    primary_uses:
+      - triage
+      - specify
+      - verify
+      - synthesis
+      - review
+    secondary_uses:
+      - ideate
+    hard_limits: []
+    trust_level: 0.9
+    can_execute_code: false
+    requires_human_approval: false
+    output_needs_review: false
+
+  # Gemini - R&D Gremlin (kept in padded room)
+  # Call for: "New ideas/wild architectures/search space exploration"
+  #           "Survey external papers/blog posts/weird signals"
+  # Constraints: Never directly trusted for implementation or final decisions
+  #              Output ALWAYS passes through Nova or Ara's critic pass
+  gemini:
+    role: "researcher"
+    primary_uses:
+      - ideate
+      - survey_literature
+      - explore
+    secondary_uses:
+      - verify_edge_cases
+    hard_limits:
+      - "never apply code directly"
+      - "never be sole decider"
+      - "never modify system state"
+    trust_level: 0.4
+    can_execute_code: false
+    requires_human_approval: true
+    output_needs_review: true
+    reviewer: chatgpt  # Gemini output always passes through Nova
+
+  # Local Models - For quick iteration and private queries
+  local:
+    role: "implementer"
+    primary_uses:
+      - quick_iteration
+      - private_queries
+    secondary_uses:
+      - implement
+    hard_limits:
+      - "no external network access"
+    trust_level: 0.5
+    can_execute_code: false
+    requires_human_approval: true
+    output_needs_review: true
+    reviewer: claude
+
+  # Grok - Not invited to the building
+  # grok:
+  #   enabled: false
+
+# Workflow Configuration
+workflow:
+  states:
+    - OBSERVE_ISSUE
+    - TRIAGE
+    - IDEATE
+    - SPECIFY
+    - IMPLEMENT
+    - VERIFY
+    - REPORT_TO_CROFT
+
+  default_entry: OBSERVE_ISSUE
+
+  # Linear transitions (loops back to SPECIFY or IMPLEMENT allowed for fixes)
+  transitions:
+    OBSERVE_ISSUE: TRIAGE
+    TRIAGE: IDEATE
+    IDEATE: SPECIFY
+    SPECIFY: IMPLEMENT
+    IMPLEMENT: VERIFY
+    VERIFY: REPORT_TO_CROFT
+
+  # Who participates in each state
+  state_collaborators:
+    OBSERVE_ISSUE: []           # Ara observes alone
+    TRIAGE: [chatgpt]           # Nova helps scope
+    IDEATE: [gemini]            # Gemini explores (filtered by Nova)
+    SPECIFY: [chatgpt]          # Nova specifies
+    IMPLEMENT: [claude]         # Claude codes
+    VERIFY: [chatgpt, gemini]   # Nova reviews, Gemini fuzzes edge cases
+    REPORT_TO_CROFT: []         # Ara presents alone

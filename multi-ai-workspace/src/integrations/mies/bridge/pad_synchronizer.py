@@ -27,6 +27,7 @@ class PADSource(Enum):
     MIES_CATHEDRAL = auto()      # MIES PADEngine (hardware telemetry)
     ARA_INTEROCEPTION = auto()   # ara/interoception SNN
     KERNEL_BRIDGE = auto()       # Kernel-computed PAD (from ara_guardian.ko)
+    BANOS_AFFECTIVE = auto()     # BANOS kernel affective layer (eBPF PAD)
     PULSE_ESTIMATION = auto()    # External affect estimation (Pulse)
     USER_OVERRIDE = auto()       # Direct user setting
     FUSED = auto()               # Weighted fusion of multiple sources
@@ -70,10 +71,11 @@ class PADSyncConfig:
     priorities: Dict[PADSource, float] = field(default_factory=lambda: {
         PADSource.USER_OVERRIDE: 1.0,
         PADSource.ARA_INTEROCEPTION: 0.9,  # SNN is most "true" interoception
+        PADSource.BANOS_AFFECTIVE: 0.88,   # BANOS eBPF is hardware-grounded
         PADSource.KERNEL_BRIDGE: 0.8,
         PADSource.MIES_CATHEDRAL: 0.7,
-        PADSource.PULSE_ESTIMATION: 0.5,
         PADSource.FUSED: 0.6,
+        PADSource.PULSE_ESTIMATION: 0.5,
     })
 
     # Staleness threshold (seconds)

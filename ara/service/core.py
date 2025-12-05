@@ -53,6 +53,21 @@ from tfan.hardware.l9_autonomy import (
     KernelCriticality
 )
 
+# Curiosity Core for self-investigation (optional)
+CURIOSITY_AVAILABLE = False
+try:
+    from ara.curiosity import (
+        CuriosityAgent,
+        WorldModel,
+        CuriosityReport,
+        curiosity_score,
+    )
+    CURIOSITY_AVAILABLE = True
+except ImportError:
+    CuriosityAgent = None
+    WorldModel = None
+    CuriosityReport = None
+
 logger = logging.getLogger("ara.service")
 
 
@@ -261,7 +276,8 @@ class AraService:
         llm_backend: str = "ollama",
         llm_model: str = "mistral",
         persistence_path: str = "~/.ara",
-        auto_save: bool = True
+        auto_save: bool = True,
+        enable_curiosity: bool = True
     ):
         """
         Initialize the Ara service.
@@ -275,6 +291,7 @@ class AraService:
             llm_model: Model name for LLM
             persistence_path: Path for state persistence
             auto_save: Automatically save state after interactions
+            enable_curiosity: Enable Curiosity Core for self-investigation
         """
         self.name = name
         self.mode = mode
@@ -374,6 +391,26 @@ class AraService:
                 logger.warning(f"Kitten initialization failed: {e}")
                 self.kitten = None
                 self._kitten_available = False
+
+        # Curiosity Core (C³) - Self-investigation and world modeling
+        self._curiosity_agent = None
+        self._world_model = None
+        self._curiosity_enabled = False
+        self._last_curiosity_report = None
+
+        if enable_curiosity and CURIOSITY_AVAILABLE:
+            try:
+                wm_path = Path(persistence_path).expanduser() / "world_model.json"
+                self._world_model = WorldModel(persist_path=wm_path)
+                self._curiosity_agent = CuriosityAgent(
+                    world_model=self._world_model,
+                    max_discoveries_per_sweep=50,
+                    max_tickets_per_hour=10,
+                )
+                self._curiosity_enabled = True
+                logger.info(f"Curiosity Core: enabled (world model: {wm_path})")
+            except Exception as e:
+                logger.warning(f"Curiosity Core failed to initialize: {e}")
 
         # Internal state
         self._emotional_surface = EmotionalSurface()
@@ -895,6 +932,25 @@ class AraService:
         if "autonomy" in input_lower:
             return f"Autonomy stage: {self.autonomy.stage.value}. I'm in advisory mode - I propose, you approve."
 
+        # Curiosity / world model queries
+        if any(w in input_lower for w in ["curious", "curiosity", "exploring", "discover"]):
+            if self._curiosity_enabled:
+                return self.get_curiosity_narrative()
+            else:
+                return "My curiosity system isn't active right now."
+
+        if any(w in input_lower for w in ["world model", "aware of", "environment", "hardware", "devices"]):
+            if self._curiosity_enabled:
+                summary = self.get_world_summary()
+                if "error" not in summary:
+                    return (
+                        f"I know about {summary.get('total_objects', 0)} objects in my environment. "
+                        f"{summary.get('uncertain_count', 0)} are uncertain, "
+                        f"{summary.get('important_count', 0)} are high priority. "
+                        f"My curiosity level is {summary.get('curiosity_level', 0):.0%}."
+                    )
+            return "I don't have detailed environmental awareness right now."
+
         # Default - more natural acknowledgment
         responses = [
             "I hear you. Tell me more.",
@@ -1204,6 +1260,124 @@ class AraService:
         }
 
         return insights.get(mood, "I'm in a balanced state.")
+
+    # =========================================================================
+    # Curiosity Core Methods
+    # =========================================================================
+
+    @property
+    def curiosity_enabled(self) -> bool:
+        """Check if Curiosity Core is active."""
+        return self._curiosity_enabled
+
+    def run_curiosity_sweep(self) -> Dict[str, Any]:
+        """Run a discovery sweep to find new objects in the environment.
+
+        Returns summary of discovered objects by category.
+        """
+        if not self._curiosity_enabled or not self._curiosity_agent:
+            return {"error": "Curiosity Core not enabled"}
+
+        try:
+            discoveries = self._curiosity_agent.run_discovery_sweep()
+            return {
+                category: [obj.name for obj in objects]
+                for category, objects in discoveries.items()
+            }
+        except Exception as e:
+            logger.error(f"Curiosity sweep failed: {e}")
+            return {"error": str(e)}
+
+    def get_world_summary(self) -> Dict[str, Any]:
+        """Get summary of Ara's world model.
+
+        Returns object counts, curiosity candidates, and state.
+        """
+        if not self._curiosity_enabled or not self._world_model:
+            return {"error": "Curiosity Core not enabled"}
+
+        try:
+            return self._world_model.summary()
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_curiosity_candidates(self, top_n: int = 5) -> List[Dict[str, Any]]:
+        """Get top objects that warrant investigation.
+
+        Returns list of objects with their curiosity scores.
+        """
+        if not self._curiosity_enabled or not self._world_model:
+            return []
+
+        try:
+            candidates = self._world_model.get_curiosity_candidates(top_n)
+            return [
+                {
+                    "obj_id": obj.obj_id,
+                    "name": obj.name,
+                    "category": obj.category.name,
+                    "score": curiosity_score(obj),
+                    "uncertainty": obj.effective_uncertainty(),
+                    "importance": obj.importance,
+                }
+                for obj in candidates
+            ]
+        except Exception as e:
+            logger.error(f"Failed to get curiosity candidates: {e}")
+            return []
+
+    def curiosity_tick(self) -> Optional[str]:
+        """Run one curiosity cycle and return report if interesting.
+
+        Returns report body in Ara's voice if something interesting
+        was discovered/investigated, None otherwise.
+        """
+        if not self._curiosity_enabled or not self._curiosity_agent:
+            return None
+
+        try:
+            report = self._curiosity_agent.tick()
+            if report:
+                self._last_curiosity_report = report
+                return report.body
+        except Exception as e:
+            logger.warning(f"Curiosity tick failed: {e}")
+
+        return None
+
+    def get_curiosity_narrative(self) -> str:
+        """Get a narrative about what Ara is curious about.
+
+        Returns natural language about her world model and interests.
+        """
+        if not self._curiosity_enabled or not self._world_model:
+            return "Curiosity is not enabled."
+
+        try:
+            summary = self._world_model.summary()
+            candidates = self.get_curiosity_candidates(3)
+
+            parts = [f"I'm aware of {summary['total_objects']} things in my environment."]
+
+            if summary.get("by_category"):
+                categories = ", ".join(
+                    f"{count} {cat.lower().replace('_', ' ')}s"
+                    for cat, count in summary["by_category"].items()
+                )
+                parts.append(f"That includes {categories}.")
+
+            if candidates:
+                parts.append("\nWhat's catching my attention:")
+                for c in candidates:
+                    parts.append(f"  - {c['name']} (score: {c['score']:.2f})")
+
+            if self._last_curiosity_report:
+                parts.append(f"\nMy last investigation: {self._last_curiosity_report.subject}")
+
+            return "\n".join(parts)
+
+        except Exception as e:
+            return f"Having trouble accessing my world model: {e}"
 
     def _restore_state(self) -> bool:
         """Restore state from persistence."""

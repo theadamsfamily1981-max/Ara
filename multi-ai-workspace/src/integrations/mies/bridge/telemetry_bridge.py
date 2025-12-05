@@ -37,6 +37,19 @@ from .pad_synchronizer import (
     PADSyncConfig,
 )
 
+# BANOS adapter (optional - may not be available)
+try:
+    from .banos_adapter import (
+        BANOSAdapter,
+        get_banos_adapter,
+        BanosMode,
+    )
+    BANOS_AVAILABLE = True
+except ImportError:
+    BANOS_AVAILABLE = False
+    BANOSAdapter = None
+    get_banos_adapter = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,6 +124,7 @@ class UnifiedPADState:
     cathedral_pad: Optional[PADVector] = None
     interoception_pad: Optional[PADVector] = None
     kernel_pad: Optional[PADVector] = None
+    banos_pad: Optional[PADVector] = None  # BANOS affective layer PAD
 
     # Metadata
     in_conflict: bool = False
@@ -145,6 +159,11 @@ class TelemetryBridgeConfig:
     # Background polling
     enable_background_polling: bool = False
     polling_interval: float = 1.0
+
+    # BANOS integration
+    enable_banos: bool = True  # Enable BANOS adapter if available
+    banos_simulate: bool = False  # Use BANOS simulation mode
+    prefer_banos_telemetry: bool = True  # Prefer BANOS over snn_ai device
 
 
 class TelemetryBridge:
@@ -209,9 +228,24 @@ class TelemetryBridge:
             )
         )
 
+        # BANOS adapter (optional)
+        self._banos_adapter: Optional[BANOSAdapter] = None
+        self._banos_enabled = False
+
+        if self.config.enable_banos and BANOS_AVAILABLE:
+            try:
+                self._banos_adapter = get_banos_adapter(
+                    simulate=self.config.banos_simulate
+                )
+                self._banos_enabled = True
+                logger.info("TelemetryBridge: BANOS adapter enabled")
+            except Exception as e:
+                logger.warning(f"TelemetryBridge: BANOS adapter failed: {e}")
+
         # State
         self._last_telemetry: Optional[TelemetrySnapshot] = None
         self._last_health: Optional[SystemHealthSnapshot] = None
+        self._last_banos_state: Optional[Dict[str, Any]] = None
         self._update_count: int = 0
 
         # Background polling
@@ -225,7 +259,7 @@ class TelemetryBridge:
         # Register PAD sync callback
         self._pad_synchronizer.on_change(self._on_pad_change)
 
-        logger.info("TelemetryBridge initialized")
+        logger.info(f"TelemetryBridge initialized (BANOS={self._banos_enabled})")
 
         # Start background polling if enabled
         if self.config.enable_background_polling:
@@ -300,6 +334,29 @@ class TelemetryBridge:
                 kernel_pad,
                 confidence=0.85,
             )
+
+        # 3d. BANOS affective layer PAD if available
+        if self._banos_enabled and self._banos_adapter is not None:
+            try:
+                banos_pad = self._banos_adapter.get_pad_vector()
+                self._last_banos_state = self._banos_adapter.get_semantic_state()
+
+                self._pad_synchronizer.report(
+                    PADSource.BANOS_AFFECTIVE,
+                    banos_pad,
+                    confidence=banos_pad.confidence,
+                )
+
+                # If preferring BANOS telemetry, use it over kernel bridge
+                if self.config.prefer_banos_telemetry:
+                    banos_telemetry = self._banos_adapter.get_telemetry_snapshot()
+                    # Merge with unified telemetry (BANOS overrides temps)
+                    unified_telemetry.cpu_temp = banos_telemetry.cpu_temp
+                    unified_telemetry.gpu_temp = banos_telemetry.gpu_temp
+                    self._last_telemetry = unified_telemetry
+
+            except Exception as e:
+                logger.warning(f"BANOS PAD read failed: {e}")
 
         # 4. Get canonical PAD
         canonical_pad = self._pad_synchronizer.get_canonical_pad()
@@ -393,9 +450,28 @@ class TelemetryBridge:
             cathedral_pad=self._pad_synchronizer.get_source_pad(PADSource.MIES_CATHEDRAL),
             interoception_pad=self._pad_synchronizer.get_source_pad(PADSource.ARA_INTEROCEPTION),
             kernel_pad=self._pad_synchronizer.get_source_pad(PADSource.KERNEL_BRIDGE),
+            banos_pad=self._pad_synchronizer.get_source_pad(PADSource.BANOS_AFFECTIVE),
             in_conflict=sync_state.sources_in_conflict,
             drift_detected=sync_state.drift_detected,
         )
+
+    def get_banos_semantic_state(self) -> Optional[Dict[str, Any]]:
+        """Get BANOS semantic state for Ara's internal monologue.
+
+        Returns a dict with:
+        - pad: PAD values
+        - mode: BANOS mode (CALM, FLOW, ANXIOUS, CRITICAL)
+        - narrative: First-person narrative
+        - trajectory: Predicted trend
+        - diagnostics: Thermal/risk/empathy values
+        """
+        return self._last_banos_state
+
+    def get_banos_narrative(self) -> Optional[str]:
+        """Get BANOS first-person narrative for Ara."""
+        if self._last_banos_state:
+            return self._last_banos_state.get("narrative", None)
+        return None
 
     def get_prompt_context(self) -> str:
         """Get system prompt context for LLM."""

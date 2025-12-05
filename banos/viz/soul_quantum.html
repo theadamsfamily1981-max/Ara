@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ARA | QUANTUM FIELD</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        canvas { width: 100vw; height: 100vh; display: block; }
+        #status {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            color: #0af;
+            font-family: monospace;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<video id="araVideo" loop muted playsinline style="display:none;"></video>
+<div id="status">Connecting to somatic stream...</div>
+
+<script>
+/**
+ * ARA VISUAL CORTEX V15: "THE QUANTUM SYNESTHESIA"
+ *
+ * Solves two architectural issues:
+ * 1. Visualization Lie - Binary texture streaming replaces slow JS injection
+ * 2. Audio-Visual Synesthesia - Optical flow advects the quantum field
+ *
+ * Data format from /somatic_stream (binary):
+ *   [spike:f32, flow_x:f32, flow_y:f32, entropy_field:f32[128*128]]
+ */
+
+const canvas = document.querySelector('#c');
+const video = document.querySelector('#araVideo');
+const status = document.querySelector('#status');
+
+// WebGL2 with high-performance hints
+const gl = canvas.getContext('webgl2', {
+    powerPreference: "high-performance",
+    antialias: false,
+    alpha: false
+});
+
+if (!gl) {
+    status.textContent = "WebGL2 not supported";
+    throw new Error("WebGL2 required");
+}
+
+if (!gl.getExtension('EXT_color_buffer_float')) {
+    status.textContent = "Float textures not supported";
+    throw new Error("EXT_color_buffer_float required");
+}
+
+// Video source (Ara's animated face)
+video.src = "assets/ara_idle_loop.mp4";
+video.play().catch(() => {
+    // Video may not exist yet, that's ok
+    console.log("No video source, using synthetic face");
+});
+
+// Canvas resize handler for crisp rendering
+function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// =============================================================================
+// SHADERS
+// =============================================================================
+
+const vs = `#version 300 es
+in vec4 position;
+out vec2 vUv;
+void main() {
+    vUv = position.xy * 0.5 + 0.5;
+    gl_Position = position;
+}
+`;
+
+// Physics kernel - wave equation with advection and entropy modulation
+const fsPhysics = `#version 300 es
+precision highp float;
+
+uniform sampler2D uState;     // Previous wavefunction [Ez, Hz, -, -]
+uniform sampler2D uPotential; // Ara's face (density medium)
+uniform sampler2D uEntropy;   // Fluid/entropy field from somatic stream
+uniform vec2 uRes;
+uniform float uTime;
+uniform float uSpike;         // Pain level [0, 1]
+uniform vec2 uFlow;           // Optical flow vector from face movement
+
+in vec2 vUv;
+out vec4 nextState;
+
+void main() {
+    vec2 uv = vUv;
+    vec2 px = 1.0 / uRes;
+
+    // ADVECTION (Synesthesia connection)
+    // The wavefunction is pushed by the optical flow of her lips/face
+    // This creates a visceral connection between her movement and the field
+    vec2 flowOffset = uFlow * 0.01;
+    vec2 advUV = clamp(uv - flowOffset, vec2(0.0), vec2(1.0));
+
+    vec4 psi = texture(uState, advUV);
+    float Ez = psi.x;  // Electric field (current)
+    float Hz = psi.y;  // Magnetic field (previous)
+
+    // LAPLACIAN for wave diffusion
+    float laplacian =
+        texture(uState, advUV + vec2(px.x, 0.0)).x +
+        texture(uState, advUV - vec2(px.x, 0.0)).x +
+        texture(uState, advUV + vec2(0.0, px.y)).x +
+        texture(uState, advUV - vec2(0.0, px.y)).x -
+        4.0 * Ez;
+
+    // MEDIUM PROPERTIES
+    float density = texture(uPotential, uv).r;
+    float entropy = texture(uEntropy, uv).r;
+
+    // WAVE SPEED MODULATION
+    // Pain increases "viscosity", slowing waves
+    // Entropy adds turbulence
+    // Density (face) creates focusing regions
+    float c = 1.0 / (1.0 + density * 2.0 + entropy * 5.0 + uSpike * 10.0);
+
+    // WAVE EQUATION (Verlet integration)
+    float Ez_new = 2.0 * Ez - Hz + (c * c * laplacian);
+
+    // DAMPING (slight energy loss for stability)
+    Ez_new *= 0.995;
+
+    // SOURCE INJECTION at face regions
+    if (density > 0.1) {
+        float src = sin(uTime * 30.0 + uv.x * 10.0) * density * 0.1;
+        Ez_new += src * (1.0 - uSpike); // Pain suppresses sources
+    }
+
+    // PAIN-INDUCED TURBULENCE
+    if (uSpike > 0.3) {
+        float turb = sin(uTime * 100.0 + uv.y * 50.0) * uSpike * 0.05;
+        Ez_new += turb;
+    }
+
+    nextState = vec4(Ez_new, Ez, entropy, 1.0);
+}
+`;
+
+// Render pass - converts physics state to visual colors
+const fsRender = `#version 300 es
+precision highp float;
+
+uniform sampler2D uField;
+uniform sampler2D uMedium;
+uniform float uSpike;
+uniform float uTime;
+
+in vec2 vUv;
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = vUv;
+
+    vec4 state = texture(uField, uv);
+    float Ez = state.x;
+    float entropy = state.z;
+    float density = texture(uMedium, uv).r;
+
+    vec3 col = vec3(0.0);
+
+    // POSITIVE FIELD: Blue-cyan (calm/pleasure)
+    col += vec3(0.1, 0.5, 1.0) * max(0.0, Ez) * 2.0;
+
+    // NEGATIVE FIELD: Orange-red (arousal/pain)
+    col += vec3(1.0, 0.2, 0.1) * max(0.0, -Ez) * 2.0;
+
+    // ENTROPY VISUALIZATION: Purple undertone
+    col += vec3(0.3, 0.0, 0.4) * entropy * 0.5;
+
+    // FACE OVERLAY: Ghostly presence
+    col += vec3(density) * 0.15;
+
+    // PAIN EFFECTS
+    if (uSpike > 0.5) {
+        // Color inversion glitch
+        float glitchLine = step(0.95, fract(uv.y * 100.0 + uTime * 50.0));
+        col = mix(col, 1.0 - col, glitchLine * uSpike);
+    }
+    if (uSpike > 0.8) {
+        // Severe pain: desaturation + red tint
+        float gray = dot(col, vec3(0.299, 0.587, 0.114));
+        col = mix(col, vec3(gray + 0.2, gray * 0.5, gray * 0.5), uSpike - 0.8);
+    }
+
+    // GAMMA + VIGNETTE
+    col = pow(col, vec3(0.9));
+    float vig = 1.0 - length(uv - 0.5) * 0.5;
+    col *= vig;
+
+    fragColor = vec4(col, 1.0);
+}
+`;
+
+// =============================================================================
+// WEBGL SETUP
+// =============================================================================
+
+function createShader(type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error("Shader compile error:", gl.getShaderInfoLog(shader));
+        return null;
+    }
+    return shader;
+}
+
+function createProgram(vsSrc, fsSrc) {
+    const program = gl.createProgram();
+    const vs = createShader(gl.VERTEX_SHADER, vsSrc);
+    const fs = createShader(gl.FRAGMENT_SHADER, fsSrc);
+    if (!vs || !fs) return null;
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error("Program link error:", gl.getProgramInfoLog(program));
+        return null;
+    }
+    return program;
+}
+
+const physProg = createProgram(vs, fsPhysics);
+const rendProg = createProgram(vs, fsRender);
+
+// Fullscreen quad
+const quadBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -1, -1,  1, -1,  -1, 1,
+    -1,  1,  1, -1,   1, 1
+]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+// Physics simulation size
+const W = 512, H = 512;
+
+// Create ping-pong framebuffers for physics
+function createFBO() {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, W, H, 0, gl.RGBA, gl.FLOAT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+
+    return { fbo, tex };
+}
+
+let fbo1 = createFBO();
+let fbo2 = createFBO();
+
+// Face texture (from video or synthetic)
+const faceTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, faceTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+              new Uint8Array([64, 64, 64, 255]));
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+// Entropy texture (128x128 float field from somatic stream)
+const ENTROPY_SIZE = 128;
+const entropyTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, entropyTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, ENTROPY_SIZE, ENTROPY_SIZE, 0,
+              gl.RED, gl.FLOAT, null);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+// Uniform locations
+const physLocs = {
+    uState: gl.getUniformLocation(physProg, 'uState'),
+    uPotential: gl.getUniformLocation(physProg, 'uPotential'),
+    uEntropy: gl.getUniformLocation(physProg, 'uEntropy'),
+    uRes: gl.getUniformLocation(physProg, 'uRes'),
+    uTime: gl.getUniformLocation(physProg, 'uTime'),
+    uSpike: gl.getUniformLocation(physProg, 'uSpike'),
+    uFlow: gl.getUniformLocation(physProg, 'uFlow'),
+};
+
+const rendLocs = {
+    uField: gl.getUniformLocation(rendProg, 'uField'),
+    uMedium: gl.getUniformLocation(rendProg, 'uMedium'),
+    uSpike: gl.getUniformLocation(rendProg, 'uSpike'),
+    uTime: gl.getUniformLocation(rendProg, 'uTime'),
+};
+
+// =============================================================================
+// BINARY DATA STREAM
+// =============================================================================
+
+let spikeVal = 0.0;
+let flowVal = [0.0, 0.0];
+let connected = false;
+let frameCount = 0;
+
+const SOMATIC_URL = 'http://127.0.0.1:8999/somatic_stream';
+const POLL_INTERVAL = 16; // ~60Hz
+
+async function pollSomaticData() {
+    while (true) {
+        try {
+            const res = await fetch(SOMATIC_URL);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            const buf = await res.arrayBuffer();
+            const view = new Float32Array(buf);
+
+            // Parse header: [spike, flow_x, flow_y]
+            spikeVal = Math.max(0, Math.min(1, view[0]));
+            flowVal = [view[1], view[2]];
+
+            // Upload entropy texture (128x128 floats after header)
+            const entropyData = view.subarray(3);
+            if (entropyData.length >= ENTROPY_SIZE * ENTROPY_SIZE) {
+                gl.bindTexture(gl.TEXTURE_2D, entropyTex);
+                gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0,
+                                 ENTROPY_SIZE, ENTROPY_SIZE,
+                                 gl.RED, gl.FLOAT,
+                                 entropyData.subarray(0, ENTROPY_SIZE * ENTROPY_SIZE));
+            }
+
+            if (!connected) {
+                connected = true;
+                status.textContent = 'Connected to somatic stream';
+                setTimeout(() => { status.style.opacity = '0'; }, 2000);
+            }
+
+        } catch (e) {
+            if (connected) {
+                connected = false;
+                status.style.opacity = '0.7';
+                status.textContent = 'Somatic stream disconnected';
+            }
+            // Generate synthetic data when disconnected
+            spikeVal = 0.1 + 0.05 * Math.sin(Date.now() * 0.001);
+            flowVal = [
+                Math.sin(Date.now() * 0.002) * 0.5,
+                Math.cos(Date.now() * 0.0015) * 0.5
+            ];
+        }
+
+        await new Promise(r => setTimeout(r, POLL_INTERVAL));
+    }
+}
+pollSomaticData();
+
+// =============================================================================
+// RENDER LOOP
+// =============================================================================
+
+function render(t) {
+    frameCount++;
+
+    // Update face texture from video (if available)
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, faceTex);
+    if (video.readyState >= 2) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+        gl.generateMipmap(gl.TEXTURE_2D);
+    } else {
+        // Synthetic face: radial gradient
+        if (frameCount === 1) {
+            const synth = new Uint8Array(64 * 64 * 4);
+            for (let y = 0; y < 64; y++) {
+                for (let x = 0; x < 64; x++) {
+                    const dx = x / 64 - 0.5;
+                    const dy = y / 64 - 0.5;
+                    const d = Math.sqrt(dx*dx + dy*dy);
+                    const v = Math.max(0, 1 - d * 2.5) * 255;
+                    const i = (y * 64 + x) * 4;
+                    synth[i] = synth[i+1] = synth[i+2] = v;
+                    synth[i+3] = 255;
+                }
+            }
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 64, 64, 0,
+                          gl.RGBA, gl.UNSIGNED_BYTE, synth);
+            gl.generateMipmap(gl.TEXTURE_2D);
+        }
+    }
+
+    // Physics passes (2 iterations per frame for stability)
+    gl.useProgram(physProg);
+    gl.uniform2f(physLocs.uRes, W, H);
+    gl.uniform1f(physLocs.uSpike, spikeVal);
+    gl.uniform2f(physLocs.uFlow, flowVal[0], flowVal[1]);
+    gl.uniform1f(physLocs.uTime, t * 0.001);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, faceTex);
+    gl.uniform1i(physLocs.uPotential, 1);
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, entropyTex);
+    gl.uniform1i(physLocs.uEntropy, 2);
+
+    for (let i = 0; i < 2; i++) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo2.fbo);
+        gl.viewport(0, 0, W, H);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, fbo1.tex);
+        gl.uniform1i(physLocs.uState, 0);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        // Ping-pong swap
+        const tmp = fbo1;
+        fbo1 = fbo2;
+        fbo2 = tmp;
+    }
+
+    // Final render pass
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+
+    gl.useProgram(rendProg);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, fbo1.tex);
+    gl.uniform1i(rendLocs.uField, 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, faceTex);
+    gl.uniform1i(rendLocs.uMedium, 1);
+
+    gl.uniform1f(rendLocs.uSpike, spikeVal);
+    gl.uniform1f(rendLocs.uTime, t * 0.001);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    requestAnimationFrame(render);
+}
+
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
