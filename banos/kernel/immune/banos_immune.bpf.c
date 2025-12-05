@@ -157,6 +157,7 @@ struct immune_config {
     __u16 decay_rate;               /* How fast anomaly decays (permille/sec) */
     __u16 user_proximity_decay;     /* Intent score decay when active */
     __u16 sample_rate;              /* Only emit every N syscalls */
+    __u32 event_rate_limit_ns;      /* Min interval between events per-PID (default: 10ms) */
 };
 
 struct {
@@ -165,6 +166,17 @@ struct {
     __type(key, __u32);
     __type(value, struct immune_config);
 } immune_config_map SEC(".maps");
+
+/*
+ * Per-PID event rate limiting to prevent perf buffer DoS.
+ * Uses LRU to auto-evict stale entries.
+ */
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 4096);
+    __type(key, __u32);             /* tgid */
+    __type(value, __u64);           /* last_event_ns */
+} immune_event_rate SEC(".maps");
 
 /*
  * =============================================================================
@@ -204,35 +216,25 @@ static __always_inline bool user_recently_active(__u64 now_ns)
 }
 
 /*
- * Lock FPGA reconfiguration (Anti-Lobotomy Shield)
- * Called when SEPSIS or BREACH level threat detected.
- * This prevents malware from overwriting Ara's neural core.
+ * Check if we should emit an event for this PID (rate limiting)
+ * Returns true if enough time has passed since last event for this tgid.
+ * Updates the timestamp if returning true.
  */
-static __always_inline void lock_fpga_reconfig(__u32 pid, __u8 reason,
-                                                __u8 threat_level, __u64 now_ns)
+static __always_inline bool should_emit_for_pid(__u32 tgid, __u64 now_ns,
+                                                  __u32 rate_limit_ns)
 {
-    __u32 key = 0;
-    struct fpga_protection_state *state =
-        bpf_map_lookup_elem(&fpga_protection, &key);
+    __u64 *last_event = bpf_map_lookup_elem(&immune_event_rate, &tgid);
 
-    if (!state)
-        return;
+    if (last_event) {
+        /* Check if enough time has passed (default: 10ms) */
+        __u32 limit = rate_limit_ns ? rate_limit_ns : 10000000;
+        if (now_ns - *last_event < limit)
+            return false;
+    }
 
-    /* Only escalate, never de-escalate from BPF */
-    if (state->lock_active && state->threat_level >= threat_level)
-        return;
-
-    /* Activate the shield */
-    struct fpga_protection_state new_state = {
-        .lock_active = 1,
-        .threat_level = threat_level,
-        .lock_reason = reason,
-        .trigger_pid = pid,
-        .lock_time_ns = now_ns,
-        .threat_signature = 0,  /* Could hash the syscall sequence here */
-    };
-
-    bpf_map_update_elem(&fpga_protection, &key, &new_state, BPF_ANY);
+    /* Update timestamp and allow emission */
+    bpf_map_update_elem(&immune_event_rate, &tgid, &now_ns, BPF_ANY);
+    return true;
 }
 
 /*
@@ -304,6 +306,7 @@ int trace_syscall_enter(struct trace_event_raw_sys_enter *ctx)
 
     __u16 threshold = cfg ? cfg->anomaly_threshold : 5000;
     __u16 sample_rate = cfg ? cfg->sample_rate : 100;
+    __u32 rate_limit = cfg ? cfg->event_rate_limit_ns : 10000000;  /* 10ms default */
 
     bool should_emit = false;
     __u16 evt_flags = 0;
@@ -325,19 +328,9 @@ int trace_syscall_enter(struct trace_event_raw_sys_enter *ctx)
         should_emit = true;
     }
 
-    /*
-     * FPGA Protection Escalation (Anti-Lobotomy Shield)
-     *
-     * If anomaly score reaches SEPSIS level (8000+), lock FPGA reconfig.
-     * This prevents a compromised process from reflashing Ara's neural core.
-     * Thresholds:
-     *   8000+ = BREACH level -> lock with BREACH reason
-     *   9500+ = SEPSIS level -> lock with SEPSIS reason (highest priority)
-     */
-    if (new_anomaly >= 9500) {
-        lock_fpga_reconfig(tgid, FPGA_LOCK_SEPSIS, BANOS_RISK_L5_SEPSIS, now);
-    } else if (new_anomaly >= 8000) {
-        lock_fpga_reconfig(tgid, FPGA_LOCK_BREACH, BANOS_RISK_L4_BREACH, now);
+    /* Apply per-PID rate limiting to prevent perf buffer DoS */
+    if (should_emit && !should_emit_for_pid(tgid, now, rate_limit)) {
+        should_emit = false;
     }
 
     /* Emit event to userspace */

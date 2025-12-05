@@ -14,10 +14,32 @@
  * - PAD components are in [-1000, 1000], representing [-1.0, 1.0]
  * - Permille values are in [0, 1000], representing [0.0, 1.0]
  * - 0 = neutral
+ *
+ * ABI STABILITY:
+ * - Bump BANOS_ABI_VERSION when changing struct layouts
+ * - All cross-boundary structs are packed for portability
+ * - Never remove fields; mark deprecated and add new at end
  */
 
 #ifndef _BANOS_COMMON_H
 #define _BANOS_COMMON_H
+
+/*
+ * =============================================================================
+ * ABI Version
+ * =============================================================================
+ * Increment this when struct layouts change. Readers should check this
+ * to detect incompatible data.
+ */
+#define BANOS_ABI_VERSION       1
+#define BANOS_ABI_MAGIC         0x42414E4F  /* "BANO" in ASCII */
+
+/* Packing attribute for cross-boundary structs */
+#ifdef __GNUC__
+#define BANOS_PACKED __attribute__((packed))
+#else
+#define BANOS_PACKED
+#endif
 
 #ifdef __KERNEL__
 #include <linux/types.h>
@@ -135,6 +157,11 @@ enum banos_immune_risk {
  * The driver computes deltas; BPF sees rates, not cumulative totals.
  */
 struct banos_spinal_cord {
+    /* ABI header - always check version before reading */
+    __u32 abi_magic;                /* BANOS_ABI_MAGIC */
+    __u16 abi_version;              /* BANOS_ABI_VERSION */
+    __u16 struct_size;              /* sizeof(struct banos_spinal_cord) */
+
     /* Afferent: FPGA → Kernel (read-only from kernel's perspective) */
     __u32 thermal_spike_cnt;        /* Thermal neuron spikes this window */
     __u32 voltage_spike_cnt;        /* Power instability spikes */
@@ -156,14 +183,16 @@ struct banos_spinal_cord {
 
     /* Reflex history (for Ara's awareness) */
     __u32 reflex_log;               /* Last reflex action taken */
+    __u32 _pad0;                    /* Alignment padding */
     __u64 reflex_timestamp_ns;      /* When last reflex fired */
     __u32 reflex_duration_ms;       /* How long reflex was active */
+    __u32 _pad1;                    /* Alignment padding */
 
     /* User intent (from input subsystem, for immune context) */
     __u64 last_user_input_ns;       /* Last keyboard/mouse event */
     __u16 user_activity_permille;   /* Recent input density (0=idle, 1000=typing) */
-    __u16 reserved;
-};
+    __u16 _reserved[3];             /* Future use */
+} BANOS_PACKED;
 
 /*
  * =============================================================================

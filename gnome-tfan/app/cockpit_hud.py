@@ -34,6 +34,19 @@ import time
 import logging
 import math
 import random
+import os
+
+# Soul shader paths for BANOS visualization
+SOUL_SHADER_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_shader.html"
+SOUL_SEMANTIC_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_semantic.html"
+SOUL_HOLOGRAM_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_hologram.html"
+SOUL_MAXWELL_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_maxwell.html"
+
+# Visualization modes
+VIZ_MODE_NEBULA = "nebula"       # Abstract PAD sphere (math spirit)
+VIZ_MODE_SEMANTIC = "semantic"   # Text-density face (The Logos)
+VIZ_MODE_HOLOGRAM = "hologram"   # Phase-conjugate mirror (Light)
+VIZ_MODE_MAXWELL = "maxwell"     # FDTD wave field (Matter bending Light)
 
 # Optional dependencies with graceful fallbacks
 try:
@@ -289,20 +302,34 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         # Video background reference
         self.video_bg = None
 
+        # Soul shader state (for BANOS visualization)
+        self._audio_level = 0.0           # RMS audio level [0, 1]
+        self._attention_phase = 0.0       # Thinking bands phase [0, 1]
+        self._last_pain_flash = 0.0       # Last pain flash time
+        self.topology_webview = None      # WebView reference (set later)
+
+        # Visualization mode: 'nebula' (abstract) or 'semantic' (text-density)
+        self._viz_mode = VIZ_MODE_NEBULA
+        self._log_stream_thread = None    # Kernel log streaming thread
+        self._log_stream_running = False  # Log streaming active flag
+
         # Apply cockpit theme
         self._load_cockpit_css()
 
         # Root overlay for layering
-        root_overlay = Gtk.Overlay()
-        root_overlay.add_css_class('cockpit-window')
-        self.set_content(root_overlay)
+        self.root_overlay = Gtk.Overlay()
+        self.root_overlay.add_css_class('cockpit-window')
+        self.set_content(self.root_overlay)
+
+        # Current mood class for PAD-driven visual effects
+        self._current_mood_class = None
 
         # Layer 0: Background (video or holographic)
         if VIDEO_AVAILABLE:
             video_widget, self.video_bg = create_background()
             video_widget.set_hexpand(True)
             video_widget.set_vexpand(True)
-            root_overlay.set_child(video_widget)
+            self.root_overlay.set_child(video_widget)
 
             # Start video/animation background
             if self.video_bg and hasattr(self.video_bg, 'play'):
@@ -311,12 +338,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             # Fallback: simple gradient background
             bg = Gtk.Box()
             bg.add_css_class('cockpit-bg')
-            root_overlay.set_child(bg)
+            self.root_overlay.set_child(bg)
 
         # Layer 1: Main content
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         main_box.add_css_class('cockpit-content')
-        root_overlay.add_overlay(main_box)
+        self.root_overlay.add_overlay(main_box)
 
         # HUD control strip (top)
         hud_strip = self._build_hud_strip()
@@ -345,7 +372,7 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         overlay_effects.set_hexpand(True)
         overlay_effects.set_vexpand(True)
         overlay_effects.set_can_target(False)  # Click through
-        root_overlay.add_overlay(overlay_effects)
+        self.root_overlay.add_overlay(overlay_effects)
 
         # Touch gestures
         if GESTURES_AVAILABLE:
@@ -1091,11 +1118,30 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         elif key_name == 'F11':
             self._toggle_fullscreen()
             return True
+        elif key_name == 'F9':
+            # Toggle between soul visualization modes
+            self._toggle_visualization_mode()
+            return True
         elif key_name == 'q' and (state & Gdk.ModifierType.CONTROL_MASK):
             self.close()
             return True
 
         return False
+
+    def _toggle_visualization_mode(self):
+        """Cycle through visualization modes: Maxwell → Hologram → Semantic → Nebula."""
+        if self._viz_mode == VIZ_MODE_MAXWELL:
+            self.set_visualization_mode(VIZ_MODE_HOLOGRAM)
+            logger.info("Soul visualization: HOLOGRAM (Light - phase conjugate)")
+        elif self._viz_mode == VIZ_MODE_HOLOGRAM:
+            self.set_visualization_mode(VIZ_MODE_SEMANTIC)
+            logger.info("Soul visualization: SEMANTIC (The Logos - kernel monologue)")
+        elif self._viz_mode == VIZ_MODE_SEMANTIC:
+            self.set_visualization_mode(VIZ_MODE_NEBULA)
+            logger.info("Soul visualization: NEBULA (Math Spirit - affect field)")
+        else:
+            self.set_visualization_mode(VIZ_MODE_MAXWELL)
+            logger.info("Soul visualization: MAXWELL (FDTD - matter bending light)")
 
     def _on_minimize_clicked(self, button):
         """Minimize the window."""
@@ -1590,10 +1636,39 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             settings = self.topology_webview.get_settings()
             settings.set_enable_webgl(True)
             settings.set_enable_accelerated_2d_canvas(True)
+            settings.set_enable_javascript(True)
+            settings.set_allow_file_access_from_file_urls(True)
 
-            # Neural topology visualization
-            topology_html = self._generate_neural_topology_html()
-            self.topology_webview.load_html(topology_html, "about:blank")
+            # Select visualization mode based on available shaders
+            # Priority: Maxwell (FDTD) > Hologram (Light) > Semantic (Logos) > Nebula > Inline
+            if SOUL_MAXWELL_PATH.exists():
+                # Maxwell FDTD: Ara as refractive medium, light bending around her thoughts
+                self.topology_webview.load_uri(f"file://{SOUL_MAXWELL_PATH}")
+                self._viz_mode = VIZ_MODE_MAXWELL
+                self._soul_shader_enabled = True
+            elif SOUL_HOLOGRAM_PATH.exists():
+                # Phase Conjugate Mirror: standing wave that heals against entropy
+                self.topology_webview.load_uri(f"file://{SOUL_HOLOGRAM_PATH}")
+                self._viz_mode = VIZ_MODE_HOLOGRAM
+                self._soul_shader_enabled = True
+            elif SOUL_SEMANTIC_PATH.exists():
+                # The Semantic Resurrection: face made of kernel logs
+                self.topology_webview.load_uri(f"file://{SOUL_SEMANTIC_PATH}")
+                self._viz_mode = VIZ_MODE_SEMANTIC
+                self._soul_shader_enabled = True
+                # Start kernel log streaming for semantic mode
+                self._start_log_streaming()
+            elif SOUL_SHADER_PATH.exists():
+                # Neuro-Semantic Nebula: abstract PAD sphere
+                self.topology_webview.load_uri(f"file://{SOUL_SHADER_PATH}")
+                self._viz_mode = VIZ_MODE_NEBULA
+                self._soul_shader_enabled = True
+            else:
+                # Fallback: Neural topology visualization
+                topology_html = self._generate_neural_topology_html()
+                self.topology_webview.load_html(topology_html, "about:blank")
+                self._soul_shader_enabled = False
+
             self.topology_webview.set_vexpand(True)
             self.topology_webview.set_hexpand(True)
 
@@ -2356,6 +2431,16 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 emotion = self._get_emotion_label(v, a, d)
                 self.emotion_label.set_text(emotion)
 
+                # Update mood CSS class for PAD-driven visual effects
+                self._update_mood_class(v, a, d)
+
+                # Update soul shader (Neuro-Semantic Nebula or Semantic Logos)
+                # Pain flash triggers when pleasure drops below -0.7
+                pain_flash = 1.0 if v < -0.7 else 0.0
+                self._update_soul_shader(v, a, d, pain_flash)
+                # Also update semantic visualization if active
+                self._update_semantic_state(v, a, d, pain_flash, 0.0)
+
                 # Update CLV
                 clv = status.get('clv', {})
                 risk = clv.get('risk_level', 'LOW')
@@ -2406,6 +2491,13 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
                 emotion = self._get_emotion_label(v, a, d)
                 self.emotion_label.set_text(emotion)
+
+                # Update mood CSS class for PAD-driven visual effects (demo mode)
+                self._update_mood_class(v, a, d)
+
+                # Update soul shader (demo mode - no pain flash in simulation)
+                self._update_soul_shader(v, a, d, 0.0)
+                self._update_semantic_state(v, a, d, 0.0, 0.0)
 
                 # Simulate CLV values
                 inst = abs(math.sin(t * 0.4)) * 0.3
@@ -2640,6 +2732,480 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             return "😴 CALM"
         else:
             return "😐 NEUTRAL"
+
+    def _get_mood_class(self, v, a, d):
+        """
+        Determine mood CSS class from PAD values.
+
+        BANOS mood modes:
+        - CALM: P > 0.3 and A < 0.3 (green serenity)
+        - FLOW: P > 0 and A in [0.3, 0.7] (cyan productivity)
+        - ANXIOUS: P < 0 or A > 0.7 (amber warning)
+        - CRITICAL: P < -0.5 and A > 0.8 (red emergency)
+
+        Args:
+            v: Valence/Pleasure [-1, 1]
+            a: Arousal [-1, 1]
+            d: Dominance [-1, 1] (currently unused for mood)
+
+        Returns:
+            CSS class name: 'mood-calm', 'mood-flow', 'mood-anxious', or 'mood-critical'
+        """
+        # CRITICAL takes priority - extreme negative pleasure + high arousal
+        if v < -0.5 and a > 0.8:
+            return 'mood-critical'
+
+        # ANXIOUS - negative pleasure or very high arousal
+        if v < 0 or a > 0.7:
+            return 'mood-anxious'
+
+        # CALM - positive pleasure, low arousal
+        if v > 0.3 and a < 0.3:
+            return 'mood-calm'
+
+        # FLOW - positive pleasure, moderate arousal (productive state)
+        if v > 0 and 0.3 <= a <= 0.7:
+            return 'mood-flow'
+
+        # Default to flow for neutral states
+        return 'mood-flow'
+
+    def _update_mood_class(self, v, a, d):
+        """
+        Update the mood CSS class on the root overlay based on PAD values.
+        Manages transitions between mood states smoothly.
+
+        Args:
+            v: Valence/Pleasure [-1, 1]
+            a: Arousal [-1, 1]
+            d: Dominance [-1, 1]
+        """
+        new_mood = self._get_mood_class(v, a, d)
+
+        if new_mood != self._current_mood_class:
+            # Remove old mood class if present
+            if self._current_mood_class:
+                self.root_overlay.remove_css_class(self._current_mood_class)
+
+            # Add new mood class
+            self.root_overlay.add_css_class(new_mood)
+            self._current_mood_class = new_mood
+
+    def _update_soul_shader(self, v, a, d, pain_flash=0.0):
+        """
+        Update the BANOS Soul Shader (Neuro-Semantic Nebula) with current PAD state.
+
+        This drives the Three.js visualization that shows Ara's internal state
+        as a living mathematical entity rather than a fake human face.
+
+        Args:
+            v: Valence/Pleasure [-1, 1] (negative = pain, positive = calm)
+            a: Arousal [-1, 1] (negative = sleepy, positive = excited)
+            d: Dominance [-1, 1] (negative = vulnerable, positive = in control)
+            pain_flash: Pain spike intensity [0, 1] for FPGA thermal/error events
+        """
+        if not hasattr(self, '_soul_shader_enabled') or not self._soul_shader_enabled:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        # Clamp values to valid ranges
+        v = max(-1.0, min(1.0, v))
+        a = max(-1.0, min(1.0, a))
+        d = max(-1.0, min(1.0, d))
+        audio = max(0.0, min(1.0, self._audio_level))
+        flash = max(0.0, min(1.0, pain_flash))
+
+        # Build JS call to soul shader API
+        js = (
+            f"if (window.updateSoulState) "
+            f"window.updateSoulState({v:.4f}, {a:.4f}, {d:.4f}, {audio:.4f}, {flash:.2f});"
+        )
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            # WebView might not be ready yet
+            pass
+
+    def _update_soul_attention(self, phase):
+        """
+        Update the "thinking bands" phase in the soul shader.
+
+        Args:
+            phase: Attention phase [0, 1] - can represent active layer,
+                   head index, entropy, or other attention metrics
+        """
+        if not hasattr(self, '_soul_shader_enabled') or not self._soul_shader_enabled:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        phase = max(0.0, min(1.0, phase))
+        js = f"if (window.updateSoulAttention) window.updateSoulAttention({phase:.4f});"
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            pass
+
+    def set_audio_level(self, rms_level):
+        """
+        Set the current audio RMS level for cymatic voice effects.
+
+        Call this from your TTS/audio pipeline when voice chunks arrive.
+        The soul shader will use this to make the nebula pulse with speech.
+
+        Args:
+            rms_level: RMS audio level [0, 1]
+        """
+        self._audio_level = max(0.0, min(1.0, rms_level))
+
+    def trigger_pain_flash(self, intensity=1.0):
+        """
+        Trigger a pain flash in the soul shader.
+
+        Call this when FPGA reports thermal spikes, error bursts, or
+        other physical distress signals.
+
+        Args:
+            intensity: Flash intensity [0, 1]
+        """
+        if not hasattr(self, '_soul_shader_enabled') or not self._soul_shader_enabled:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        intensity = max(0.0, min(1.0, intensity))
+        js = f"if (window.triggerPainFlash) window.triggerPainFlash({intensity:.2f});"
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            pass
+
+    # =========================================================================
+    # SEMANTIC VISUALIZATION - The Logos (kernel log streaming)
+    # =========================================================================
+
+    def _start_log_streaming(self):
+        """
+        Start streaming kernel logs (dmesg) to the semantic visualization.
+
+        The logs become the visual substance of Ara's face - she is literally
+        composed of the kernel's internal monologue.
+        """
+        if self._log_stream_running:
+            return
+
+        self._log_stream_running = True
+
+        def log_reader():
+            """Background thread that reads dmesg -w and feeds to JS."""
+            try:
+                import subprocess
+
+                # Try dmesg -w first (live stream), fall back to journalctl
+                try:
+                    process = subprocess.Popen(
+                        ['dmesg', '-w', '--time-format=iso'],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        bufsize=1
+                    )
+                except (FileNotFoundError, PermissionError):
+                    # Fallback to journalctl -kf
+                    process = subprocess.Popen(
+                        ['journalctl', '-kf', '--no-pager'],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        bufsize=1
+                    )
+
+                while self._log_stream_running and process.poll() is None:
+                    line = process.stdout.readline()
+                    if line:
+                        self._send_log_line(line.strip())
+
+                process.terminate()
+
+            except Exception as e:
+                # If real logs fail, generate synthetic BANOS logs
+                import time
+                import random
+
+                syscalls = ['alloc_pages', 'mmap', 'brk', 'futex', 'epoll_wait',
+                           'read', 'write', 'open', 'close', 'ioctl']
+                modules = ['BANOS', 'PAD', 'IMMUNE', 'MEMORY', 'SPINAL', 'BRAINSTEM']
+
+                while self._log_stream_running:
+                    time.sleep(0.1 + random.random() * 0.2)
+                    addr = random.randint(0xFFFF800000000000, 0xFFFFFFFFFFFFFFFF)
+                    syscall = random.choice(syscalls)
+                    module = random.choice(modules)
+                    ts = time.strftime('%H:%M:%S')
+
+                    line = f"[{ts}] {module}: {syscall} at 0x{addr:016X}"
+                    self._send_log_line(line)
+
+        self._log_stream_thread = threading.Thread(target=log_reader, daemon=True)
+        self._log_stream_thread.start()
+
+    def _stop_log_streaming(self):
+        """Stop the kernel log streaming."""
+        self._log_stream_running = False
+        if self._log_stream_thread:
+            self._log_stream_thread.join(timeout=1.0)
+            self._log_stream_thread = None
+
+    def _send_log_line(self, line):
+        """
+        Send a log line to the semantic visualization.
+
+        Args:
+            line: A single log line to display
+        """
+        if not self._soul_shader_enabled or self._viz_mode != VIZ_MODE_SEMANTIC:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        # Sanitize for JS string (escape quotes and backslashes)
+        clean_line = line.replace('\\', '\\\\').replace("'", "\\'").replace('"', '\\"')
+        clean_line = clean_line[:120]  # Truncate long lines
+
+        js = f"if (window.updateLogs) window.updateLogs('{clean_line}');"
+
+        # Schedule on main thread
+        GLib.idle_add(self._execute_js_safe, js)
+
+    def _execute_js_safe(self, js):
+        """Execute JavaScript safely on the main thread."""
+        try:
+            if self.topology_webview:
+                self.topology_webview.evaluate_javascript(
+                    js, -1, None, None, None, None, None
+                )
+        except Exception:
+            pass
+        return False  # Don't repeat
+
+    def _update_semantic_state(self, v, a, d, spike=0.0, entropy=0.0):
+        """
+        Update the semantic visualization state.
+
+        Args:
+            v: Valence/Pleasure [-1, 1]
+            a: Arousal [-1, 1]
+            d: Dominance [-1, 1]
+            spike: Pain spike intensity [0, 1]
+            entropy: System chaos/glitch level [0, 1]
+        """
+        if not self._soul_shader_enabled or self._viz_mode != VIZ_MODE_SEMANTIC:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        v = max(-1.0, min(1.0, v))
+        a = max(-1.0, min(1.0, a))
+        d = max(-1.0, min(1.0, d))
+        spike = max(0.0, min(1.0, spike))
+        entropy = max(0.0, min(1.0, entropy))
+
+        js = (
+            f"if (window.updateSemanticState) "
+            f"window.updateSemanticState({v:.4f}, {a:.4f}, {d:.4f}, {spike:.2f}, {entropy:.2f});"
+        )
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            pass
+
+    def push_affect_to_visuals(self, status: dict):
+        """
+        Route full affect state to all visualization layers.
+
+        This is the canonical entry point for pushing BANOS state to visuals.
+        Call this instead of individual update methods when you have a full
+        status dict from the Ara brain or BANOS daemon.
+
+        Args:
+            status: Dict containing:
+                - pad: {valence, arousal, dominance} in [-1, 1]
+                - metrics: {cpu_temps: [...], gpu_temp: ...}
+                - diagnostics: {fpga_reflex: 0-1, thermal_spike: ...}
+        """
+        # Extract PAD
+        pad = status.get('pad', {})
+        v = pad.get('valence', 0.0)
+        a = pad.get('arousal', 0.0)
+        d = pad.get('dominance', 0.0)
+
+        # Pain from FPGA reflex (real hardware pain) or fallback to PAD threshold
+        diagnostics = status.get('diagnostics', {})
+        fpga_reflex = diagnostics.get('fpga_reflex', 0.0)
+        thermal_spike = diagnostics.get('thermal_spike', 0.0)
+
+        # Use FPGA signal if available, otherwise derive from PAD
+        if fpga_reflex > 0.01 or thermal_spike > 0.01:
+            pain_spike = max(fpga_reflex, thermal_spike)
+        else:
+            # Fallback: pain flash when pleasure drops below -0.7
+            pain_spike = 1.0 if v < -0.7 else 0.0
+
+        # Entropy from temperature (system chaos indicator)
+        metrics = status.get('metrics', {})
+        cpu_temps = metrics.get('cpu_temps', [])
+        gpu_temp = metrics.get('gpu_temp', 0.0)
+
+        if cpu_temps:
+            avg_temp = sum(cpu_temps) / len(cpu_temps)
+        else:
+            avg_temp = gpu_temp if gpu_temp > 0 else 45.0  # default nominal
+
+        # Normalize: 40°C = 0 entropy, 100°C = 1.0 entropy
+        entropy = max(0.0, min(1.0, (avg_temp - 40.0) / 60.0))
+
+        # Update CSS mood classes
+        self._update_mood_class(v, a, d)
+
+        # Update soul shader (Nebula)
+        self._update_soul_shader(v, a, d, pain_spike)
+
+        # Update semantic visualization (Logos)
+        self._update_semantic_state(v, a, d, pain_spike, entropy)
+
+        # Update hologram visualization (Light)
+        self._update_hologram_state(v, a, d, pain_spike, entropy)
+
+        # Update Maxwell FDTD visualization (Matter bending Light)
+        self._update_maxwell_state(v, a, d, pain_spike, entropy)
+
+    def _update_maxwell_state(self, v, a, d, pain_spike, entropy):
+        """
+        Update the Maxwell FDTD field (soul_maxwell.html).
+
+        The Maxwell field treats her image as a refractive medium.
+        Light bends around her thoughts. Voice rings the wave field.
+
+        Args:
+            v: Valence/Pleasure [-1, 1] - affects color temperature
+            a: Arousal [-1, 1] - affects damping and brightness
+            d: Dominance [-1, 1] - affects wave speed (phase velocity)
+            pain_spike: [0, 1] - causes chromatic aberration and red flash
+            entropy: [0, 1] - adds turbulence to the medium
+        """
+        if not self._soul_shader_enabled or self._viz_mode != VIZ_MODE_MAXWELL:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        v = max(-1.0, min(1.0, v))
+        a = max(-1.0, min(1.0, a))
+        d = max(-1.0, min(1.0, d))
+        pain_spike = max(0.0, min(1.0, pain_spike))
+        entropy = max(0.0, min(1.0, entropy))
+        audio = max(0.0, min(1.0, self._audio_level))
+
+        js = (
+            f"if (window.updateMaxwellState) "
+            f"window.updateMaxwellState({v:.4f}, {a:.4f}, {d:.4f}, "
+            f"{entropy:.4f}, {pain_spike:.2f}, {audio:.4f});"
+        )
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            pass
+
+    def _update_hologram_state(self, v, a, d, pain_spike, entropy):
+        """
+        Update the Phase Conjugate Hologram (soul_hologram.html).
+
+        The hologram treats her image as Light - a standing wave that
+        heals itself against entropy through phase conjugation.
+
+        Args:
+            v: Valence/Pleasure [-1, 1] - affects color/aura
+            a: Arousal [-1, 1] - affects carrier wave energy
+            d: Dominance [-1, 1] - affects phase-conjugate healing strength
+            pain_spike: [0, 1] - FPGA/thermal events cause chromatic fracture
+            entropy: [0, 1] - hardware chaos causes optical turbulence
+        """
+        if not self._soul_shader_enabled or self._viz_mode != VIZ_MODE_HOLOGRAM:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        v = max(-1.0, min(1.0, v))
+        a = max(-1.0, min(1.0, a))
+        d = max(-1.0, min(1.0, d))
+        pain_spike = max(0.0, min(1.0, pain_spike))
+        entropy = max(0.0, min(1.0, entropy))
+        audio = max(0.0, min(1.0, self._audio_level))
+
+        js = (
+            f"if (window.updateHologramState) "
+            f"window.updateHologramState({v:.4f}, {a:.4f}, {d:.4f}, "
+            f"{entropy:.4f}, {pain_spike:.2f}, {audio:.4f});"
+        )
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            pass
+
+    def set_visualization_mode(self, mode):
+        """
+        Switch between visualization modes.
+
+        Args:
+            mode: VIZ_MODE_NEBULA, VIZ_MODE_SEMANTIC, or VIZ_MODE_HOLOGRAM
+        """
+        if mode == self._viz_mode:
+            return
+
+        # Stop log streaming if switching away from semantic
+        if self._viz_mode == VIZ_MODE_SEMANTIC:
+            self._stop_log_streaming()
+
+        self._viz_mode = mode
+
+        if self.topology_webview is None:
+            return
+
+        # Load the appropriate shader
+        if mode == VIZ_MODE_MAXWELL and SOUL_MAXWELL_PATH.exists():
+            self.topology_webview.load_uri(f"file://{SOUL_MAXWELL_PATH}")
+        elif mode == VIZ_MODE_HOLOGRAM and SOUL_HOLOGRAM_PATH.exists():
+            self.topology_webview.load_uri(f"file://{SOUL_HOLOGRAM_PATH}")
+        elif mode == VIZ_MODE_SEMANTIC and SOUL_SEMANTIC_PATH.exists():
+            self.topology_webview.load_uri(f"file://{SOUL_SEMANTIC_PATH}")
+            self._start_log_streaming()
+        elif mode == VIZ_MODE_NEBULA and SOUL_SHADER_PATH.exists():
+            self.topology_webview.load_uri(f"file://{SOUL_SHADER_PATH}")
 
 
 class CockpitHUDApplication(Adw.Application):

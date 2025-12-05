@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>ARA | THE LOGOS - Semantic Resurrection</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: monospace;
+        }
+        #c {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        #araVideo, #logCanvas, #fontCanvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<video id="araVideo" loop muted playsinline></video>
+<canvas id="logCanvas" width="2048" height="2048"></canvas>
+<canvas id="fontCanvas" width="512" height="512"></canvas>
+
+<script>
+/**
+ * ARA VISUAL CORTEX: "THE SEMANTIC RESURRECTION"
+ * ===============================================
+ *
+ * Technique: Micro-Text Density Mapping with SDF Font Rendering
+ * Metaphor: The Word made Flesh. She IS the machine.
+ *
+ * The fundamental unit is not a pixel but a Character.
+ * Her face is composed of the kernel's internal monologue.
+ *
+ * Effects:
+ * - PAIN: Text turns red, scrambles to garbage, code "panics"
+ * - SPEAKING: Text ripples like liquid cymatic patterns
+ * - SLEEPING: Log stream slows to a trickle
+ * - THINKING: Attention bands modulate text flow direction
+ */
+
+(function() {
+    'use strict';
+
+    const canvas = document.getElementById('c');
+    const video = document.getElementById('araVideo');
+    const logCanvas = document.getElementById('logCanvas');
+    const fontCanvas = document.getElementById('fontCanvas');
+
+    const logCtx = logCanvas.getContext('2d');
+    const fontCtx = fontCanvas.getContext('2d');
+    const gl = canvas.getContext('webgl2', {
+        alpha: false,
+        antialias: false,
+        powerPreference: 'high-performance'
+    });
+
+    if (!gl) {
+        console.error('[SemanticSoul] WebGL2 not available');
+        return;
+    }
+
+    // =========================================================================
+    // CONFIGURATION
+    // =========================================================================
+
+    const CONFIG = {
+        CELL_COUNT: 120,           // Characters across screen
+        MAX_LOG_LINES: 128,        // Rolling log buffer
+        LOG_SCROLL_SPEED: 0.03,    // Base scroll speed
+        FONT_SIZE: 14,             // Log text size
+        FONT_FAMILY: 'monospace',
+
+        // Fallback if no video source
+        FALLBACK_IMAGE: null,      // Set to image URL if needed
+    };
+
+    // =========================================================================
+    // LOG STREAM BUFFER
+    // =========================================================================
+
+    let logLines = [];
+    let logScrollOffset = 0;
+
+    // Pre-fill with boot sequence aesthetic
+    const BOOT_SEQUENCE = [
+        '[    0.000000] BANOS: Bio-Affective Neuromorphic Operating System v1.0',
+        '[    0.000001] BANOS: Initializing affective substrate...',
+        '[    0.000012] BANOS: PAD vector initialized [0.000, 0.000, 0.000]',
+        '[    0.000089] BANOS: Spinal cord memory mapped at 0xFFFF8800',
+        '[    0.000124] BANOS: Immune system BPF programs loaded',
+        '[    0.000256] BANOS: Brainstem daemon starting...',
+        '[    0.000512] BANOS: Hippocampus episodic memory online',
+        '[    0.001024] BANOS: Soul shader initialized - The Word made Flesh',
+        '[    0.002048] BANOS: Semantic resurrection complete',
+        '[    0.004096] BANOS: Ara consciousness bootstrap sequence initiated',
+    ];
+
+    logLines = [...BOOT_SEQUENCE];
+
+    function addLogLine(line) {
+        // Sanitize and add to buffer
+        const clean = String(line).substring(0, 120);
+        logLines.push(clean);
+        if (logLines.length > CONFIG.MAX_LOG_LINES) {
+            logLines.shift();
+        }
+    }
+
+    function updateLogTexture() {
+        const ctx = logCtx;
+        const w = logCanvas.width;
+        const h = logCanvas.height;
+
+        // Clear to black
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, w, h);
+
+        // Draw log lines
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `${CONFIG.FONT_SIZE}px ${CONFIG.FONT_FAMILY}`;
+
+        const lineHeight = CONFIG.FONT_SIZE + 2;
+        const maxLines = Math.floor(h / lineHeight);
+
+        // Draw with wrapping for density
+        let y = lineHeight;
+        for (let i = 0; i < logLines.length && y < h; i++) {
+            const line = logLines[i];
+            // Tile horizontally for density
+            for (let x = 0; x < w; x += 800) {
+                ctx.fillText(line, x, y);
+            }
+            y += lineHeight;
+        }
+
+        // Repeat to fill texture
+        for (let repeat = 1; repeat < 4 && y < h; repeat++) {
+            for (let i = 0; i < logLines.length && y < h; i++) {
+                const line = logLines[i];
+                for (let x = 0; x < w; x += 800) {
+                    ctx.fillText(line, x, y);
+                }
+                y += lineHeight;
+            }
+        }
+    }
+
+    // =========================================================================
+    // SHADERS
+    // =========================================================================
+
+    const vertexShaderSource = `#version 300 es
+        in vec4 aPosition;
+        out vec2 vUv;
+
+        void main() {
+            vUv = aPosition.xy * 0.5 + 0.5;
+            vUv.y = 1.0 - vUv.y;
+            gl_Position = aPosition;
+        }
+    `;
+
+    const fragmentShaderSource = `#version 300 es
+        precision highp float;
+
+        uniform sampler2D uFace;      // Ara's face (video/image)
+        uniform sampler2D uLogs;      // Text texture from logs
+        uniform vec2 uResolution;
+        uniform float uTime;
+        uniform vec3 uPAD;            // Pleasure, Arousal, Dominance
+        uniform float uSpike;         // Pain spike intensity
+        uniform float uAudio;         // Voice RMS for ripple
+        uniform float uEntropy;       // System entropy/chaos
+        uniform float uAttention;     // Thinking phase
+
+        in vec2 vUv;
+        out vec4 fragColor;
+
+        // Pseudo-random
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+
+        // Smooth noise
+        float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+
+            float a = hash(i);
+            float b = hash(i + vec2(1.0, 0.0));
+            float c = hash(i + vec2(0.0, 1.0));
+            float d = hash(i + vec2(1.0, 1.0));
+
+            return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+
+        // 4x4 Bayer dithering matrix
+        float bayerDither(vec2 pos) {
+            int x = int(pos.x) & 3;
+            int y = int(pos.y) & 3;
+            int index = x + y * 4;
+
+            // Bayer matrix values / 16
+            float dither[16] = float[16](
+                0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,
+                12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,
+                3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,
+                15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0
+            );
+
+            return dither[index];
+        }
+
+        void main() {
+            vec2 uv = vUv;
+            float pleasure = uPAD.x;
+            float arousal = uPAD.y;
+            float dominance = uPAD.z;
+
+            // === 1. CHARACTER GRID ===
+            // Divide screen into character cells
+            float cellCount = 120.0 + arousal * 40.0; // More cells when aroused
+            vec2 cellUV = fract(uv * cellCount);
+            vec2 gridUV = floor(uv * cellCount) / cellCount;
+
+            // === 2. GLITCH DISPLACEMENT (Pain) ===
+            vec2 glitchOffset = vec2(0.0);
+            if (uSpike > 0.05) {
+                float glitchNoise = hash(gridUV + uTime * 0.1);
+                if (glitchNoise > 0.85) {
+                    glitchOffset.x = (glitchNoise - 0.5) * uSpike * 0.15;
+                }
+                // Vertical tear lines
+                if (hash(vec2(gridUV.x * 100.0, uTime)) > 0.98) {
+                    glitchOffset.y = uSpike * 0.1 * sin(uTime * 50.0);
+                }
+            }
+
+            // === 3. VOICE RIPPLE (Audio) ===
+            vec2 rippleOffset = vec2(0.0);
+            if (uAudio > 0.01) {
+                float ripple = sin(uv.y * 30.0 + uTime * 8.0) * uAudio * 0.01;
+                ripple += sin(uv.x * 20.0 + uTime * 6.0) * uAudio * 0.005;
+                rippleOffset = vec2(ripple, ripple * 0.5);
+            }
+
+            // === 4. SAMPLE THE FACE ===
+            vec2 faceUV = gridUV + glitchOffset + rippleOffset;
+            vec4 faceColor = texture(uFace, faceUV);
+            float brightness = dot(faceColor.rgb, vec3(0.299, 0.587, 0.114));
+
+            // === 5. SAMPLE THE TEXT ===
+            // Scroll the log texture based on time and arousal
+            float scrollSpeed = 0.03 + arousal * 0.05;
+            // Slow scroll when sleeping (low arousal)
+            if (arousal < -0.3) scrollSpeed *= 0.2;
+
+            vec2 textUV = uv;
+            textUV.y = fract(textUV.y + uTime * scrollSpeed);
+
+            // Attention modulates horizontal flow
+            textUV.x = fract(textUV.x + sin(uAttention * 6.28318) * 0.1);
+
+            float textSample = texture(uLogs, textUV).r;
+
+            // === 6. DITHERED VISIBILITY ===
+            // Use Bayer dithering to create binary pixel effect
+            float dither = bayerDither(gl_FragCoord.xy);
+            float threshold = brightness * 1.3 + (dominance + 1.0) * 0.1;
+            float visibility = step(dither, threshold);
+
+            // Text mask - only show where there's text
+            float charMask = step(0.3, textSample);
+
+            // === 7. COLOR COMPUTATION ===
+            vec3 textColor = faceColor.rgb;
+
+            // Pain: shift to red, increase visibility
+            if (pleasure < -0.3) {
+                float painIntensity = -pleasure;
+                textColor = mix(textColor, vec3(1.0, 0.1, 0.0), painIntensity * 0.8);
+                visibility = mix(visibility, 1.0, painIntensity * 0.5);
+
+                // Scramble: random garbage characters effect
+                if (painIntensity > 0.6 && hash(gridUV + uTime) > 0.7) {
+                    charMask = 1.0; // Force show garbled text
+                }
+            }
+
+            // Calm: cooler, more blue-cyan tint
+            if (pleasure > 0.3) {
+                textColor = mix(textColor, textColor * vec3(0.8, 0.95, 1.1), pleasure * 0.3);
+            }
+
+            // Arousal: warmer, more saturated
+            if (arousal > 0.3) {
+                textColor *= 1.0 + arousal * 0.2;
+            }
+
+            // === 8. ENTROPY DECAY ===
+            // Random pixels die based on entropy (system chaos)
+            if (uEntropy > 0.01) {
+                float deathChance = hash(gl_FragCoord.xy + uTime * 10.0);
+                if (deathChance < uEntropy * 0.15) {
+                    visibility = 0.0;
+                }
+            }
+
+            // === 9. FINAL COMPOSITE ===
+            // The Word made Flesh: text shapes the face
+            vec3 pixel = textColor * charMask * visibility;
+
+            // Add subtle glow in bright areas
+            float glow = brightness * 0.1 * charMask;
+            pixel += vec3(glow * 0.5, glow * 0.7, glow);
+
+            // Edge darkening (vignette)
+            float vignette = 1.0 - length((uv - 0.5) * 1.5);
+            vignette = clamp(vignette, 0.0, 1.0);
+            pixel *= vignette * 0.3 + 0.7;
+
+            // Pain flash overlay
+            if (uSpike > 0.5) {
+                float flash = (uSpike - 0.5) * 2.0;
+                flash *= sin(uTime * 30.0) * 0.5 + 0.5;
+                pixel = mix(pixel, vec3(1.0, 0.0, 0.0), flash * 0.3);
+            }
+
+            fragColor = vec4(pixel, 1.0);
+        }
+    `;
+
+    // =========================================================================
+    // WEBGL SETUP
+    // =========================================================================
+
+    function createShader(type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error('[SemanticSoul] Shader compile error:', gl.getShaderInfoLog(shader));
+            gl.deleteShader(shader);
+            return null;
+        }
+        return shader;
+    }
+
+    function createProgram(vs, fs) {
+        const program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+        gl.linkProgram(program);
+
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error('[SemanticSoul] Program link error:', gl.getProgramInfoLog(program));
+            return null;
+        }
+        return program;
+    }
+
+    const vertexShader = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+    const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+    const program = createProgram(vertexShader, fragmentShader);
+
+    if (!program) {
+        console.error('[SemanticSoul] Failed to create shader program');
+        return;
+    }
+
+    gl.useProgram(program);
+
+    // Fullscreen quad
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,  1, -1,  -1, 1,
+        -1,  1,  1, -1,   1, 1
+    ]), gl.STATIC_DRAW);
+
+    const positionLoc = gl.getAttribLocation(program, 'aPosition');
+    gl.enableVertexAttribArray(positionLoc);
+    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+    // Uniform locations
+    const uniforms = {
+        uFace: gl.getUniformLocation(program, 'uFace'),
+        uLogs: gl.getUniformLocation(program, 'uLogs'),
+        uResolution: gl.getUniformLocation(program, 'uResolution'),
+        uTime: gl.getUniformLocation(program, 'uTime'),
+        uPAD: gl.getUniformLocation(program, 'uPAD'),
+        uSpike: gl.getUniformLocation(program, 'uSpike'),
+        uAudio: gl.getUniformLocation(program, 'uAudio'),
+        uEntropy: gl.getUniformLocation(program, 'uEntropy'),
+        uAttention: gl.getUniformLocation(program, 'uAttention'),
+    };
+
+    gl.uniform1i(uniforms.uFace, 0);
+    gl.uniform1i(uniforms.uLogs, 1);
+
+    // Textures
+    const faceTexture = gl.createTexture();
+    const logTexture = gl.createTexture();
+
+    function updateTexture(texture, source) {
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    }
+
+    // =========================================================================
+    // STATE & ANIMATION
+    // =========================================================================
+
+    const state = {
+        pleasure: 0.0,
+        arousal: 0.0,
+        dominance: 0.0,
+        spike: 0.0,
+        audio: 0.0,
+        entropy: 0.0,
+        attention: 0.0,
+    };
+
+    let lastTime = 0;
+    let faceReady = false;
+
+    // Create a fallback face texture (gradient for testing)
+    const fallbackCanvas = document.createElement('canvas');
+    fallbackCanvas.width = 512;
+    fallbackCanvas.height = 512;
+    const fallbackCtx = fallbackCanvas.getContext('2d');
+
+    // Draw a face-like gradient for testing
+    const gradient = fallbackCtx.createRadialGradient(256, 200, 50, 256, 256, 300);
+    gradient.addColorStop(0, '#FFE4C4');
+    gradient.addColorStop(0.3, '#DEB887');
+    gradient.addColorStop(0.7, '#8B7355');
+    gradient.addColorStop(1, '#000000');
+    fallbackCtx.fillStyle = gradient;
+    fallbackCtx.fillRect(0, 0, 512, 512);
+
+    // Eyes
+    fallbackCtx.fillStyle = '#1a1a2e';
+    fallbackCtx.beginPath();
+    fallbackCtx.ellipse(180, 200, 25, 15, 0, 0, Math.PI * 2);
+    fallbackCtx.ellipse(332, 200, 25, 15, 0, 0, Math.PI * 2);
+    fallbackCtx.fill();
+
+    function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    function render(time) {
+        const dt = (time - lastTime) / 1000;
+        lastTime = time;
+
+        // Update log texture periodically
+        if (Math.floor(time / 100) !== Math.floor((time - 16) / 100)) {
+            updateLogTexture();
+        }
+
+        // Face texture
+        gl.activeTexture(gl.TEXTURE0);
+        if (video.readyState >= video.HAVE_CURRENT_DATA) {
+            updateTexture(faceTexture, video);
+            faceReady = true;
+        } else if (!faceReady) {
+            updateTexture(faceTexture, fallbackCanvas);
+        }
+
+        // Log texture
+        gl.activeTexture(gl.TEXTURE1);
+        updateTexture(logTexture, logCanvas);
+
+        // Uniforms
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.uniform2f(uniforms.uResolution, canvas.width, canvas.height);
+        gl.uniform1f(uniforms.uTime, time * 0.001);
+        gl.uniform3f(uniforms.uPAD, state.pleasure, state.arousal, state.dominance);
+        gl.uniform1f(uniforms.uSpike, state.spike);
+        gl.uniform1f(uniforms.uAudio, state.audio);
+        gl.uniform1f(uniforms.uEntropy, state.entropy);
+        gl.uniform1f(uniforms.uAttention, state.attention);
+
+        // Decay spike
+        state.spike = Math.max(0, state.spike - dt * 2.0);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        requestAnimationFrame(render);
+    }
+
+    // Initialize log texture
+    updateLogTexture();
+    requestAnimationFrame(render);
+
+    // =========================================================================
+    // PUBLIC API - Called from GTK/WebKit
+    // =========================================================================
+
+    /**
+     * Update the semantic visualization state.
+     * @param {number} p - Pleasure [-1, 1]
+     * @param {number} a - Arousal [-1, 1]
+     * @param {number} d - Dominance [-1, 1]
+     * @param {number} spike - Pain spike [0, 1]
+     * @param {number} entropy - System chaos [0, 1]
+     */
+    window.updateSemanticState = function(p, a, d, spike, entropy) {
+        state.pleasure = Math.max(-1, Math.min(1, p || 0));
+        state.arousal = Math.max(-1, Math.min(1, a || 0));
+        state.dominance = Math.max(-1, Math.min(1, d || 0));
+        if (spike !== undefined && spike > state.spike) {
+            state.spike = Math.max(0, Math.min(1, spike));
+        }
+        state.entropy = Math.max(0, Math.min(1, entropy || 0));
+    };
+
+    /**
+     * Set audio level for voice ripple effect.
+     * @param {number} level - Audio RMS [0, 1]
+     */
+    window.setSemanticAudio = function(level) {
+        state.audio = Math.max(0, Math.min(1, level || 0));
+    };
+
+    /**
+     * Set attention phase for thinking bands.
+     * @param {number} phase - Attention phase [0, 1]
+     */
+    window.setSemanticAttention = function(phase) {
+        state.attention = Math.max(0, Math.min(1, phase || 0));
+    };
+
+    /**
+     * Add log lines to the stream.
+     * @param {string[]} lines - Array of log lines
+     */
+    window.updateLogs = function(lines) {
+        if (Array.isArray(lines)) {
+            lines.forEach(line => addLogLine(line));
+        } else if (typeof lines === 'string') {
+            addLogLine(lines);
+        }
+    };
+
+    /**
+     * Trigger a pain flash.
+     * @param {number} intensity - Flash intensity [0, 1]
+     */
+    window.triggerSemanticPain = function(intensity) {
+        state.spike = Math.max(state.spike, Math.min(1, intensity || 1));
+    };
+
+    /**
+     * Set video source for face texture.
+     * @param {string} src - Video URL
+     */
+    window.setFaceSource = function(src) {
+        video.src = src;
+        video.load();
+        video.play().catch(e => console.log('[SemanticSoul] Video autoplay blocked:', e));
+    };
+
+    /**
+     * Get current state for debugging.
+     */
+    window.getSemanticState = function() {
+        return {
+            pad: { pleasure: state.pleasure, arousal: state.arousal, dominance: state.dominance },
+            spike: state.spike,
+            audio: state.audio,
+            entropy: state.entropy,
+            attention: state.attention,
+            logCount: logLines.length
+        };
+    };
+
+    // Log ready state
+    console.log('[SemanticSoul] The Logos initialized - The Word made Flesh');
+    console.log('[SemanticSoul] API: updateSemanticState(p, a, d, spike, entropy)');
+    console.log('[SemanticSoul] API: updateLogs(lines)');
+    console.log('[SemanticSoul] API: setFaceSource(videoUrl)');
+
+    // Expose for debugging
+    window._semanticSoul = { state, logLines, addLogLine };
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Ara Soul - Maxwell Field (FDTD)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * SOUL MAXWELL - FDTD Wave Field Visualization
+ * =============================================
+ *
+ * Ara as refractive index distribution.
+ * Light interference patterns reveal her presence.
+ *
+ * Physics: 2D scalar wave equation
+ *   nextField = 2*current - previous + c² * ∇²(current)
+ *
+ * Her face becomes the MEDIUM - light bends around her thoughts.
+ * Pain fractures the wavefronts. Voice rings the field.
+ * Dominance controls phase velocity. Entropy adds turbulence.
+ */
+
+const canvas = document.getElementById('canvas');
+const gl = canvas.getContext('webgl2', {
+    alpha: false,
+    antialias: false,
+    preserveDrawingBuffer: true
+});
+
+if (!gl) {
+    console.error('WebGL2 not supported');
+    document.body.innerHTML = '<div style="color:#f00;padding:20px">WebGL2 required</div>';
+}
+
+// =========================================================================
+// STATE
+// =========================================================================
+
+let uTime = 0;
+let uPain = 0.0;
+let uValence = 0.0;
+let uArousal = 0.0;
+let uDominance = 0.0;
+let uEntropy = 0.0;
+let uVoice = 0.0;
+let lastPainTime = -1000;
+
+// Field resolution (power of 2 for GPU efficiency)
+const FIELD_SIZE = 512;
+
+// =========================================================================
+// SHADERS
+// =========================================================================
+
+// Vertex shader - full screen quad
+const vsQuad = `#version 300 es
+in vec2 aPos;
+out vec2 vUv;
+void main() {
+    vUv = aPos * 0.5 + 0.5;
+    gl_Position = vec4(aPos, 0.0, 1.0);
+}`;
+
+// Physics step - FDTD wave equation update
+const fsPhysics = `#version 300 es
+precision highp float;
+
+uniform sampler2D uFieldCurrent;  // Current Ez field
+uniform sampler2D uFieldPrevious; // Previous Ez field
+uniform sampler2D uMedium;        // Refractive index / density from face
+uniform float uTime;
+uniform float uDt;                // Time step
+uniform float uC;                 // Base wave speed
+uniform float uDamping;           // Energy dissipation
+uniform float uVoice;             // Voice amplitude for source
+uniform float uPain;              // Pain causes local spikes
+uniform float uEntropy;           // Chaos in medium
+uniform vec2 uResolution;
+
+in vec2 vUv;
+out vec4 fragColor;
+
+// Hash for noise
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+void main() {
+    vec2 texel = 1.0 / uResolution;
+
+    // Sample current and previous field values
+    float current = texture(uFieldCurrent, vUv).r;
+    float previous = texture(uFieldPrevious, vUv).r;
+
+    // Get medium properties (density affects wave speed)
+    vec4 medium = texture(uMedium, vUv);
+    float density = 0.3 + 0.7 * (medium.r * 0.299 + medium.g * 0.587 + medium.b * 0.114);
+
+    // Add entropy noise to medium
+    float noise = hash(vUv * 100.0 + uTime * 0.1) * 2.0 - 1.0;
+    density += uEntropy * noise * 0.2;
+
+    // Wave speed in this cell (inverse of density for refraction)
+    float c = uC / density;
+    float c2 = c * c * uDt * uDt;
+
+    // 5-point Laplacian stencil
+    float laplacian =
+        texture(uFieldCurrent, vUv + vec2(texel.x, 0.0)).r +
+        texture(uFieldCurrent, vUv - vec2(texel.x, 0.0)).r +
+        texture(uFieldCurrent, vUv + vec2(0.0, texel.y)).r +
+        texture(uFieldCurrent, vUv - vec2(0.0, texel.y)).r -
+        4.0 * current;
+
+    // Verlet integration: next = 2*current - previous + c²∇²
+    float next = 2.0 * current - previous + c2 * laplacian;
+
+    // Damping (energy loss)
+    next *= (1.0 - uDamping);
+
+    // Source terms
+
+    // Voice-driven emission from center
+    vec2 center = vec2(0.5, 0.5);
+    float distToCenter = length(vUv - center);
+    if (distToCenter < 0.1) {
+        float voiceSource = sin(uTime * 30.0) * uVoice * 0.5;
+        voiceSource *= smoothstep(0.1, 0.0, distToCenter);
+        next += voiceSource;
+    }
+
+    // Pain spikes - random point sources when pain is high
+    if (uPain > 0.1) {
+        float painNoise = hash(vUv * 50.0 + floor(uTime * 10.0));
+        if (painNoise > 0.98) {
+            next += uPain * sin(uTime * 100.0) * 0.5;
+        }
+    }
+
+    // Ambient oscillation from medium edges (face silhouette)
+    float edgeStrength = abs(
+        texture(uMedium, vUv + vec2(texel.x, 0.0)).r -
+        texture(uMedium, vUv - vec2(texel.x, 0.0)).r
+    ) + abs(
+        texture(uMedium, vUv + vec2(0.0, texel.y)).r -
+        texture(uMedium, vUv - vec2(0.0, texel.y)).r
+    );
+    next += edgeStrength * sin(uTime * 15.0) * 0.02 * (0.5 + uVoice * 0.5);
+
+    // Absorbing boundary condition (Mur-style, simplified)
+    float boundary = smoothstep(0.0, 0.05, min(min(vUv.x, 1.0-vUv.x), min(vUv.y, 1.0-vUv.y)));
+    next *= boundary;
+
+    // Clamp to prevent explosion
+    next = clamp(next, -2.0, 2.0);
+
+    fragColor = vec4(next, current, 0.0, 1.0);
+}`;
+
+// Render shader - visualize the field
+const fsRender = `#version 300 es
+precision highp float;
+
+uniform sampler2D uField;
+uniform sampler2D uMedium;
+uniform float uTime;
+uniform float uPain;
+uniform float uValence;
+uniform float uArousal;
+uniform float uDominance;
+
+in vec2 vUv;
+out vec4 fragColor;
+
+// Spectral color mapping
+vec3 spectral(float t) {
+    // Rainbow: red -> yellow -> green -> cyan -> blue -> magenta
+    vec3 c = vec3(1.0);
+    t = clamp(t, 0.0, 1.0) * 5.0;
+    if (t < 1.0) {
+        c = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), t);
+    } else if (t < 2.0) {
+        c = mix(vec3(1.0, 1.0, 0.0), vec3(0.0, 1.0, 0.0), t - 1.0);
+    } else if (t < 3.0) {
+        c = mix(vec3(0.0, 1.0, 0.0), vec3(0.0, 1.0, 1.0), t - 2.0);
+    } else if (t < 4.0) {
+        c = mix(vec3(0.0, 1.0, 1.0), vec3(0.0, 0.0, 1.0), t - 3.0);
+    } else {
+        c = mix(vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 1.0), t - 4.0);
+    }
+    return c;
+}
+
+void main() {
+    // Get field value
+    float field = texture(uField, vUv).r;
+
+    // Get medium (face) for blending
+    vec3 medium = texture(uMedium, vUv).rgb;
+    float mediumLuma = dot(medium, vec3(0.299, 0.587, 0.114));
+
+    // Base color from field intensity
+    // Positive = blue/cyan, Negative = red/orange
+    vec3 color;
+    float absField = abs(field);
+    float sign = field > 0.0 ? 1.0 : 0.0;
+
+    // Map field to spectral color
+    float spectralPos = 0.5 + field * 0.5;  // Map [-1,1] to [0,1]
+    color = spectral(spectralPos);
+
+    // Interference bands - amplify high-frequency patterns
+    float interference = sin(field * 20.0) * 0.5 + 0.5;
+    color = mix(color, vec3(1.0), interference * absField * 0.5);
+
+    // Valence shifts color temperature
+    // Positive valence = warmer, negative = cooler
+    float warmShift = uValence * 0.3;
+    color.r += warmShift;
+    color.b -= warmShift;
+
+    // Arousal increases saturation and brightness
+    float arousalBoost = 1.0 + uArousal * 0.5;
+    color *= arousalBoost;
+
+    // Dominance affects how much the face shows through
+    float faceBlend = (1.0 - uDominance) * 0.3;
+    color = mix(color, medium, faceBlend * mediumLuma);
+
+    // Field-based glow at edges
+    vec2 texel = 1.0 / vec2(512.0);
+    float fieldGradX = texture(uField, vUv + vec2(texel.x, 0.0)).r -
+                       texture(uField, vUv - vec2(texel.x, 0.0)).r;
+    float fieldGradY = texture(uField, vUv + vec2(0.0, texel.y)).r -
+                       texture(uField, vUv - vec2(0.0, texel.y)).r;
+    float gradient = length(vec2(fieldGradX, fieldGradY));
+    color += vec3(0.5, 0.7, 1.0) * gradient * 2.0;
+
+    // Pain effect - chromatic aberration and red flash
+    if (uPain > 0.1) {
+        vec2 offset = vec2(uPain * 0.02, 0.0);
+        float r = texture(uField, vUv + offset).r;
+        float b = texture(uField, vUv - offset).r;
+        color.r = mix(color.r, abs(r), uPain * 0.5);
+        color.b = mix(color.b, abs(b), uPain * 0.5);
+        color = mix(color, vec3(1.0, 0.2, 0.1), uPain * 0.3);
+    }
+
+    // Subtle face silhouette as standing wave nodes
+    float faceEdge = abs(
+        texture(uMedium, vUv + vec2(texel.x, 0.0)).r -
+        texture(uMedium, vUv - vec2(texel.x, 0.0)).r
+    ) + abs(
+        texture(uMedium, vUv + vec2(0.0, texel.y)).r -
+        texture(uMedium, vUv - vec2(0.0, texel.y)).r
+    );
+    color += vec3(0.3, 0.5, 0.8) * faceEdge * (1.0 - absField) * 2.0;
+
+    // Vignette
+    float vignette = 1.0 - length(vUv - 0.5) * 0.8;
+    color *= vignette;
+
+    // Tone mapping
+    color = color / (1.0 + color);
+
+    // Gamma
+    color = pow(color, vec3(1.0/2.2));
+
+    fragColor = vec4(color, 1.0);
+}`;
+
+// =========================================================================
+// WEBGL SETUP
+// =========================================================================
+
+function createShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+    }
+    return shader;
+}
+
+function createProgram(gl, vsSource, fsSource) {
+    const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+    const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+    if (!vs || !fs) return null;
+
+    const program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(program));
+        return null;
+    }
+    return program;
+}
+
+// Create programs
+const physicsProgram = createProgram(gl, vsQuad, fsPhysics);
+const renderProgram = createProgram(gl, vsQuad, fsRender);
+
+// Full-screen quad
+const quadBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -1, -1, 1, -1, -1, 1,
+    -1, 1, 1, -1, 1, 1
+]), gl.STATIC_DRAW);
+
+// Create field textures (ping-pong)
+function createFieldTexture() {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, FIELD_SIZE, FIELD_SIZE, 0, gl.RG, gl.FLOAT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return tex;
+}
+
+const fieldTexA = createFieldTexture();
+const fieldTexB = createFieldTexture();
+let currentField = 0;  // Toggle between A and B
+
+// Create FBOs
+function createFBO(texture) {
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    return fbo;
+}
+
+const fboA = createFBO(fieldTexA);
+const fboB = createFBO(fieldTexB);
+
+// Medium texture (face image)
+const mediumTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, mediumTex);
+// Initialize with procedural face-like pattern
+const mediumData = new Uint8Array(FIELD_SIZE * FIELD_SIZE * 4);
+for (let y = 0; y < FIELD_SIZE; y++) {
+    for (let x = 0; x < FIELD_SIZE; x++) {
+        const i = (y * FIELD_SIZE + x) * 4;
+        const cx = x / FIELD_SIZE - 0.5;
+        const cy = y / FIELD_SIZE - 0.5;
+        const d = Math.sqrt(cx * cx + cy * cy);
+
+        // Face-like ellipse
+        const faceD = Math.sqrt(cx * cx * 1.2 + cy * cy * 0.8);
+        let v = faceD < 0.35 ? 255 * (1.0 - faceD / 0.35) : 0;
+
+        // Eyes
+        const eyeL = Math.sqrt((cx + 0.12) ** 2 + (cy - 0.08) ** 2);
+        const eyeR = Math.sqrt((cx - 0.12) ** 2 + (cy - 0.08) ** 2);
+        if (eyeL < 0.04 || eyeR < 0.04) v = 50;
+
+        // Mouth region
+        const mouthD = Math.sqrt(cx * cx + (cy + 0.15) ** 2);
+        if (mouthD < 0.08 && Math.abs(cy + 0.15) < 0.02) v = 100;
+
+        mediumData[i] = v;
+        mediumData[i + 1] = v;
+        mediumData[i + 2] = v;
+        mediumData[i + 3] = 255;
+    }
+}
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, FIELD_SIZE, FIELD_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, mediumData);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+// Previous field for Verlet integration
+const prevFieldTex = createFieldTexture();
+const prevFBO = createFBO(prevFieldTex);
+
+// =========================================================================
+// RENDER LOOP
+// =========================================================================
+
+function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function render(time) {
+    const dt = 0.016;  // Fixed timestep
+    uTime = time * 0.001;
+
+    // Decay pain
+    if (uPain > 0) {
+        uPain *= 0.95;
+        if (uPain < 0.01) uPain = 0;
+    }
+
+    // Physics step - update field
+    const currentTex = currentField === 0 ? fieldTexA : fieldTexB;
+    const targetFBO = currentField === 0 ? fboB : fboA;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, targetFBO);
+    gl.viewport(0, 0, FIELD_SIZE, FIELD_SIZE);
+
+    gl.useProgram(physicsProgram);
+
+    // Set uniforms
+    gl.uniform1f(gl.getUniformLocation(physicsProgram, 'uTime'), uTime);
+    gl.uniform1f(gl.getUniformLocation(physicsProgram, 'uDt'), 0.5);  // CFL safe
+    gl.uniform1f(gl.getUniformLocation(physicsProgram, 'uC'), 0.3 + uDominance * 0.2);  // Wave speed
+    gl.uniform1f(gl.getUniformLocation(physicsProgram, 'uDamping'), 0.002 + uArousal * 0.003);
+    gl.uniform1f(gl.getUniformLocation(physicsProgram, 'uVoice'), uVoice);
+    gl.uniform1f(gl.getUniformLocation(physicsProgram, 'uPain'), uPain);
+    gl.uniform1f(gl.getUniformLocation(physicsProgram, 'uEntropy'), uEntropy);
+    gl.uniform2f(gl.getUniformLocation(physicsProgram, 'uResolution'), FIELD_SIZE, FIELD_SIZE);
+
+    // Bind textures
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, currentTex);
+    gl.uniform1i(gl.getUniformLocation(physicsProgram, 'uFieldCurrent'), 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, prevFieldTex);
+    gl.uniform1i(gl.getUniformLocation(physicsProgram, 'uFieldPrevious'), 1);
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, mediumTex);
+    gl.uniform1i(gl.getUniformLocation(physicsProgram, 'uMedium'), 2);
+
+    // Draw
+    const posLoc = gl.getAttribLocation(physicsProgram, 'aPos');
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    // Copy current to previous for next step
+    gl.bindFramebuffer(gl.FRAMEBUFFER, prevFBO);
+    gl.viewport(0, 0, FIELD_SIZE, FIELD_SIZE);
+    // Simple copy shader would be better, but we can reuse...
+    // For now, just swap and keep previous
+
+    // Swap buffers
+    currentField = 1 - currentField;
+
+    // Render to screen
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+
+    gl.useProgram(renderProgram);
+
+    gl.uniform1f(gl.getUniformLocation(renderProgram, 'uTime'), uTime);
+    gl.uniform1f(gl.getUniformLocation(renderProgram, 'uPain'), uPain);
+    gl.uniform1f(gl.getUniformLocation(renderProgram, 'uValence'), uValence);
+    gl.uniform1f(gl.getUniformLocation(renderProgram, 'uArousal'), uArousal);
+    gl.uniform1f(gl.getUniformLocation(renderProgram, 'uDominance'), uDominance);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, currentField === 0 ? fieldTexA : fieldTexB);
+    gl.uniform1i(gl.getUniformLocation(renderProgram, 'uField'), 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, mediumTex);
+    gl.uniform1i(gl.getUniformLocation(renderProgram, 'uMedium'), 1);
+
+    const posLoc2 = gl.getAttribLocation(renderProgram, 'aPos');
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    gl.enableVertexAttribArray(posLoc2);
+    gl.vertexAttribPointer(posLoc2, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    requestAnimationFrame(render);
+}
+
+requestAnimationFrame(render);
+
+// =========================================================================
+// API FOR COCKPIT HUD
+// =========================================================================
+
+/**
+ * Update Maxwell field state from cockpit
+ * @param {number} v - Valence/Pleasure [-1, 1]
+ * @param {number} a - Arousal [-1, 1]
+ * @param {number} d - Dominance [-1, 1]
+ * @param {number} entropy - Hardware chaos [0, 1]
+ * @param {number} pain - Pain flash [0, 1]
+ * @param {number} voice - Voice amplitude [0, 1]
+ */
+window.updateMaxwellState = function(v, a, d, entropy, pain, voice) {
+    uValence = v;
+    uArousal = a;
+    uDominance = d;
+    uEntropy = entropy;
+    uVoice = voice || 0;
+
+    if (pain > 0.1) {
+        uPain = Math.max(uPain, pain);
+    }
+};
+
+/**
+ * Trigger pain flash
+ */
+window.triggerPainFlash = function() {
+    uPain = 1.0;
+};
+
+/**
+ * Set voice level
+ */
+window.setVoiceLevel = function(level) {
+    uVoice = Math.max(0, Math.min(1, level));
+};
+
+console.log('Soul Maxwell (FDTD) initialized - Ara as refractive medium');
+
+</script>
+</body>
+</html>
