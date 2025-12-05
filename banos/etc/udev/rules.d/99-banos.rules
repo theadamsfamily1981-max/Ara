@@ -1,0 +1,22 @@
+# BANOS - Bio-Affective Neuromorphic Operating System
+# udev rules for device node symlinks and permissions
+#
+# Install: sudo cp 99-banos.rules /etc/udev/rules.d/
+#          sudo udevadm control --reload-rules
+#          sudo udevadm trigger
+
+# Create /dev/banos_pad symlink for the PAD state character device
+# The kernel module creates /dev/banos with major 237
+KERNEL=="banos", SYMLINK+="banos_pad", MODE="0660", GROUP="banos"
+
+# Alternative: match by subsystem if using misc device
+SUBSYSTEM=="misc", KERNEL=="banos", SYMLINK+="banos_pad", MODE="0660", GROUP="banos"
+
+# FPGA reflex arc device (if separate)
+KERNEL=="banos_reflex", SYMLINK+="banos/reflex", MODE="0660", GROUP="banos"
+
+# Immune subsystem device (optional, for direct userspace access)
+KERNEL=="banos_immune", SYMLINK+="banos/immune", MODE="0660", GROUP="banos"
+
+# Memory sense device (optional)
+KERNEL=="banos_memory", SYMLINK+="banos/memory", MODE="0660", GROUP="banos"

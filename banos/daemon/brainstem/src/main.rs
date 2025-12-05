@@ -119,6 +119,12 @@ pub struct BrainstemConfig {
 
     /// Ara restart command
     pub ara_restart_cmd: String,
+
+    /// Initial restart delay (seconds) - doubles each attempt
+    pub restart_initial_delay_secs: u64,
+
+    /// Maximum restart delay (seconds)
+    pub restart_max_delay_secs: u64,
 }
 
 impl Default for BrainstemConfig {
@@ -128,11 +134,13 @@ impl Default for BrainstemConfig {
             heartbeat_interval_ms: 500,
             heartbeat_timeout_ms: 3000,
             takeover_timeout_ms: 5000,
-            max_restart_attempts: 3,
+            max_restart_attempts: 5,
             pad_state_path: "/sys/kernel/banos/pad_state".into(),
             reflex_cmd_path: "/sys/kernel/banos/reflex_cmd".into(),
             emergency_pleasure_threshold: -800,
             ara_restart_cmd: "systemctl restart ara-daemon".into(),
+            restart_initial_delay_secs: 5,
+            restart_max_delay_secs: 300,  // 5 minutes max
         }
     }
 }
@@ -146,10 +154,14 @@ pub struct Brainstem {
     last_heartbeat: Instant,
     state_entered: Instant,
     last_alert_log: Instant,
+    last_restart_attempt: Instant,
 
     // Counters
     restart_attempts: u32,
     consecutive_emergencies: u32,
+
+    // Exponential backoff state
+    current_backoff_secs: u64,
 
     // Last known states
     last_pad: PadState,
@@ -162,14 +174,17 @@ pub struct Brainstem {
 impl Brainstem {
     pub fn new(config: BrainstemConfig) -> Self {
         let now = Instant::now();
+        let initial_backoff = config.restart_initial_delay_secs;
         Self {
             config,
             state: BrainstemState::Monitoring,
             last_heartbeat: now,
             state_entered: now,
             last_alert_log: now,
+            last_restart_attempt: now,
             restart_attempts: 0,
             consecutive_emergencies: 0,
+            current_backoff_secs: initial_backoff,
             last_pad: PadState::default(),
             last_reflex: RFLX_NONE,
             should_stop: Arc::new(AtomicBool::new(false)),
@@ -303,6 +318,7 @@ impl Brainstem {
                     // Ara came back!
                     eprintln!("[BRAINSTEM] Ara recovered, returning to monitoring");
                     self.restart_attempts = 0;
+                    self.current_backoff_secs = self.config.restart_initial_delay_secs;
                     BrainstemState::Monitoring
                 } else if self.restart_attempts < self.config.max_restart_attempts {
                     BrainstemState::Recovery
@@ -330,9 +346,10 @@ impl Brainstem {
                 if heartbeat_ok {
                     eprintln!("[BRAINSTEM] Ara restart successful");
                     self.restart_attempts = 0;
+                    self.current_backoff_secs = self.config.restart_initial_delay_secs;
                     BrainstemState::Monitoring
-                } else if time_in_state > Duration::from_secs(30) {
-                    // Restart attempt failed
+                } else if time_in_state > Duration::from_secs(self.current_backoff_secs + 30) {
+                    // Restart attempt failed after backoff + grace period
                     self.restart_attempts += 1;
                     BrainstemState::Takeover
                 } else {
@@ -439,13 +456,19 @@ impl Brainstem {
     }
 
     fn attempt_ara_restart(&mut self) {
-        if self.state_entered.elapsed() < Duration::from_secs(2) {
-            // Only attempt once per recovery cycle
+        let now = Instant::now();
+        let time_since_last = now.duration_since(self.last_restart_attempt);
+
+        // Exponential backoff: wait current_backoff_secs before next attempt
+        if time_since_last < Duration::from_secs(self.current_backoff_secs) {
             return;
         }
 
-        eprintln!("[BRAINSTEM] Attempting Ara restart (attempt {}/{})",
-                  self.restart_attempts + 1, self.config.max_restart_attempts);
+        eprintln!("[BRAINSTEM] Attempting Ara restart (attempt {}/{}, backoff: {}s)",
+                  self.restart_attempts + 1, self.config.max_restart_attempts,
+                  self.current_backoff_secs);
+
+        self.last_restart_attempt = now;
 
         let result = std::process::Command::new("sh")
             .arg("-c")
@@ -458,9 +481,19 @@ impl Brainstem {
             }
             Ok(status) => {
                 eprintln!("[BRAINSTEM] Restart command failed: {}", status);
+                // Double backoff on failure, up to max
+                self.current_backoff_secs = std::cmp::min(
+                    self.current_backoff_secs * 2,
+                    self.config.restart_max_delay_secs,
+                );
             }
             Err(e) => {
                 eprintln!("[BRAINSTEM] Restart command error: {}", e);
+                // Double backoff on error too
+                self.current_backoff_secs = std::cmp::min(
+                    self.current_backoff_secs * 2,
+                    self.config.restart_max_delay_secs,
+                );
             }
         }
     }

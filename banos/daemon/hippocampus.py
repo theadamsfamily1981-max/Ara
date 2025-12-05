@@ -30,6 +30,10 @@ from typing import Optional, List, Dict, Any
 from collections import deque
 
 
+# Schema version - bump when HippocampusEntry structure changes
+HIPPOCAMPUS_SCHEMA_VERSION = 1
+
+
 class LogLevel(Enum):
     """Logging importance levels"""
     TRACE = 0       # Every tick (only in debug)
@@ -42,6 +46,9 @@ class LogLevel(Enum):
 @dataclass
 class HippocampusEntry:
     """A single memory entry in the daily log"""
+    # Schema version for forward compatibility
+    schema_version: int
+
     timestamp_ns: int
     timestamp_iso: str
     level: str
@@ -158,6 +165,7 @@ class Hippocampus:
 
         # Build entry
         entry = HippocampusEntry(
+            schema_version=HIPPOCAMPUS_SCHEMA_VERSION,
             timestamp_ns=now_ns,
             timestamp_iso=now.isoformat(),
             level=level.name,
