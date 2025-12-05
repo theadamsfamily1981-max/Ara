@@ -37,4 +37,9 @@ setup(
             "pytest-cov>=4.1.0",
         ],
     },
+    entry_points={
+        "console_scripts": [
+            "ara-meta=ara.meta.cli:main",
+        ],
+    },
 )
