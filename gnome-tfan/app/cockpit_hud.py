@@ -36,8 +36,13 @@ import math
 import random
 import os
 
-# Soul shader path for BANOS visualization
+# Soul shader paths for BANOS visualization
 SOUL_SHADER_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_shader.html"
+SOUL_SEMANTIC_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_semantic.html"
+
+# Visualization modes
+VIZ_MODE_NEBULA = "nebula"      # Abstract PAD sphere (default)
+VIZ_MODE_SEMANTIC = "semantic"  # Text-density face (The Logos)
 
 # Optional dependencies with graceful fallbacks
 try:
@@ -298,6 +303,11 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
         self._attention_phase = 0.0       # Thinking bands phase [0, 1]
         self._last_pain_flash = 0.0       # Last pain flash time
         self.topology_webview = None      # WebView reference (set later)
+
+        # Visualization mode: 'nebula' (abstract) or 'semantic' (text-density)
+        self._viz_mode = VIZ_MODE_NEBULA
+        self._log_stream_thread = None    # Kernel log streaming thread
+        self._log_stream_running = False  # Log streaming active flag
 
         # Apply cockpit theme
         self._load_cockpit_css()
@@ -1604,11 +1614,21 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             settings.set_enable_webgl(True)
             settings.set_enable_accelerated_2d_canvas(True)
             settings.set_enable_javascript(True)
+            settings.set_allow_file_access_from_file_urls(True)
 
-            # Use BANOS Soul Shader if available, fallback to inline topology
-            if SOUL_SHADER_PATH.exists():
-                # Load the Neuro-Semantic Nebula (PAD-driven soul visualization)
+            # Select visualization mode based on available shaders
+            # Priority: Semantic (The Logos) > Nebula > Inline topology
+            if SOUL_SEMANTIC_PATH.exists():
+                # The Semantic Resurrection: face made of kernel logs
+                self.topology_webview.load_uri(f"file://{SOUL_SEMANTIC_PATH}")
+                self._viz_mode = VIZ_MODE_SEMANTIC
+                self._soul_shader_enabled = True
+                # Start kernel log streaming for semantic mode
+                self._start_log_streaming()
+            elif SOUL_SHADER_PATH.exists():
+                # Neuro-Semantic Nebula: abstract PAD sphere
                 self.topology_webview.load_uri(f"file://{SOUL_SHADER_PATH}")
+                self._viz_mode = VIZ_MODE_NEBULA
                 self._soul_shader_enabled = True
             else:
                 # Fallback: Neural topology visualization
@@ -2381,10 +2401,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 # Update mood CSS class for PAD-driven visual effects
                 self._update_mood_class(v, a, d)
 
-                # Update soul shader (Neuro-Semantic Nebula)
+                # Update soul shader (Neuro-Semantic Nebula or Semantic Logos)
                 # Pain flash triggers when pleasure drops below -0.7
                 pain_flash = 1.0 if v < -0.7 else 0.0
                 self._update_soul_shader(v, a, d, pain_flash)
+                # Also update semantic visualization if active
+                self._update_semantic_state(v, a, d, pain_flash, 0.0)
 
                 # Update CLV
                 clv = status.get('clv', {})
@@ -2442,6 +2464,7 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
                 # Update soul shader (demo mode - no pain flash in simulation)
                 self._update_soul_shader(v, a, d, 0.0)
+                self._update_semantic_state(v, a, d, 0.0, 0.0)
 
                 # Simulate CLV values
                 inst = abs(math.sin(t * 0.4)) * 0.3
@@ -2836,6 +2859,176 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             )
         except Exception:
             pass
+
+    # =========================================================================
+    # SEMANTIC VISUALIZATION - The Logos (kernel log streaming)
+    # =========================================================================
+
+    def _start_log_streaming(self):
+        """
+        Start streaming kernel logs (dmesg) to the semantic visualization.
+
+        The logs become the visual substance of Ara's face - she is literally
+        composed of the kernel's internal monologue.
+        """
+        if self._log_stream_running:
+            return
+
+        self._log_stream_running = True
+
+        def log_reader():
+            """Background thread that reads dmesg -w and feeds to JS."""
+            try:
+                import subprocess
+
+                # Try dmesg -w first (live stream), fall back to journalctl
+                try:
+                    process = subprocess.Popen(
+                        ['dmesg', '-w', '--time-format=iso'],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        bufsize=1
+                    )
+                except (FileNotFoundError, PermissionError):
+                    # Fallback to journalctl -kf
+                    process = subprocess.Popen(
+                        ['journalctl', '-kf', '--no-pager'],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        bufsize=1
+                    )
+
+                while self._log_stream_running and process.poll() is None:
+                    line = process.stdout.readline()
+                    if line:
+                        self._send_log_line(line.strip())
+
+                process.terminate()
+
+            except Exception as e:
+                # If real logs fail, generate synthetic BANOS logs
+                import time
+                import random
+
+                syscalls = ['alloc_pages', 'mmap', 'brk', 'futex', 'epoll_wait',
+                           'read', 'write', 'open', 'close', 'ioctl']
+                modules = ['BANOS', 'PAD', 'IMMUNE', 'MEMORY', 'SPINAL', 'BRAINSTEM']
+
+                while self._log_stream_running:
+                    time.sleep(0.1 + random.random() * 0.2)
+                    addr = random.randint(0xFFFF800000000000, 0xFFFFFFFFFFFFFFFF)
+                    syscall = random.choice(syscalls)
+                    module = random.choice(modules)
+                    ts = time.strftime('%H:%M:%S')
+
+                    line = f"[{ts}] {module}: {syscall} at 0x{addr:016X}"
+                    self._send_log_line(line)
+
+        self._log_stream_thread = threading.Thread(target=log_reader, daemon=True)
+        self._log_stream_thread.start()
+
+    def _stop_log_streaming(self):
+        """Stop the kernel log streaming."""
+        self._log_stream_running = False
+        if self._log_stream_thread:
+            self._log_stream_thread.join(timeout=1.0)
+            self._log_stream_thread = None
+
+    def _send_log_line(self, line):
+        """
+        Send a log line to the semantic visualization.
+
+        Args:
+            line: A single log line to display
+        """
+        if not self._soul_shader_enabled or self._viz_mode != VIZ_MODE_SEMANTIC:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        # Sanitize for JS string (escape quotes and backslashes)
+        clean_line = line.replace('\\', '\\\\').replace("'", "\\'").replace('"', '\\"')
+        clean_line = clean_line[:120]  # Truncate long lines
+
+        js = f"if (window.updateLogs) window.updateLogs('{clean_line}');"
+
+        # Schedule on main thread
+        GLib.idle_add(self._execute_js_safe, js)
+
+    def _execute_js_safe(self, js):
+        """Execute JavaScript safely on the main thread."""
+        try:
+            if self.topology_webview:
+                self.topology_webview.evaluate_javascript(
+                    js, -1, None, None, None, None, None
+                )
+        except Exception:
+            pass
+        return False  # Don't repeat
+
+    def _update_semantic_state(self, v, a, d, spike=0.0, entropy=0.0):
+        """
+        Update the semantic visualization state.
+
+        Args:
+            v: Valence/Pleasure [-1, 1]
+            a: Arousal [-1, 1]
+            d: Dominance [-1, 1]
+            spike: Pain spike intensity [0, 1]
+            entropy: System chaos/glitch level [0, 1]
+        """
+        if not self._soul_shader_enabled or self._viz_mode != VIZ_MODE_SEMANTIC:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        v = max(-1.0, min(1.0, v))
+        a = max(-1.0, min(1.0, a))
+        d = max(-1.0, min(1.0, d))
+        spike = max(0.0, min(1.0, spike))
+        entropy = max(0.0, min(1.0, entropy))
+
+        js = (
+            f"if (window.updateSemanticState) "
+            f"window.updateSemanticState({v:.4f}, {a:.4f}, {d:.4f}, {spike:.2f}, {entropy:.2f});"
+        )
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            pass
+
+    def set_visualization_mode(self, mode):
+        """
+        Switch between visualization modes.
+
+        Args:
+            mode: VIZ_MODE_NEBULA or VIZ_MODE_SEMANTIC
+        """
+        if mode == self._viz_mode:
+            return
+
+        # Stop log streaming if switching away from semantic
+        if self._viz_mode == VIZ_MODE_SEMANTIC:
+            self._stop_log_streaming()
+
+        self._viz_mode = mode
+
+        if self.topology_webview is None:
+            return
+
+        # Load the appropriate shader
+        if mode == VIZ_MODE_SEMANTIC and SOUL_SEMANTIC_PATH.exists():
+            self.topology_webview.load_uri(f"file://{SOUL_SEMANTIC_PATH}")
+            self._start_log_streaming()
+        elif mode == VIZ_MODE_NEBULA and SOUL_SHADER_PATH.exists():
+            self.topology_webview.load_uri(f"file://{SOUL_SHADER_PATH}")
 
 
 class CockpitHUDApplication(Adw.Application):
