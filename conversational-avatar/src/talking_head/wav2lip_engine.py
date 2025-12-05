@@ -433,6 +433,39 @@ class Wav2LipTalkingHead:
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # PRE-FLIGHT RESOURCE CHECK
+        # Prevents OOM by checking resources before starting generation
+        try:
+            from ara.embodied import can_generate_video, get_recommended_quality, check_resources
+
+            # Map quality_mode to resource gate quality
+            quality_map = {"standard": "720p", "high": "1080p"}
+            requested_quality = quality_map.get(self.quality_mode, "720p")
+
+            if not can_generate_video(requested_quality):
+                # Check if we can generate at a lower quality
+                recommended = get_recommended_quality()
+                if recommended == "skip":
+                    resources = check_resources()
+                    raise RuntimeError(
+                        f"Insufficient resources for video generation. "
+                        f"GPU memory: {resources.get('gpu_memory_available_gb', 0):.1f}GB, "
+                        f"CLV resource: {resources.get('clv_resource', 0):.2f}. "
+                        f"Reason: {resources.get('reason', 'unknown')}"
+                    )
+                else:
+                    # Warn but continue with lower quality recommendation
+                    logger.warning(
+                        f"Requested quality '{self.quality_mode}' exceeds resources. "
+                        f"Recommended: {recommended}. Proceeding with caution."
+                    )
+            else:
+                logger.debug(f"Resource check passed for {requested_quality} video generation")
+
+        except ImportError:
+            # Resource gate not available, proceed without check
+            logger.debug("Resource gate not available, skipping pre-flight check")
+
         # Use default FPS if not specified
         if fps is None:
             fps = self.fps
