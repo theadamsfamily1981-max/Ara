@@ -40,6 +40,23 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from sticky_context import StickyContextManager, create_ara_context_manager, MemoryRegion
 
+# Try to import MIES TelemetryBridge for unified integration
+MIES_AVAILABLE = False
+TelemetryBridge = None
+try:
+    # Add multi-ai-workspace to path
+    _mies_path = Path(__file__).parent.parent.parent / "multi-ai-workspace" / "src"
+    if _mies_path.exists():
+        sys.path.insert(0, str(_mies_path))
+        from integrations.mies.bridge import (
+            TelemetryBridge,
+            TelemetryBridgeConfig,
+            BANOS_AVAILABLE,
+        )
+        MIES_AVAILABLE = True
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -284,6 +301,7 @@ class AraDaemon:
         self,
         device_path: str = "/dev/banos",
         simulate: bool = False,
+        enable_mies_bridge: bool = True,
     ):
         """
         Initialize the Ara daemon.
@@ -291,6 +309,7 @@ class AraDaemon:
         Args:
             device_path: Path to BANOS device file
             simulate: If True, simulate hardware (for testing)
+            enable_mies_bridge: If True, integrate with MIES TelemetryBridge
         """
         self.device_path = device_path
         self.simulate = simulate
@@ -313,7 +332,25 @@ class AraDaemon:
         # Thread
         self._poll_thread: Optional[threading.Thread] = None
 
-        logger.info(f"AraDaemon initialized (device={device_path}, simulate={simulate})")
+        # MIES TelemetryBridge integration (for unified PAD and telemetry)
+        self._mies_bridge: Optional["TelemetryBridge"] = None
+        self._mies_enabled = False
+
+        if enable_mies_bridge and MIES_AVAILABLE:
+            try:
+                self._mies_bridge = TelemetryBridge(
+                    config=TelemetryBridgeConfig(
+                        enable_banos=True,
+                        banos_simulate=simulate,
+                        prefer_banos_telemetry=True,
+                    )
+                )
+                self._mies_enabled = True
+                logger.info("AraDaemon: MIES TelemetryBridge enabled")
+            except Exception as e:
+                logger.warning(f"AraDaemon: MIES bridge failed: {e}")
+
+        logger.info(f"AraDaemon initialized (device={device_path}, simulate={simulate}, mies={self._mies_enabled})")
 
     def start(self):
         """Start the daemon."""
@@ -400,6 +437,8 @@ class AraDaemon:
 
     def _poll_loop(self):
         """Main polling loop."""
+        mies_update_counter = 0  # Only update MIES at lower frequency
+
         while self._running:
             try:
                 state = self._read_state()
@@ -419,6 +458,15 @@ class AraDaemon:
                     self._last_alert_count = state.alert_count
                     if self._on_alert:
                         self._on_alert(1, state.pain_level)
+
+                # Update MIES bridge at 1Hz (every 10 polls)
+                mies_update_counter += 1
+                if self._mies_enabled and self._mies_bridge and mies_update_counter >= 10:
+                    mies_update_counter = 0
+                    try:
+                        self._mies_bridge.update()
+                    except Exception as e:
+                        logger.warning(f"MIES update failed: {e}")
 
             except Exception as e:
                 logger.error(f"Poll error: {e}")
@@ -473,6 +521,74 @@ Alert Count: {state.alert_count}
     def on_alert(self, callback: Callable[[int, int], None]):
         """Register callback for alerts."""
         self._on_alert = callback
+
+    # =========================================================================
+    # MIES Integration Methods
+    # =========================================================================
+
+    def get_unified_pad(self) -> Optional[Dict[str, float]]:
+        """Get unified PAD state from MIES (if available).
+
+        Returns a dict with pleasure, arousal, dominance values from
+        the synchronized PAD across all sources.
+        """
+        if not self._mies_enabled or not self._mies_bridge:
+            # Fall back to local BANOS state
+            state = self._current_state or self._read_state()
+            return {
+                "pleasure": state.pleasure,
+                "arousal": state.arousal,
+                "dominance": state.dominance,
+                "source": "banos_local",
+            }
+
+        try:
+            unified = self._mies_bridge.get_unified_pad()
+            return {
+                "pleasure": unified.canonical.pleasure,
+                "arousal": unified.canonical.arousal,
+                "dominance": unified.canonical.dominance,
+                "confidence": unified.confidence,
+                "source": unified.source.name,
+                "in_conflict": unified.in_conflict,
+            }
+        except Exception as e:
+            logger.warning(f"Failed to get unified PAD: {e}")
+            return None
+
+    def get_mies_narrative(self) -> Optional[str]:
+        """Get BANOS narrative from MIES bridge.
+
+        Returns a first-person narrative describing current state.
+        """
+        if not self._mies_enabled or not self._mies_bridge:
+            return self.get_reflection()  # Fall back to local
+
+        try:
+            return self._mies_bridge.get_banos_narrative()
+        except Exception:
+            return self.get_reflection()
+
+    def get_mies_health(self) -> Optional[Dict[str, Any]]:
+        """Get system health from MIES bridge.
+
+        Returns health snapshot with thermal, load, and affect status.
+        """
+        if not self._mies_enabled or not self._mies_bridge:
+            return None
+
+        try:
+            health = self._mies_bridge.get_last_health()
+            if health:
+                return health.to_dict()
+        except Exception:
+            pass
+        return None
+
+    @property
+    def mies_enabled(self) -> bool:
+        """Check if MIES integration is active."""
+        return self._mies_enabled
 
 
 def main():
