@@ -328,6 +328,145 @@ def cmd_recommend(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_plan(args: argparse.Namespace) -> int:
+    """Plan workflow using shadow models."""
+    from .shadow.planner import get_planner, WorkflowPlanner
+    from .shadow.profiles import seed_default_profiles, get_profile_manager
+
+    # Seed profiles if needed
+    pm = get_profile_manager()
+    seed_default_profiles(pm)
+
+    planner = get_planner()
+    query = args.query
+
+    if not query:
+        query = input("What are you trying to do? > ").strip()
+        if not query:
+            print("No query provided.")
+            return 1
+
+    # Plan
+    intent = args.intent
+    plan = planner.plan_from_query(query, intent=intent, mode=args.mode)
+
+    if args.json:
+        print(json.dumps(plan.to_dict(), indent=2, default=str))
+    else:
+        print(f"\nIntent: {plan.intent}")
+        print(f"Mode: {plan.planning_mode}")
+        print()
+        print("Candidate workflows (simulated):")
+        print()
+
+        # Show chosen
+        print(f"[CHOSEN] {' → '.join(plan.teachers)}")
+        print(f"  expected_reward: {plan.expected_reward:.0%}")
+        print(f"  expected_latency: {plan.expected_latency_sec:.1f}s")
+        print(f"  confidence: {plan.confidence:.0%}")
+        print()
+
+        # Show alternatives
+        for i, alt in enumerate(plan.alternatives[:2], 1):
+            print(f"[ALT {i}] {' → '.join(alt.teachers)}")
+            print(f"  expected_reward: {alt.expected_reward:.0%}")
+            print(f"  expected_latency: {alt.expected_latency_sec:.1f}s")
+            if alt.notes:
+                print(f"  notes: {alt.notes[0]}")
+            print()
+
+        print(f"Chosen: {' → '.join(plan.teachers)} (policy {plan.policy_version})")
+
+    return 0
+
+
+def cmd_shadow(args: argparse.Namespace) -> int:
+    """Manage shadow teacher profiles."""
+    from .shadow.profiles import get_profile_manager, seed_default_profiles
+
+    pm = get_profile_manager()
+
+    if args.seed:
+        count = seed_default_profiles(pm)
+        print(f"Seeded {count} default profiles.")
+        return 0
+
+    if args.teacher:
+        profiles = pm.get_profiles_for_teacher(args.teacher)
+        if not profiles:
+            print(f"No profiles found for teacher: {args.teacher}")
+            return 0
+
+        if args.json:
+            print(json.dumps([p.to_dict() for p in profiles], indent=2, default=str))
+        else:
+            print(f"Profiles for {args.teacher}:")
+            print("-" * 40)
+            for p in profiles:
+                print(f"  Intent: {p.intent}")
+                print(f"    Success rate: {p.success_rate:.0%}")
+                print(f"    Avg reward: {p.avg_reward:.0%}")
+                print(f"    Avg latency: {p.avg_latency_sec:.1f}s")
+                print(f"    Samples: {p.sample_count}")
+                print()
+        return 0
+
+    # Default: show status
+    summary = pm.get_summary()
+
+    if args.json:
+        print(json.dumps(summary, indent=2, default=str))
+    else:
+        print("Shadow Teacher Profiles")
+        print("=" * 40)
+        print(f"Total profiles: {summary['total_profiles']}")
+        print(f"Total samples: {summary['total_samples']}")
+        print(f"Teachers: {', '.join(summary['teachers'])}")
+        print(f"Intents: {', '.join(summary['intents'])}")
+        print()
+        print("Run with --teacher <name> to see specific profiles.")
+        print("Run with --seed to initialize default profiles.")
+
+    return 0
+
+
+def cmd_curiosity(args: argparse.Namespace) -> int:
+    """View curiosity hotspots (shadow model disagreements)."""
+    from .shadow.disagreement import get_disagreement_tracker
+
+    tracker = get_disagreement_tracker()
+    hotspots = tracker.get_curiosity_hotspots(limit=args.limit)
+
+    if args.json:
+        print(json.dumps([h.to_dict() for h in hotspots], indent=2, default=str))
+    else:
+        if not hotspots:
+            print("No curiosity hotspots found.")
+            print("(These appear when shadow models disagree on predictions)")
+            return 0
+
+        print("Curiosity Hotspots")
+        print("=" * 40)
+        print("(Regions where shadow models strongly disagree)")
+        print()
+
+        for h in hotspots:
+            print(f"[{h.id}] Intent: {h.intent}")
+            print(f"  Disagreement score: {h.disagreement_score:.0%}")
+            print(f"  Plan A: {h.plan_a} (predicted {h.plan_a_reward:.0%})")
+            print(f"  Plan B: {h.plan_b} (predicted {h.plan_b_reward:.0%})")
+            print(f"  Status: {h.status}")
+            if h.query_summary:
+                print(f"  Context: {h.query_summary[:50]}...")
+            print()
+
+        summary = tracker.get_summary()
+        print(f"Total: {summary['total_records']} recorded, "
+              f"{summary['open']} open, {summary['resolved']} resolved")
+
+    return 0
+
+
 def cmd_config(args: argparse.Namespace) -> int:
     """Show or create configuration."""
     if args.create:
@@ -396,6 +535,30 @@ def main(argv: Optional[list] = None) -> int:
     recommend_parser = subparsers.add_parser("recommend", help="Get recommendations")
     recommend_parser.add_argument("--json", action="store_true", help="Output as JSON")
     recommend_parser.set_defaults(func=cmd_recommend)
+
+    # Plan command (Shadow Teachers)
+    plan_parser = subparsers.add_parser("plan", help="Plan workflow using shadow models")
+    plan_parser.add_argument("query", nargs="?", default="",
+                             help="Query to plan for (or enter interactively)")
+    plan_parser.add_argument("--intent", type=str, help="Override intent classification")
+    plan_parser.add_argument("--mode", choices=["cheap", "standard", "thorough"],
+                             default="standard", help="Planning mode")
+    plan_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    plan_parser.set_defaults(func=cmd_plan)
+
+    # Shadow command (manage shadow profiles)
+    shadow_parser = subparsers.add_parser("shadow", help="Manage shadow teacher profiles")
+    shadow_parser.add_argument("--status", action="store_true", help="Show profile status")
+    shadow_parser.add_argument("--seed", action="store_true", help="Seed default profiles")
+    shadow_parser.add_argument("--teacher", type=str, help="Show specific teacher profiles")
+    shadow_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    shadow_parser.set_defaults(func=cmd_shadow)
+
+    # Curiosity command (disagreement hotspots)
+    curiosity_parser = subparsers.add_parser("curiosity", help="View curiosity hotspots")
+    curiosity_parser.add_argument("--limit", type=int, default=10, help="Max hotspots to show")
+    curiosity_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    curiosity_parser.set_defaults(func=cmd_curiosity)
 
     # Config command
     config_parser = subparsers.add_parser("config", help="Show/create configuration")
