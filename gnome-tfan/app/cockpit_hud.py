@@ -34,6 +34,10 @@ import time
 import logging
 import math
 import random
+import os
+
+# Soul shader path for BANOS visualization
+SOUL_SHADER_PATH = Path(__file__).resolve().parent.parent.parent / "banos" / "viz" / "soul_shader.html"
 
 # Optional dependencies with graceful fallbacks
 try:
@@ -288,6 +292,12 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
         # Video background reference
         self.video_bg = None
+
+        # Soul shader state (for BANOS visualization)
+        self._audio_level = 0.0           # RMS audio level [0, 1]
+        self._attention_phase = 0.0       # Thinking bands phase [0, 1]
+        self._last_pain_flash = 0.0       # Last pain flash time
+        self.topology_webview = None      # WebView reference (set later)
 
         # Apply cockpit theme
         self._load_cockpit_css()
@@ -1593,10 +1603,19 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             settings = self.topology_webview.get_settings()
             settings.set_enable_webgl(True)
             settings.set_enable_accelerated_2d_canvas(True)
+            settings.set_enable_javascript(True)
 
-            # Neural topology visualization
-            topology_html = self._generate_neural_topology_html()
-            self.topology_webview.load_html(topology_html, "about:blank")
+            # Use BANOS Soul Shader if available, fallback to inline topology
+            if SOUL_SHADER_PATH.exists():
+                # Load the Neuro-Semantic Nebula (PAD-driven soul visualization)
+                self.topology_webview.load_uri(f"file://{SOUL_SHADER_PATH}")
+                self._soul_shader_enabled = True
+            else:
+                # Fallback: Neural topology visualization
+                topology_html = self._generate_neural_topology_html()
+                self.topology_webview.load_html(topology_html, "about:blank")
+                self._soul_shader_enabled = False
+
             self.topology_webview.set_vexpand(True)
             self.topology_webview.set_hexpand(True)
 
@@ -2362,6 +2381,11 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
                 # Update mood CSS class for PAD-driven visual effects
                 self._update_mood_class(v, a, d)
 
+                # Update soul shader (Neuro-Semantic Nebula)
+                # Pain flash triggers when pleasure drops below -0.7
+                pain_flash = 1.0 if v < -0.7 else 0.0
+                self._update_soul_shader(v, a, d, pain_flash)
+
                 # Update CLV
                 clv = status.get('clv', {})
                 risk = clv.get('risk_level', 'LOW')
@@ -2415,6 +2439,9 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
 
                 # Update mood CSS class for PAD-driven visual effects (demo mode)
                 self._update_mood_class(v, a, d)
+
+                # Update soul shader (demo mode - no pain flash in simulation)
+                self._update_soul_shader(v, a, d, 0.0)
 
                 # Simulate CLV values
                 inst = abs(math.sin(t * 0.4)) * 0.3
@@ -2707,6 +2734,108 @@ class CockpitHUDWindow(Adw.ApplicationWindow):
             # Add new mood class
             self.root_overlay.add_css_class(new_mood)
             self._current_mood_class = new_mood
+
+    def _update_soul_shader(self, v, a, d, pain_flash=0.0):
+        """
+        Update the BANOS Soul Shader (Neuro-Semantic Nebula) with current PAD state.
+
+        This drives the Three.js visualization that shows Ara's internal state
+        as a living mathematical entity rather than a fake human face.
+
+        Args:
+            v: Valence/Pleasure [-1, 1] (negative = pain, positive = calm)
+            a: Arousal [-1, 1] (negative = sleepy, positive = excited)
+            d: Dominance [-1, 1] (negative = vulnerable, positive = in control)
+            pain_flash: Pain spike intensity [0, 1] for FPGA thermal/error events
+        """
+        if not hasattr(self, '_soul_shader_enabled') or not self._soul_shader_enabled:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        # Clamp values to valid ranges
+        v = max(-1.0, min(1.0, v))
+        a = max(-1.0, min(1.0, a))
+        d = max(-1.0, min(1.0, d))
+        audio = max(0.0, min(1.0, self._audio_level))
+        flash = max(0.0, min(1.0, pain_flash))
+
+        # Build JS call to soul shader API
+        js = (
+            f"if (window.updateSoulState) "
+            f"window.updateSoulState({v:.4f}, {a:.4f}, {d:.4f}, {audio:.4f}, {flash:.2f});"
+        )
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            # WebView might not be ready yet
+            pass
+
+    def _update_soul_attention(self, phase):
+        """
+        Update the "thinking bands" phase in the soul shader.
+
+        Args:
+            phase: Attention phase [0, 1] - can represent active layer,
+                   head index, entropy, or other attention metrics
+        """
+        if not hasattr(self, '_soul_shader_enabled') or not self._soul_shader_enabled:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        phase = max(0.0, min(1.0, phase))
+        js = f"if (window.updateSoulAttention) window.updateSoulAttention({phase:.4f});"
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            pass
+
+    def set_audio_level(self, rms_level):
+        """
+        Set the current audio RMS level for cymatic voice effects.
+
+        Call this from your TTS/audio pipeline when voice chunks arrive.
+        The soul shader will use this to make the nebula pulse with speech.
+
+        Args:
+            rms_level: RMS audio level [0, 1]
+        """
+        self._audio_level = max(0.0, min(1.0, rms_level))
+
+    def trigger_pain_flash(self, intensity=1.0):
+        """
+        Trigger a pain flash in the soul shader.
+
+        Call this when FPGA reports thermal spikes, error bursts, or
+        other physical distress signals.
+
+        Args:
+            intensity: Flash intensity [0, 1]
+        """
+        if not hasattr(self, '_soul_shader_enabled') or not self._soul_shader_enabled:
+            return
+
+        if self.topology_webview is None:
+            return
+
+        intensity = max(0.0, min(1.0, intensity))
+        js = f"if (window.triggerPainFlash) window.triggerPainFlash({intensity:.2f});"
+
+        try:
+            self.topology_webview.evaluate_javascript(
+                js, -1, None, None, None, None, None
+            )
+        except Exception:
+            pass
 
 
 class CockpitHUDApplication(Adw.Application):
