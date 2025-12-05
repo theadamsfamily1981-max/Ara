@@ -63,8 +63,7 @@
 struct banos_shared_mem {
     /* FPGA state (updated by driver) */
     u32 neural_state;
-    u16 pain_level;
-    u16 reserved1;
+    u32 pain_level;      /* 32-bit to match FPGA ABI - was u16, caused overflow/numbness */
     u32 reflex_log;
 
     /* PAD state (computed by driver) */
@@ -163,12 +162,13 @@ static void ara_compute_pad(struct ara_dev *ara)
     s32 p, a, d;
 
     /* Read raw values from FPGA */
-    sh->pain_level = ara_read_reg(ara, REG_PAIN_LEVEL) & 0xFFFF;
+    sh->pain_level = ara_read_reg(ara, REG_PAIN_LEVEL);  /* Full 32-bit, no mask */
     sh->neural_state = ara_read_reg(ara, REG_NEURAL_STATE);
 
     /* Pleasure: inverse of pain */
-    /* pain_level 0-65535 -> pleasure -256 to +256 */
-    p = 256 - ((s32)sh->pain_level >> 7);
+    /* pain_level 0-4294967295 (32-bit) -> pleasure -256 to +256 */
+    /* Scale down: pain >> 15 gives 0-131071, then subtract from 256 */
+    p = 256 - ((s32)(sh->pain_level >> 15));
     if (p > 255) p = 255;
     if (p < -256) p = -256;
     sh->pleasure = (s16)p;

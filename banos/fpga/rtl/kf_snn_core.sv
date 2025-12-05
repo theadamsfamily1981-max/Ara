@@ -65,14 +65,19 @@ module kf_snn_core
     // =========================================================================
     // MEMORY ARRAYS
     // =========================================================================
+    // Use UltraRAM on VU7P+ (SB-852 has 270Mb URAM) for ~4x higher neuron density
+    // For smaller FPGAs, change to: (* ram_style = "block" *)
 
-    // Membrane potentials (BRAM)
+    // Membrane potentials (URAM for VU7P+)
+    (* ram_style = "ultra" *)
     logic signed [V_WIDTH-1:0] vmem [N_NEURONS];
 
-    // Synapse table (BRAM)
+    // Synapse table (URAM for VU7P+ - this is the big one!)
+    (* ram_style = "ultra" *)
     synapse_t syn_ram [N_SYNAPSES];
 
-    // Index table: synapse range per presynaptic neuron (BRAM)
+    // Index table: synapse range per presynaptic neuron (URAM)
+    (* ram_style = "ultra" *)
     syn_index_t idx_ram [N_NEURONS];
 
     // Spike pending FIFO (small, for multiple firings per walk)

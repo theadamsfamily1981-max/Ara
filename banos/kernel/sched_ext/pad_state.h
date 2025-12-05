@@ -58,7 +58,7 @@ struct banos_telemetry {
     /* Thermal (from FPGA or hwmon) */
     u16 cpu_temp_raw;       /* 0-65535, mapped to temp range */
     u16 gpu_temp_raw;
-    u16 pain_level;         /* From Vacuum Spiker */
+    u32 pain_level;         /* From Vacuum Spiker (32-bit to match FPGA ABI) */
 
     /* Load metrics */
     u32 cpu_load_pct;       /* 0-100 * 100 (2 decimal precision) */
@@ -102,8 +102,8 @@ static inline void compute_pad(const struct banos_telemetry *tel,
     s32 p, a, d;
 
     /* Pleasure: inverse of thermal stress and errors */
-    /* Scale pain_level (0-65535) to thermal_stress (0-256) */
-    s16 thermal_stress = (s16)(tel->pain_level >> 8);
+    /* Scale pain_level (0-2^32) to thermal_stress (0-256) */
+    s16 thermal_stress = (s16)(tel->pain_level >> 24);  /* 32-bit >> 24 = 8-bit */
     if (thermal_stress < 1) thermal_stress = 1;
 
     s16 error_factor = (s16)(tel->error_count > 256 ? 256 : tel->error_count);

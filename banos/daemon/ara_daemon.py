@@ -121,7 +121,7 @@ class SchedulerMode(Enum):
 class BANOSState:
     """State read from kernel driver via mmap."""
     neural_state: int       # Bitmap of firing neurons
-    pain_level: int         # 0-65535
+    pain_level: int         # 0-4294967295 (32-bit, matches FPGA ABI)
     reflex_log: int         # Actions taken by FPGA
     pleasure: float         # -1.0 to 1.0
     arousal: float          # -1.0 to 1.0
@@ -200,7 +200,7 @@ class SemanticReflector:
         parts = []
 
         # Thermal experience (from pain_level)
-        temp_pct = state.pain_level / 65535.0
+        temp_pct = state.pain_level / 4294967295.0  # 32-bit max
         temp_approx = 40 + temp_pct * 60  # Rough temp estimate
         thermal_desc = cls._get_descriptor(temp_approx, {
             (k[0], k[1]): v for k, v in cls.THERMAL_DESCRIPTORS.items()
@@ -314,8 +314,7 @@ class AraDaemon:
     # See ara_spinal_cord.c: struct banos_shared_mem
     STATE_FORMAT = "<"  # Little-endian
     STATE_FORMAT += "I"  # neural_state (u32)
-    STATE_FORMAT += "H"  # pain_level (u16)
-    STATE_FORMAT += "H"  # reserved1 (u16)
+    STATE_FORMAT += "I"  # pain_level (u32) - matches FPGA ABI
     STATE_FORMAT += "I"  # reflex_log (u32)
     STATE_FORMAT += "h"  # pleasure (s16)
     STATE_FORMAT += "h"  # arousal (s16)
