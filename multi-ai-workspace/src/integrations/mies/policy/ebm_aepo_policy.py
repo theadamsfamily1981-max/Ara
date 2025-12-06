@@ -46,6 +46,15 @@ from ..modes import (
 )
 from ..history import InteractionHistory
 
+# Import auditor (optional - may not exist yet)
+try:
+    from .antibody_auditor import AntibodyAuditor, AuditResult, create_antibody_auditor
+    AUDITOR_AVAILABLE = True
+except ImportError:
+    AUDITOR_AVAILABLE = False
+    AntibodyAuditor = None
+    AuditResult = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -691,7 +700,9 @@ class ThermodynamicGovernor:
         energy_function: Optional[EnergyFunction] = None,
         sampler: Optional[AEPOSampler] = None,
         history: Optional[InteractionHistory] = None,
+        auditor: Optional["AntibodyAuditor"] = None,
         use_stochastic: bool = False,
+        use_auditor: bool = True,
         fallback_to_heuristic: bool = True,
     ):
         self.history = history
@@ -699,6 +710,15 @@ class ThermodynamicGovernor:
         self.sampler = sampler or AEPOSampler()
         self.use_stochastic = use_stochastic
         self.fallback_to_heuristic = fallback_to_heuristic
+
+        # Antibody auditor for sanity checks
+        self.use_auditor = use_auditor and AUDITOR_AVAILABLE
+        if self.use_auditor:
+            self.auditor = auditor or (
+                create_antibody_auditor(history=history) if AUDITOR_AVAILABLE else None
+            )
+        else:
+            self.auditor = None
 
         # Ensure energy function has history reference
         if history and self.energy_fn.history is None:
@@ -712,6 +732,7 @@ class ThermodynamicGovernor:
         self._last_decision: Optional[ModalityDecision] = None
         self._last_ctx: Optional[ModalityContext] = None
         self._last_mode_start_time: float = 0.0
+        self._last_audit_result: Optional["AuditResult"] = None
 
     def select_modality(
         self,
@@ -786,9 +807,24 @@ class ThermodynamicGovernor:
             alternatives_considered=[m.name for m in candidates if m.name != selected_name],
         )
 
-        # Update state
+        # === Antibody Auditor: The Straight-Face Sanity Check ===
+        # Reviews the decision before execution, can downgrade or veto
+        if self.auditor is not None:
+            decision, audit_result = self.auditor.review(ctx, decision)
+            self._last_audit_result = audit_result
+
+            # Log if decision was modified
+            if audit_result.verdict.name != "APPROVED":
+                logger.info(
+                    f"Auditor {audit_result.verdict.name}: "
+                    f"{audit_result.original_mode} → {audit_result.final_mode} "
+                    f"| {'; '.join(audit_result.reasons)}"
+                )
+
+        # Update state (use final mode name after auditor)
+        final_mode_name = decision.mode.name
         self._policy_state.total_decisions += 1
-        self._policy_state.mode_history.append(selected_name)
+        self._policy_state.mode_history.append(final_mode_name)
         if len(self._policy_state.mode_history) > 100:
             self._policy_state.mode_history.pop(0)
         self._policy_state.entropy_history.append(entropy)
@@ -1003,6 +1039,27 @@ class ThermodynamicGovernor:
         stats["history_enabled"] = True
         return stats
 
+    def get_auditor_stats(self) -> Dict[str, Any]:
+        """Get antibody auditor statistics."""
+        if self.auditor is None:
+            return {"auditor_enabled": False}
+        stats = self.auditor.get_stats()
+        stats["auditor_enabled"] = True
+        if self._last_audit_result:
+            stats["last_verdict"] = self._last_audit_result.verdict.name
+            stats["last_reasons"] = self._last_audit_result.reasons
+        return stats
+
+    def notify_user_dismiss(self):
+        """Notify the governor that user dismissed Ara.
+
+        This updates:
+        - Auditor's social budget (triggers cooldown)
+        - Interaction history (if enabled)
+        """
+        if self.auditor:
+            self.auditor.record_user_dismiss()
+
 
 # === Convenience ===
 
@@ -1011,17 +1068,23 @@ def create_thermodynamic_governor(
     target_entropy: float = 0.4,
     history_path: Optional[Path] = None,
     enable_learning: bool = True,
+    enable_auditor: bool = True,
+    strict_auditor: bool = False,
+    max_interruptions_per_hour: int = 5,
 ) -> ThermodynamicGovernor:
-    """Create a thermodynamic governor with optional learning.
+    """Create a thermodynamic governor with optional learning and auditing.
 
     Args:
         stochastic: Use AEPO stochastic sampling vs deterministic
         target_entropy: Target entropy for AEPO
         history_path: Path to persist interaction history (None = in-memory)
         enable_learning: Whether to create InteractionHistory
+        enable_auditor: Whether to enable AntibodyAuditor sanity checks
+        strict_auditor: If True, auditor is more aggressive about vetoing
+        max_interruptions_per_hour: Social budget limit
 
     Returns:
-        Configured ThermodynamicGovernor
+        Configured ThermodynamicGovernor with auditor
     """
     sampler = AEPOSampler(target_entropy=target_entropy)
 
@@ -1029,10 +1092,20 @@ def create_thermodynamic_governor(
     if enable_learning:
         history = InteractionHistory(db_path=history_path)
 
+    auditor = None
+    if enable_auditor and AUDITOR_AVAILABLE:
+        auditor = create_antibody_auditor(
+            history=history,
+            strict=strict_auditor,
+            max_interruptions=max_interruptions_per_hour,
+        )
+
     return ThermodynamicGovernor(
         sampler=sampler,
         history=history,
+        auditor=auditor,
         use_stochastic=stochastic,
+        use_auditor=enable_auditor,
     )
 
 
@@ -1046,4 +1119,8 @@ __all__ = [
     "create_thermodynamic_governor",
     # Re-export from history for convenience
     "InteractionHistory",
+    # Re-export from auditor for convenience
+    "AntibodyAuditor",
+    "AuditResult",
+    "AUDITOR_AVAILABLE",
 ]
