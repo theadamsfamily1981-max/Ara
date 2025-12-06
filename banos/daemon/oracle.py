@@ -365,6 +365,113 @@ Be brief but thorough. If there are no significant concerns, say "No major conce
         hope = 0.3 + 0.4 * (pos_count / total)
         return hope
 
+    def contemplate(self, context_override: Optional[str] = None) -> Optional[str]:
+        """
+        Idle contemplation - only dream when arousal is low.
+
+        This is the "Vision Board" pattern: Ara only runs future simulations
+        when in a calm, low-arousal state. High arousal means we're busy
+        with immediate tasks and shouldn't burn cycles on speculation.
+
+        The idle contemplation pattern ensures:
+        1. No CPU waste during active work
+        2. More reflective, grounded visions (not panic-driven)
+        3. Natural rhythm of work → rest → dream
+
+        Args:
+            context_override: Optional context string. If None, we read from HAL.
+
+        Returns:
+            Vision summary string if contemplation ran, None if blocked by arousal.
+        """
+        # Check arousal - only contemplate when calm
+        arousal = self._get_current_arousal()
+
+        if arousal > 0.3:
+            self.log.debug(f"Contemplation skipped: arousal={arousal:.2f} > 0.3")
+            return None
+
+        # Get context if not provided
+        if context_override is None:
+            context = self._gather_idle_context()
+        else:
+            context = context_override
+
+        # Run a gentler form of divination
+        self.log.info(f"🌙 ORACLE: Idle contemplation beginning (arousal={arousal:.2f})")
+
+        plan, hope = self.divine(context, horizon="7d")
+
+        if plan is None:
+            return None
+
+        # Format as a brief contemplation summary
+        vision = f"""[Idle Contemplation @ arousal={arousal:.2f}]
+
+Looking ahead 7 days: {plan.label}
+{plan.text[:200]}{'...' if len(plan.text) > 200 else ''}
+
+Hope: {hope:.0%}
+"""
+        return vision
+
+    def _get_current_arousal(self) -> float:
+        """
+        Read current arousal from HAL.
+
+        Returns 0.5 (neutral) if HAL unavailable.
+        """
+        if self.hal is None:
+            return 0.5
+
+        try:
+            # Try to read from PAD state
+            if hasattr(self.hal, 'read_pad'):
+                pad = self.hal.read_pad()
+                return pad.get('a', 0.5) if pad else 0.5
+            elif hasattr(self.hal, 'read_somatic_state'):
+                state = self.hal.read_somatic_state()
+                return state.get('pad', {}).get('a', 0.5) if state else 0.5
+            else:
+                return 0.5
+        except Exception as e:
+            self.log.debug(f"Failed to read arousal: {e}")
+            return 0.5
+
+    def _gather_idle_context(self) -> str:
+        """
+        Gather context during idle contemplation.
+
+        Uses available sensors to build a summary of current state.
+        """
+        lines = ["Current idle state:"]
+
+        # Read from HAL if available
+        if self.hal is not None:
+            try:
+                if hasattr(self.hal, 'read_somatic_state'):
+                    state = self.hal.read_somatic_state()
+                    if state:
+                        pain = state.get('pain', 0.0)
+                        entropy = state.get('entropy', 0.0)
+                        lines.append(f"- System pain: {pain:.0%}")
+                        lines.append(f"- System entropy: {entropy:.0%}")
+            except Exception:
+                pass
+
+        # Read hope from Telos
+        if self.telos is not None:
+            hope = self.telos.hope
+            lines.append(f"- Current hope: {hope:.0%}")
+
+            # Add dominant goal
+            active = self.telos.get_active_goals()
+            if active:
+                dominant = max(active, key=lambda g: g.priority)
+                lines.append(f"- Dominant goal: {dominant.name[:50]}")
+
+        return "\n".join(lines)
+
     def get_last_divination(self) -> Optional[DivinationResult]:
         """Get the most recent divination result."""
         return self.history[-1] if self.history else None

@@ -470,6 +470,45 @@ class TeleologicalEngine:
         scored = [(f, self.evaluate_future(f)) for f in futures]
         return sorted(scored, key=lambda x: x[1], reverse=True)
 
+    def align_choice(self, options: List[str]) -> Optional[str]:
+        """
+        Among several action descriptions, pick the one that best advances the visions.
+
+        This is the key decision-support interface: given a list of options,
+        return the one most aligned with the Telos. Used by Executive/Oracle
+        when deciding between multiple valid paths.
+
+        Args:
+            options: List of action/choice descriptions to evaluate
+
+        Returns:
+            The option string most aligned with goals, or None if no options.
+
+        Example:
+            best = telos.align_choice([
+                "Focus on shipping the paper draft",
+                "Refactor the HAL layer for cleaner abstraction",
+                "Take a break and do a creative session",
+            ])
+            # → Returns whichever aligns best with current goal priorities
+        """
+        if not options:
+            return None
+
+        if len(options) == 1:
+            return options[0]
+
+        # Evaluate each option against the Telos
+        ranked = self.rank_futures(options)
+
+        if not ranked:
+            return options[0]  # Fallback to first option
+
+        best_option, best_score = ranked[0]
+        self.log.debug(f"align_choice: Selected '{best_option[:50]}...' (score={best_score:.3f})")
+
+        return best_option
+
     # =========================================================================
     # Progress Tracking
     # =========================================================================
