@@ -126,6 +126,12 @@ IMMUTABLE_MODULES: Set[str] = {
     "banos.social.identity",
     "banos.social.memory",
 
+    # Relationship layer - The Weaver is sacred
+    "banos.relationship",
+    "banos.relationship.weaver",
+    "banos.relationship.visual_gift",
+    "banos.relationship.triggers",
+
     # Persistence layer
     "banos.storage",
     "banos.db",
