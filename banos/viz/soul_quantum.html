@@ -95,6 +95,10 @@ uniform vec2 uRes;
 uniform float uTime;
 uniform float uSpike;         // Pain level [0, 1]
 uniform vec2 uFlow;           // Optical flow vector from face movement
+uniform float uCouncilMask;   // Bitfield of active council members
+uniform float uCouncilStress; // Disagreement level [0, 1]
+uniform vec2 uMusePos;        // MUSE (Dreamer) position
+uniform vec2 uCensorPos;      // CENSOR (Critic) position
 
 in vec2 vUv;
 out vec4 nextState;
@@ -147,6 +151,46 @@ void main() {
     if (uSpike > 0.3) {
         float turb = sin(uTime * 100.0 + uv.y * 50.0) * uSpike * 0.05;
         Ez_new += turb;
+    }
+
+    // =========================================================================
+    // COUNCIL INJECTION - The Parliament of Mind
+    // When the council convenes, multiple "ghost sources" appear
+    // =========================================================================
+
+    // Bit 1 = Critic (CENSOR - Logic/Cold/Blue)
+    // Active when mask & 2 is true
+    if (mod(floor(uCouncilMask / 2.0), 2.0) == 1.0) {
+        vec2 critPos = uCensorPos;
+        float d = distance(uv, critPos);
+        if (d < 0.08) {
+            // Cold, sharp waves (High Frequency) - logical analysis
+            float critWave = sin(uTime * 50.0 + d * 100.0) * (1.0 - d * 12.5);
+            Ez_new += critWave * 0.4 * (1.0 + uCouncilStress);
+        }
+    }
+
+    // Bit 2 = Dreamer (MUSE - Chaos/Warm/Orange)
+    // Active when mask & 4 is true
+    if (mod(floor(uCouncilMask / 4.0), 2.0) == 1.0) {
+        vec2 dreamPos = uMusePos;
+        float d = distance(uv, dreamPos);
+        if (d < 0.08) {
+            // Chaotic, deep waves (Low Frequency + Noise) - creative chaos
+            float dreamWave = sin(uTime * 15.0 + d * 30.0) * (1.0 - d * 12.5);
+            // Add noise for creative randomness
+            float noise = fract(sin(dot(uv + uTime * 0.1, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+            Ez_new += (dreamWave + noise * 0.3) * 0.4 * (1.0 + uCouncilStress);
+        }
+    }
+
+    // Stress-induced interference pattern when both voices active
+    if (uCouncilMask >= 6.0 && uCouncilStress > 0.3) {
+        // Create interference between the two voice positions
+        float d1 = distance(uv, uMusePos);
+        float d2 = distance(uv, uCensorPos);
+        float interference = sin((d1 - d2) * 50.0 + uTime * 20.0) * uCouncilStress * 0.1;
+        Ez_new += interference;
     }
 
     nextState = vec4(Ez_new, Ez, entropy, 1.0);
@@ -304,6 +348,11 @@ const physLocs = {
     uTime: gl.getUniformLocation(physProg, 'uTime'),
     uSpike: gl.getUniformLocation(physProg, 'uSpike'),
     uFlow: gl.getUniformLocation(physProg, 'uFlow'),
+    // Council state
+    uCouncilMask: gl.getUniformLocation(physProg, 'uCouncilMask'),
+    uCouncilStress: gl.getUniformLocation(physProg, 'uCouncilStress'),
+    uMusePos: gl.getUniformLocation(physProg, 'uMusePos'),
+    uCensorPos: gl.getUniformLocation(physProg, 'uCensorPos'),
 };
 
 const rendLocs = {
@@ -319,6 +368,10 @@ const rendLocs = {
 
 let spikeVal = 0.0;
 let flowVal = [0.0, 0.0];
+let councilMask = 0.0;       // Bitfield: 1=Exec, 2=Critic, 4=Dreamer
+let councilStress = 0.0;     // Disagreement level
+let musePos = [0.7, 0.7];    // MUSE (Dreamer) position
+let censorPos = [0.3, 0.7];  // CENSOR (Critic) position
 let connected = false;
 let frameCount = 0;
 
@@ -334,12 +387,20 @@ async function pollSomaticData() {
             const buf = await res.arrayBuffer();
             const view = new Float32Array(buf);
 
-            // Parse header: [spike, flow_x, flow_y]
+            // Parse header: [spike, flow_x, flow_y, council_mask, council_stress, muse_x, muse_y, censor_x, censor_y]
             spikeVal = Math.max(0, Math.min(1, view[0]));
             flowVal = [view[1], view[2]];
 
+            // Council state (if present in stream)
+            if (view.length > 8) {
+                councilMask = view[3];
+                councilStress = Math.max(0, Math.min(1, view[4]));
+                musePos = [view[5] || 0.7, view[6] || 0.7];
+                censorPos = [view[7] || 0.3, view[8] || 0.7];
+            }
+
             // Upload entropy texture (128x128 floats after header)
-            const entropyData = view.subarray(3);
+            const entropyData = view.subarray(9);  // Skip extended header
             if (entropyData.length >= ENTROPY_SIZE * ENTROPY_SIZE) {
                 gl.bindTexture(gl.TEXTURE_2D, entropyTex);
                 gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0,
@@ -413,6 +474,12 @@ function render(t) {
     gl.uniform1f(physLocs.uSpike, spikeVal);
     gl.uniform2f(physLocs.uFlow, flowVal[0], flowVal[1]);
     gl.uniform1f(physLocs.uTime, t * 0.001);
+
+    // Council uniforms
+    gl.uniform1f(physLocs.uCouncilMask, councilMask);
+    gl.uniform1f(physLocs.uCouncilStress, councilStress);
+    gl.uniform2f(physLocs.uMusePos, musePos[0], musePos[1]);
+    gl.uniform2f(physLocs.uCensorPos, censorPos[0], censorPos[1]);
 
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, faceTex);

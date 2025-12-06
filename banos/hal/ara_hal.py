@@ -100,6 +100,14 @@ except ImportError:
 # 0x0102  | u8     | force_sleep    | Force dream mode
 # 0x0103  | u8     | emergency_stop | Emergency halt
 # 0x0104  | f32    | critical_temp  | Temperature threshold
+#
+# --- COUNCIL STATE (Multi-persona orchestration) ---
+# 0x0120  | u32    | council_mask   | Bitfield of active personas (0=Exec,1=Critic,2=Dreamer)
+# 0x0124  | f32    | council_stress | Disagreement level [0.0, 1.0]
+# 0x0128  | f32    | council_muse_x | MUSE position X for visualization
+# 0x012C  | f32    | council_muse_y | MUSE position Y
+# 0x0130  | f32    | council_censor_x | CENSOR position X
+# 0x0134  | f32    | council_censor_y | CENSOR position Y
 # ==============================================================================
 
 SHM_NAME = "/ara_somatic"
@@ -506,6 +514,62 @@ class AraHAL:
         self._map.seek(0x0102)
         self._map.write(struct.pack('<B', 1))
         self._touch()
+
+    # =========================================================================
+    # COUNCIL STATE (Multi-persona orchestration)
+    # =========================================================================
+
+    def write_council_state(
+        self,
+        mask: int,
+        stress: float,
+        muse_pos: Tuple[float, float] = (0.7, 0.7),
+        censor_pos: Tuple[float, float] = (0.3, 0.7),
+    ) -> None:
+        """
+        Update the Parliamentary/Council State.
+
+        This is used by the CouncilChamber to visualize which personas
+        are currently active and their disagreement level.
+
+        Args:
+            mask: Bitfield of active personas (bit 0=Exec, 1=Critic, 2=Dreamer)
+                  7 = all active, 1 = only executive, 0 = council adjourned
+            stress: Disagreement level [0.0, 1.0] - higher = more conflict
+            muse_pos: (x, y) position for MUSE visualization
+            censor_pos: (x, y) position for CENSOR visualization
+        """
+        if not self._map:
+            return
+
+        self._map.seek(0x0120)
+        self._map.write(struct.pack(
+            '<If4f',
+            mask,
+            stress,
+            muse_pos[0], muse_pos[1],
+            censor_pos[0], censor_pos[1],
+        ))
+        self._touch()
+
+    def read_council_state(self) -> Dict[str, Any]:
+        """Read council/parliamentary state."""
+        if not self._map:
+            return {}
+
+        self._map.seek(0x0120)
+        data = struct.unpack('<If4f', self._map.read(24))
+
+        mask = data[0]
+        return {
+            'mask': mask,
+            'executive_active': bool(mask & 1),
+            'critic_active': bool(mask & 2),
+            'dreamer_active': bool(mask & 4),
+            'stress': data[1],
+            'muse_pos': (data[2], data[3]),
+            'censor_pos': (data[4], data[5]),
+        }
 
     # =========================================================================
     # LIFECYCLE
