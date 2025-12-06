@@ -214,11 +214,36 @@ class WebcamCapture:
             logger.error(f"Failed to start webcam: {e}")
             return False
 
-    def stop(self):
-        """Stop webcam capture."""
+    def stop(self, blocking: bool = True):
+        """Stop webcam capture.
+
+        Args:
+            blocking: If True, wait for thread to finish (default).
+                      If False, signal stop and return immediately (non-blocking).
+        """
+        self._running = False
+        if self._thread and blocking:
+            self._thread.join(timeout=1.0)
+            if self._thread.is_alive():
+                logger.warning("Webcam capture thread did not stop cleanly")
+            self._thread = None
+        if self._cap:
+            self._cap.release()
+            self._cap = None
+        logger.info("Webcam stopped")
+
+    async def stop_async(self):
+        """Async-safe stop method that doesn't block the event loop."""
         self._running = False
         if self._thread:
-            self._thread.join(timeout=2.0)
+            try:
+                loop = asyncio.get_running_loop()
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: self._thread.join(timeout=1.0)),
+                    timeout=2.0
+                )
+            except (RuntimeError, asyncio.TimeoutError):
+                pass
             self._thread = None
         if self._cap:
             self._cap.release()
@@ -704,8 +729,12 @@ class AraLive:
         """Stop Ara Live."""
         self._running = False
 
+        # Use async-safe stop methods to avoid blocking the event loop
         if self.webcam:
-            self.webcam.stop()
+            if hasattr(self.webcam, 'stop_async'):
+                await self.webcam.stop_async()
+            else:
+                self.webcam.stop(blocking=False)
 
         if self.microphone:
             self.microphone.stop()
@@ -730,11 +759,20 @@ class AraLive:
                 else:
                     # Fallback to text input
                     try:
-                        text = await asyncio.get_event_loop().run_in_executor(
-                            None, lambda: input("You: ").strip()
+                        # Use get_running_loop() instead of get_event_loop() to avoid deadlocks
+                        try:
+                            loop = asyncio.get_running_loop()
+                        except RuntimeError:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                        text = await asyncio.wait_for(
+                            loop.run_in_executor(None, lambda: input("You: ").strip()),
+                            timeout=300.0  # 5 minute timeout for user input
                         )
                         if text:
                             await self._process_input(text=text)
+                    except asyncio.TimeoutError:
+                        continue  # No input within timeout, continue loop
                     except (EOFError, KeyboardInterrupt):
                         break
 

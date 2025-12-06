@@ -244,7 +244,8 @@ class AraAvatarBackend(AIBackend):
         self.generator = None
 
         # Thread pool for blocking operations (avatar generation, TTS, etc.)
-        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ara_avatar")
+        # Use 4 workers to prevent queue exhaustion under load
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ara_avatar")
 
         # Current mode and avatar state
         self.current_mode = "default"
@@ -525,7 +526,13 @@ class AraAvatarBackend(AIBackend):
                 video_path = self.avatar_output_dir / f"ara_response_{timestamp}.mp4"
 
                 # Run blocking avatar generation in thread pool to avoid blocking event loop
-                loop = asyncio.get_event_loop()
+                # Use get_running_loop() instead of get_event_loop() to avoid deadlocks
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    # Fallback if no running loop (should not happen in async context)
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
                 try:
                     result = await asyncio.wait_for(
                         loop.run_in_executor(
@@ -582,7 +589,13 @@ class AraAvatarBackend(AIBackend):
             audio_path = self.avatar_output_dir / f"ara_tts_{timestamp}.wav"
 
             # Run blocking TTS generation in thread pool to avoid blocking event loop
-            loop = asyncio.get_event_loop()
+            # Use get_running_loop() instead of get_event_loop() to avoid deadlocks
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # Fallback if no running loop
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
 
             def _tts_sync():
                 """Synchronous TTS wrapper for thread pool."""
@@ -1510,19 +1523,49 @@ class AraAvatarBackend(AIBackend):
 
         return status
 
-    def cleanup(self):
-        """Cleanup resources (thread pool, sensors)."""
-        if hasattr(self, '_executor'):
-            self._executor.shutdown(wait=False)
+    def cleanup(self, blocking: bool = True):
+        """Cleanup resources (thread pool, sensors).
+
+        Args:
+            blocking: If True, wait for cleanup to complete (default).
+                      If False, signal cleanup and return immediately.
+        """
+        if hasattr(self, '_executor') and self._executor:
+            self._executor.shutdown(wait=blocking, cancel_futures=not blocking)
             logger.info("Ara Avatar Backend thread pool shut down")
 
-        # Stop MIES sensors
+        # Stop MIES sensors with non-blocking option
         if hasattr(self, 'focus_sensor') and self.focus_sensor:
-            self.focus_sensor.stop()
+            self.focus_sensor.stop(blocking=blocking)
         if hasattr(self, 'audio_sensor') and self.audio_sensor:
-            self.audio_sensor.stop()
+            self.audio_sensor.stop(blocking=blocking)
+        logger.info("MIES sensors stopped")
+
+    async def cleanup_async(self):
+        """Async-safe cleanup that doesn't block the event loop."""
+        if hasattr(self, '_executor') and self._executor:
+            # Shutdown executor in a thread to avoid blocking
+            try:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, lambda: self._executor.shutdown(wait=True, cancel_futures=False))
+            except RuntimeError:
+                self._executor.shutdown(wait=False, cancel_futures=True)
+            logger.info("Ara Avatar Backend thread pool shut down")
+
+        # Stop MIES sensors using async methods
+        if hasattr(self, 'focus_sensor') and self.focus_sensor:
+            if hasattr(self.focus_sensor, 'stop_async'):
+                await self.focus_sensor.stop_async()
+            else:
+                self.focus_sensor.stop(blocking=False)
+        if hasattr(self, 'audio_sensor') and self.audio_sensor:
+            if hasattr(self.audio_sensor, 'stop_async'):
+                await self.audio_sensor.stop_async()
+            else:
+                self.audio_sensor.stop(blocking=False)
         logger.info("MIES sensors stopped")
 
     def __del__(self):
         """Destructor to ensure cleanup."""
-        self.cleanup()
+        # Use non-blocking cleanup in destructor to avoid deadlocks
+        self.cleanup(blocking=False)

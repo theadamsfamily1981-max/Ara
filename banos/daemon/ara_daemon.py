@@ -537,6 +537,8 @@ class AraDaemon:
     def _poll_loop(self):
         """Main polling loop."""
         mies_update_counter = 0  # Only update MIES at lower frequency
+        mies_update_lock = threading.Lock()  # Prevent concurrent MIES updates
+        mies_consecutive_failures = 0  # Track failures for circuit breaker
 
         while self._running:
             try:
@@ -558,14 +560,35 @@ class AraDaemon:
                     if self._on_alert:
                         self._on_alert(1, state.pain_level)
 
-                # Update MIES bridge at 1Hz (every 10 polls)
+                # Update MIES bridge at 1Hz (every 10 polls) with circuit breaker
                 mies_update_counter += 1
                 if self._mies_enabled and self._mies_bridge and mies_update_counter >= 10:
                     mies_update_counter = 0
-                    try:
-                        self._mies_bridge.update()
-                    except Exception as e:
-                        logger.warning(f"MIES update failed: {e}")
+                    # Circuit breaker: skip updates after 3 consecutive failures
+                    if mies_consecutive_failures < 3:
+                        # Non-blocking attempt to update MIES
+                        if mies_update_lock.acquire(blocking=False):
+                            try:
+                                # Run MIES update with timeout via threading
+                                import concurrent.futures
+                                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                                    future = executor.submit(self._mies_bridge.update)
+                                    try:
+                                        future.result(timeout=2.0)  # 2 second timeout
+                                        mies_consecutive_failures = 0  # Reset on success
+                                    except concurrent.futures.TimeoutError:
+                                        logger.warning("MIES update timed out after 2s")
+                                        mies_consecutive_failures += 1
+                            except Exception as e:
+                                logger.warning(f"MIES update failed: {e}")
+                                mies_consecutive_failures += 1
+                            finally:
+                                mies_update_lock.release()
+                    else:
+                        # Circuit breaker open - try to recover every 30 polls
+                        if mies_update_counter % 30 == 0:
+                            logger.info("MIES circuit breaker: attempting recovery")
+                            mies_consecutive_failures = 0
 
                 # Update somatic visualization (every poll for smooth animation)
                 if self._viz_enabled and self._viz_server:
