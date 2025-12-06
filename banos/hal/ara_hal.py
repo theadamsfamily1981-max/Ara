@@ -87,7 +87,7 @@ MAGIC = 0xABA50111  # Valid hex ('ABA' looks like 'ARA')
 VERSION = 4
 
 # Explicit struct formats with sizes
-HEADER_FMT = '<IIIBBBXQ'  # magic, version, seqlock, state, dream, _pad(1), _pad(1), timestamp
+HEADER_FMT = '<IIIBBBxQ'  # magic, version, seqlock, state, dream, _pad(1), _pad(1byte), timestamp
 HEADER_SIZE = struct.calcsize(HEADER_FMT)  # 24 bytes
 HEADER_OFFSET = 0x00
 
