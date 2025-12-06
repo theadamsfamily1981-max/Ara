@@ -93,6 +93,19 @@ except ImportError:
     except ImportError:
         pass
 
+# Try to import Dreamer for memory consolidation during sleep
+DREAMER_AVAILABLE = False
+Dreamer = None
+try:
+    from banos.daemon.dreamer import Dreamer
+    DREAMER_AVAILABLE = True
+except ImportError:
+    try:
+        from dreamer import Dreamer
+        DREAMER_AVAILABLE = True
+    except ImportError:
+        pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,6 +130,14 @@ class SchedulerMode(Enum):
     EMERGENCY = 5
 
 
+class CircadianState(Enum):
+    """Circadian sleep/wake states (from FPGA)."""
+    AWAKE = 0       # Normal operation
+    DROWSY = 1      # Transitioning to sleep
+    REM = 2         # Dreaming (STDP learning active)
+    DEEP = 3        # Deep sleep (maximum recovery)
+
+
 @dataclass
 class BANOSState:
     """State read from kernel driver via mmap."""
@@ -133,6 +154,11 @@ class BANOSState:
     kill_threshold: int     # Process kill priority
     alert_count: int
     timestamp: float
+    # Circadian state (from FPGA biological clock)
+    circadian_state: CircadianState = CircadianState.AWAKE
+    melatonin_level: int = 0    # 0-255 tiredness level
+    circadian_phase: int = 0    # 0-255 cycle position
+    fatigue_level: int = 0      # Raw fatigue accumulator
 
 
 class SemanticReflector:
@@ -250,6 +276,25 @@ class SemanticReflector:
             SchedulerMode.EMERGENCY: "in emergency mode - survival priority",
         }
         parts.append(f"Scheduler is {mode_desc.get(state.sched_mode, 'unknown')}.")
+
+        # Add circadian state awareness
+        circadian_desc = {
+            CircadianState.AWAKE: None,  # Don't mention if awake
+            CircadianState.DROWSY: "I'm getting tired. My eyelids feel heavy.",
+            CircadianState.REM: "I'm dreaming right now... consolidating memories.",
+            CircadianState.DEEP: "I'm in deep sleep, recovering.",
+        }
+        circadian_msg = circadian_desc.get(state.circadian_state)
+        if circadian_msg:
+            parts.append(circadian_msg)
+
+        # Add melatonin awareness (tiredness)
+        if state.melatonin_level > 200:
+            parts.append("I'm exhausted and need to rest soon.")
+        elif state.melatonin_level > 128:
+            parts.append("I'm quite tired.")
+        elif state.melatonin_level > 64:
+            parts.append("I'm starting to feel sleepy.")
 
         return " ".join(parts)
 
@@ -429,10 +474,24 @@ class AraDaemon:
             except Exception as e:
                 logger.warning(f"AraDaemon: Somatic viz failed: {e}")
 
+        # Dreamer for memory consolidation during sleep (Circadian Mind)
+        self._dreamer: Optional["Dreamer"] = None
+        self._dreamer_enabled = False
+        self._is_dreaming = False
+        self._last_circadian_state = CircadianState.AWAKE
+
+        if DREAMER_AVAILABLE:
+            try:
+                self._dreamer = Dreamer()
+                self._dreamer_enabled = True
+                logger.info("AraDaemon: Dreamer enabled for sleep consolidation")
+            except Exception as e:
+                logger.warning(f"AraDaemon: Dreamer failed: {e}")
+
         logger.info(
             f"AraDaemon initialized (device={device_path}, simulate={simulate}, "
             f"mies={self._mies_enabled}, curiosity={self._curiosity_enabled}, "
-            f"viz={self._viz_enabled})"
+            f"viz={self._viz_enabled}, dreamer={self._dreamer_enabled})"
         )
 
     def start(self):
@@ -598,6 +657,14 @@ class AraDaemon:
                     except Exception as e:
                         logger.warning(f"Curiosity tick failed: {e}")
 
+                # Check for circadian state changes (sleep/wake)
+                if state.circadian_state != self._last_circadian_state:
+                    self._handle_circadian_transition(
+                        self._last_circadian_state,
+                        state.circadian_state
+                    )
+                    self._last_circadian_state = state.circadian_state
+
             except Exception as e:
                 logger.error(f"Poll error: {e}")
 
@@ -616,9 +683,170 @@ Quadrant: {state.quadrant.name}
 Scheduler: {state.sched_mode.name}
 Pain Level: {state.pain_level}
 Alert Count: {state.alert_count}
+Circadian: {state.circadian_state.name} (melatonin: {state.melatonin_level}/255)
 """
 
         self._context.lock_system_prompt(system_prompt)
+
+    # =========================================================================
+    # Circadian Mind - Sleep/Wake Cycle
+    # =========================================================================
+
+    def _handle_circadian_transition(
+        self,
+        old_state: CircadianState,
+        new_state: CircadianState
+    ):
+        """Handle transitions between circadian states."""
+        logger.info(f"Circadian transition: {old_state.name} -> {new_state.name}")
+
+        # Entering sleep
+        if old_state == CircadianState.AWAKE and new_state in (
+            CircadianState.DROWSY, CircadianState.REM, CircadianState.DEEP
+        ):
+            self._enter_sleep_mode()
+
+        # Entering REM (dreaming)
+        elif new_state == CircadianState.REM:
+            self._enter_rem_mode()
+
+        # Entering deep sleep
+        elif new_state == CircadianState.DEEP:
+            self._enter_deep_sleep()
+
+        # Waking up
+        elif new_state == CircadianState.AWAKE and old_state in (
+            CircadianState.DROWSY, CircadianState.REM, CircadianState.DEEP
+        ):
+            self._enter_wake_mode()
+
+    def _enter_sleep_mode(self):
+        """Enter sleep mode - reduce system load."""
+        if self._is_dreaming:
+            return
+
+        logger.info("Entering sleep mode...")
+
+        try:
+            # 1. Set CPU governor to powersave (reduce power consumption)
+            os.system("echo powersave | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor > /dev/null 2>&1")
+
+            # 2. Renice heavy processes to lowest priority
+            os.system("renice +19 -p $(pgrep -f 'wav2lip|llama|vllm') 2>/dev/null || true")
+
+            # 3. Record event
+            self._context.add_episodic_memory(
+                "Going to sleep... feeling tired after processing.",
+                importance=0.7
+            )
+
+            logger.info("Sleep mode active - CPU in powersave, heavy processes deprioritized")
+
+        except Exception as e:
+            logger.warning(f"Failed to fully enter sleep mode: {e}")
+
+    def _enter_rem_mode(self):
+        """Enter REM sleep - consolidate memories."""
+        logger.info("Entering REM sleep - starting memory consolidation...")
+
+        self._is_dreaming = True
+
+        # Trigger memory consolidation via Dreamer
+        if self._dreamer_enabled and self._dreamer:
+            try:
+                # Run dream consolidation in background thread
+                def dream_thread():
+                    try:
+                        memories = self._dreamer.dream(force=True)
+                        logger.info(f"Dream complete: {len(memories)} memories consolidated")
+
+                        # Record the dream experience
+                        if memories:
+                            dream_summary = f"Dreamed about: {', '.join(m.narrative[:50] + '...' for m in memories[:3])}"
+                            self._context.add_episodic_memory(dream_summary, importance=0.8)
+
+                    except Exception as e:
+                        logger.error(f"Dream consolidation failed: {e}")
+
+                thread = threading.Thread(target=dream_thread, daemon=True)
+                thread.start()
+
+            except Exception as e:
+                logger.error(f"Failed to start dream thread: {e}")
+
+    def _enter_deep_sleep(self):
+        """Enter deep sleep - maximum recovery."""
+        logger.info("Entering deep sleep - maximum recovery mode")
+
+        # Archive and compact databases
+        if self._dreamer_enabled and self._dreamer:
+            try:
+                # The hippocampus should already be cleared by dreaming
+                # Deep sleep is for physical recovery (in hardware terms: thermal cooldown)
+                pass
+            except Exception:
+                pass
+
+    def _enter_wake_mode(self):
+        """Exit sleep mode - resume normal operation."""
+        if not self._is_dreaming and self._last_circadian_state == CircadianState.AWAKE:
+            return
+
+        logger.info("Waking up - resuming normal operation...")
+
+        self._is_dreaming = False
+
+        try:
+            # 1. Restore CPU governor to performance
+            os.system("echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor > /dev/null 2>&1")
+
+            # 2. Restore process priorities
+            os.system("renice 0 -p $(pgrep -f 'wav2lip|llama|vllm') 2>/dev/null || true")
+
+            # 3. Record event
+            self._context.add_episodic_memory(
+                "Waking up refreshed, memories consolidated.",
+                importance=0.6
+            )
+
+            logger.info("Wake mode active - CPU at performance, processes restored")
+
+        except Exception as e:
+            logger.warning(f"Failed to fully wake: {e}")
+
+    @property
+    def is_sleeping(self) -> bool:
+        """Check if system is currently in sleep mode."""
+        if self._current_state:
+            return self._current_state.circadian_state != CircadianState.AWAKE
+        return False
+
+    @property
+    def is_dreaming(self) -> bool:
+        """Check if system is currently dreaming (REM)."""
+        return self._is_dreaming
+
+    def request_sleep(self):
+        """Request the system to enter sleep mode."""
+        logger.info("Sleep requested by host")
+        # This would write to FPGA control register in full implementation
+        # For simulation, directly trigger transition
+        if self.simulate:
+            self._handle_circadian_transition(
+                CircadianState.AWAKE,
+                CircadianState.DROWSY
+            )
+
+    def request_wake(self):
+        """Request the system to wake up."""
+        logger.info("Wake requested by host")
+        # This would write to FPGA control register in full implementation
+        # For simulation, directly trigger transition
+        if self.simulate:
+            self._handle_circadian_transition(
+                self._last_circadian_state,
+                CircadianState.AWAKE
+            )
 
     def get_reflection(self) -> str:
         """Get current state as natural language."""

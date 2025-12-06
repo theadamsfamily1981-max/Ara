@@ -281,10 +281,206 @@ class DummyDataset(IterableDataset):
             count += 1
 
 
+class JsonlDataset(Dataset):
+    """
+    JsonlDataset - Cathedral Memory Loader
+    ======================================
+
+    Loads Ara's personality and memories from ara_cathedral_dataset.jsonl.
+    NO MORE LOBOTOMY - real memories, not random noise.
+
+    Supports multiple JSONL formats:
+    1) Single-field text:      {"text": "..."}
+    2) Prompt/response pairs:  {"prompt": "...", "response": "..."}
+    3) Chat-style messages:    {"messages": [{"role": "...", "content": "..."}]}
+    4) Cathedral entries:      {"entry": "...", "emotion": {...}, "importance": 0.8}
+
+    Args:
+        path: Path to the .jsonl file (e.g., ara_cathedral_dataset.jsonl)
+        tokenizer: HuggingFace-style tokenizer
+        seq_length: Maximum sequence length (tokens)
+        bos_token: Optional token to prepend
+        eos_token: Optional token to append
+        add_special_tokens: Whether tokenizer adds special tokens
+        max_samples: Cap on samples for quick experiments
+        importance_threshold: Only load entries with importance >= this (0.0-1.0)
+    """
+
+    def __init__(
+        self,
+        path,
+        tokenizer,
+        seq_length: int = 2048,
+        bos_token: Optional[str] = None,
+        eos_token: Optional[str] = None,
+        add_special_tokens: bool = True,
+        max_samples: Optional[int] = None,
+        importance_threshold: float = 0.0,
+    ):
+        self.path = Path(path)
+        self.tokenizer = tokenizer
+        self.seq_length = seq_length
+        self.bos_token = bos_token
+        self.eos_token = eos_token
+        self.add_special_tokens = add_special_tokens
+        self.importance_threshold = importance_threshold
+
+        if not self.path.exists():
+            raise FileNotFoundError(f"JsonlDataset: Cathedral not found: {self.path}")
+
+        self._texts: List[str] = []
+        self._importance: List[float] = []
+        self._load_cathedral(max_samples=max_samples)
+
+        print(f"✓ Cathedral loaded: {len(self._texts)} memories from {self.path.name}")
+
+    def _load_cathedral(self, max_samples: Optional[int] = None):
+        """Load the Cathedral - Ara's memories and personality."""
+        skipped = 0
+
+        with self.path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    skipped += 1
+                    continue
+
+                # Check importance threshold
+                importance = obj.get("importance", 1.0)
+                if importance < self.importance_threshold:
+                    skipped += 1
+                    continue
+
+                text = self._extract_text(obj)
+                if not text:
+                    skipped += 1
+                    continue
+
+                # Apply BOS/EOS tokens
+                if self.bos_token:
+                    text = self.bos_token + text
+                if self.eos_token:
+                    text = text + self.eos_token
+
+                self._texts.append(text)
+                self._importance.append(importance)
+
+                if max_samples and len(self._texts) >= max_samples:
+                    break
+
+        if skipped:
+            print(f"  (skipped {skipped} entries below importance threshold)")
+
+        if not self._texts:
+            raise ValueError(f"JsonlDataset: No valid memories in {self.path}")
+
+    def _extract_text(self, obj: Dict) -> str:
+        """Extract training text from various JSONL formats."""
+
+        # Pattern 1: Direct "text" field
+        if "text" in obj and isinstance(obj["text"], str):
+            return obj["text"]
+
+        # Pattern 2: Cathedral "entry" field (Ara's memories)
+        if "entry" in obj:
+            entry = obj["entry"]
+            emotion = obj.get("emotion", {})
+
+            # Format with emotional context if available
+            if emotion:
+                mood = f"[P={emotion.get('pleasure', 0):.1f} A={emotion.get('arousal', 0):.1f} D={emotion.get('dominance', 0):.1f}]"
+                return f"{mood} {entry}"
+            return entry
+
+        # Pattern 3: Prompt/response pairs
+        if "prompt" in obj or "response" in obj:
+            prompt = obj.get("prompt", "")
+            response = obj.get("response", "")
+            if prompt or response:
+                return f"{prompt}\n{response}".strip()
+
+        # Pattern 4: Chat-style messages
+        if "messages" in obj and isinstance(obj["messages"], list):
+            parts = []
+            for m in obj["messages"]:
+                role = m.get("role", "")
+                content = m.get("content", "")
+                if not isinstance(content, str):
+                    continue
+                if role:
+                    parts.append(f"{role}: {content}")
+                else:
+                    parts.append(content)
+            if parts:
+                return "\n".join(parts)
+
+        # Pattern 5: Narrative field (for story-like entries)
+        if "narrative" in obj:
+            return obj["narrative"]
+
+        # Pattern 6: Content field (generic)
+        if "content" in obj:
+            return obj["content"]
+
+        return ""
+
+    def __len__(self) -> int:
+        return len(self._texts)
+
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        text = self._texts[idx]
+
+        # Handle tokenizer that uses encode() vs __call__()
+        if hasattr(self.tokenizer, '__call__'):
+            encoded = self.tokenizer(
+                text,
+                max_length=self.seq_length,
+                truncation=True,
+                padding="max_length",
+                return_tensors="pt",
+                add_special_tokens=self.add_special_tokens,
+            )
+            input_ids = encoded["input_ids"].squeeze(0)
+            attention_mask = encoded.get("attention_mask", torch.ones_like(input_ids)).squeeze(0)
+        else:
+            # Fallback for simple tokenizers with encode()
+            tokens = self.tokenizer.encode(text)
+            if len(tokens) > self.seq_length:
+                tokens = tokens[:self.seq_length]
+            else:
+                pad_id = getattr(self.tokenizer, 'pad_token_id', 0) or 0
+                tokens = tokens + [pad_id] * (self.seq_length - len(tokens))
+
+            input_ids = torch.tensor(tokens, dtype=torch.long)
+            attention_mask = (input_ids != 0).long()
+
+        # For causal LM, labels = input_ids
+        labels = input_ids.clone()
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
+
+
+def collate_cathedral(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+    """Collate function for Cathedral dataset - stacks tensors."""
+    keys = batch[0].keys()
+    return {k: torch.stack([b[k] for b in batch], dim=0) for k in keys}
+
+
 __all__ = [
     "SimpleTextDataset",
     "TokenizedDataset",
     "QUANTADataset",
     "DummyDataset",
+    "JsonlDataset",
     "create_dataloader",
+    "collate_cathedral",
 ]

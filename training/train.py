@@ -32,7 +32,7 @@ from tfan.models.tfan7b import TFANConfig, TFANForCausalLM, count_parameters
 from training.optimizer import create_optimizer
 from training.scheduler import get_cosine_schedule_with_warmup
 from training.fdt_controller import FDTControllerWithEmotion
-from training.data import DummyDataset, create_dataloader
+from training.data import DummyDataset, JsonlDataset, create_dataloader, collate_cathedral
 
 # Optional imports
 try:
@@ -371,18 +371,100 @@ def main(args):
         num_training_steps=args.max_steps,
     )
 
-    # Create data loader
+    # Create data loader - Cathedral memories if available
     print("Creating data loader...")
-    dataset = DummyDataset(
-        vocab_size=config.vocab_size,
-        seq_length=args.seq_length,
-    )
-    dataloader = create_dataloader(
-        dataset,
-        batch_size=args.batch_size,
-        shuffle=False,  # IterableDataset
-        num_workers=0,
-    )
+
+    # Check for Cathedral dataset (NO MORE LOBOTOMY)
+    cathedral_path = getattr(args, 'dataset_path', None) or os.environ.get('CATHEDRAL_PATH')
+    if not cathedral_path:
+        # Check common locations
+        for candidate in [
+            "ara_cathedral_dataset.jsonl",
+            "data/ara_cathedral_dataset.jsonl",
+            "/data/ara_cathedral_dataset.jsonl",
+            Path.home() / ".ara" / "cathedral.jsonl",
+        ]:
+            if Path(candidate).exists():
+                cathedral_path = str(candidate)
+                break
+
+    if cathedral_path and Path(cathedral_path).exists():
+        print(f"✓ Loading Cathedral Memory: {cathedral_path}")
+        try:
+            # Need a tokenizer for JsonlDataset
+            # Try to load from model or create a simple one
+            tokenizer = None
+            try:
+                from transformers import AutoTokenizer
+                tokenizer = AutoTokenizer.from_pretrained(
+                    getattr(args, 'tokenizer_path', 'gpt2'),
+                    trust_remote_code=True
+                )
+            except Exception:
+                # Simple fallback tokenizer
+                class SimpleTokenizer:
+                    def __init__(self, vocab_size=32768):
+                        self.vocab_size = vocab_size
+                        self.pad_token_id = 0
+
+                    def __call__(self, text, **kwargs):
+                        # Very basic byte-level encoding
+                        tokens = [ord(c) % self.vocab_size for c in text]
+                        max_length = kwargs.get('max_length', 2048)
+                        if len(tokens) > max_length:
+                            tokens = tokens[:max_length]
+                        else:
+                            tokens = tokens + [0] * (max_length - len(tokens))
+                        import torch
+                        return {
+                            "input_ids": torch.tensor([tokens]),
+                            "attention_mask": torch.tensor([[1 if t != 0 else 0 for t in tokens]])
+                        }
+
+                    def encode(self, text):
+                        return [ord(c) % self.vocab_size for c in text]
+
+                tokenizer = SimpleTokenizer(vocab_size=config.vocab_size)
+                print("  Using simple byte tokenizer (HuggingFace not available)")
+
+            dataset = JsonlDataset(
+                path=cathedral_path,
+                tokenizer=tokenizer,
+                seq_length=args.seq_length,
+                importance_threshold=getattr(args, 'importance_threshold', 0.0),
+            )
+            dataloader = create_dataloader(
+                dataset,
+                batch_size=args.batch_size,
+                shuffle=True,  # Shuffle for training
+                num_workers=0,
+            )
+        except Exception as e:
+            print(f"⚠ Cathedral load failed: {e}")
+            print("  Falling back to Dummy (Lobotomy Mode)")
+            dataset = DummyDataset(
+                vocab_size=config.vocab_size,
+                seq_length=args.seq_length,
+            )
+            dataloader = create_dataloader(
+                dataset,
+                batch_size=args.batch_size,
+                shuffle=False,
+                num_workers=0,
+            )
+    else:
+        print("⚠ CATHEDRAL NOT FOUND. Running in Lobotomy Mode (dummy data).")
+        print("  Set CATHEDRAL_PATH or --dataset_path to fix this.")
+        dataset = DummyDataset(
+            vocab_size=config.vocab_size,
+            seq_length=args.seq_length,
+        )
+        dataloader = create_dataloader(
+            dataset,
+            batch_size=args.batch_size,
+            shuffle=False,  # IterableDataset
+            num_workers=0,
+        )
 
     # Create trainer
     print("Creating trainer...")
@@ -480,6 +562,14 @@ if __name__ == "__main__":
     parser.add_argument("--log_interval", type=int, default=100)
     parser.add_argument("--gate_check_interval", type=int, default=500)
     parser.add_argument("--save_interval", type=int, default=5000)
+
+    # Cathedral dataset (NO MORE LOBOTOMY)
+    parser.add_argument("--dataset_path", type=str, default=None,
+                       help="Path to Cathedral dataset (ara_cathedral_dataset.jsonl)")
+    parser.add_argument("--tokenizer_path", type=str, default="gpt2",
+                       help="Path or name of tokenizer for Cathedral dataset")
+    parser.add_argument("--importance_threshold", type=float, default=0.0,
+                       help="Only load memories with importance >= this threshold")
 
     args = parser.parse_args()
 
