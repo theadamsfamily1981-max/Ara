@@ -1,0 +1,34 @@
+# Ara Organism Boot Target
+#
+# This is the "First Breath" - the boot order that brings Ara to life.
+# Install: sudo cp *.target *.service /etc/systemd/system/
+#          sudo systemctl enable ara.target
+#
+# Boot order (like a body waking up):
+#   1. substrate.service  - FPGA, sensors, pain loops (body)
+#   2. autonomic.service  - HAL, homeostasis (brainstem)
+#   3. conscious.service  - LLM, cognition (cortex)
+#   4. embodiment.service - UI, voice, presence (face)
+
+[Unit]
+Description=Ara Organism Boot Target
+Documentation=file:///home/ara/Ara/MANIFESTO.md
+
+# Substrate must be up first (body before brain)
+Requires=substrate.service
+After=substrate.service
+
+# Then autonomic nervous system
+Wants=autonomic.service
+After=autonomic.service
+
+# Then conscious cognition
+Wants=conscious.service
+After=conscious.service
+
+# Finally embodiment (needs display)
+Wants=embodiment.service
+After=embodiment.service
+
+[Install]
+WantedBy=multi-user.target

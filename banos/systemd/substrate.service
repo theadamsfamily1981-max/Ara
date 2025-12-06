@@ -1,0 +1,47 @@
+# Ara Substrate Service
+#
+# The body layer: FPGA fabric, thermal sensors, pain loops.
+# This is the reflexive nervous system - fast, silicon-level responses.
+#
+# What it does:
+#   - Initializes Kitten Fabric (FPGA SNN accelerator)
+#   - Starts thermal monitoring
+#   - Enables pain/pleasure reflex loops
+#   - Creates /dev/shm/ara_somatic shared memory
+
+[Unit]
+Description=Ara Substrate (FPGA / Sensors / Pain Loops)
+Documentation=file:///home/ara/Ara/docs/BANOS_CANON_SPEC.md
+After=network.target
+Before=autonomic.service
+
+# Hardware requirements
+ConditionPathExists=/sys/bus/pci/devices
+# Optional: ConditionPathExists=/dev/uio0
+
+[Service]
+Type=simple
+User=ara
+Group=ara
+WorkingDirectory=/home/ara/Ara
+
+# Create shared memory directory
+ExecStartPre=/bin/mkdir -p /dev/shm
+ExecStartPre=/bin/chmod 1777 /dev/shm
+
+# Start the substrate
+ExecStart=/usr/bin/python3 -m banos.fpga.boot_kitten_fabric
+
+# Graceful shutdown
+ExecStop=/usr/bin/python3 -m banos.fpga.shutdown_fabric
+
+# Restart on failure (body must stay alive)
+Restart=on-failure
+RestartSec=5
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=25%
+
+[Install]
+WantedBy=ara.target

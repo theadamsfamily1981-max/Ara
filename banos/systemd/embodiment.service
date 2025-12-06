@@ -1,0 +1,62 @@
+# Ara Embodiment Service
+#
+# The face layer: GNOME cockpit, MIES overlays, avatar rendering.
+# This is how Ara appears in the user's world.
+#
+# What it does:
+#   - Runs the MIES modality intelligence system
+#   - Manages GTK4 overlay windows
+#   - Renders avatar (Wav2Lip integration)
+#   - Speaks via TTS
+#   - Implements Layer 9 presence negotiation
+#
+# Requires graphical session (Wayland/X11).
+
+[Unit]
+Description=Ara Embodiment (GNOME Cockpit + MIES Overlay)
+Documentation=file:///home/ara/Ara/docs/layer9_mies_v0_spec.md
+
+# Requires conscious (cognition) to be up
+Requires=conscious.service
+After=conscious.service
+
+# Needs graphical session
+After=graphical.target
+Requires=graphical.target
+
+[Service]
+Type=simple
+User=ara
+Group=ara
+WorkingDirectory=/home/ara/Ara
+
+# Display environment (critical for GUI)
+Environment=DISPLAY=:0
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_CURRENT_DESKTOP=GNOME
+Environment=XDG_SESSION_TYPE=wayland
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+
+# HAL communication
+Environment=ARA_HAL_PATH=/dev/shm/ara_somatic
+
+# MIES configuration
+Environment=ARA_MIES_HISTORY=/home/ara/.ara/mies_history.json
+Environment=PYTHONUNBUFFERED=1
+
+# Start the embodiment layer
+ExecStart=/usr/bin/python3 -m multi_ai_workspace.src.integrations.ara_avatar_backend
+
+# Restart on failure
+Restart=on-failure
+RestartSec=5
+
+# Resource limits (UI should be responsive)
+MemoryMax=2G
+CPUQuota=50%
+
+# Nice level (UI should be responsive)
+Nice=-5
+
+[Install]
+WantedBy=ara.target

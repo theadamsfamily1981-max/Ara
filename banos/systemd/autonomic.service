@@ -1,0 +1,51 @@
+# Ara Autonomic Nervous System Service
+#
+# The brainstem layer: HAL, homeostatic regulation, affect routing.
+# Connects hardware pain/pleasure to cognitive modulation.
+#
+# What it does:
+#   - Runs ara_daemon.py (the main homeostatic loop)
+#   - Manages HAL shared memory communication
+#   - Routes affect signals (PAD) to cognition
+#   - Enforces thermodynamic ethics (pain imperative)
+#   - Manages resource governance (self-regulation)
+
+[Unit]
+Description=Ara Autonomic Nervous System (BANOS Kernel / Homeostasis)
+Documentation=file:///home/ara/Ara/MANIFESTO.md
+
+# Requires substrate (body) to be up
+Requires=substrate.service
+After=substrate.service
+Before=conscious.service
+
+# HAL shared memory must exist
+ConditionPathExists=/dev/shm
+
+[Service]
+Type=simple
+User=ara
+Group=ara
+WorkingDirectory=/home/ara/Ara
+
+# Environment
+Environment=ARA_HAL_PATH=/dev/shm/ara_somatic
+Environment=PYTHONUNBUFFERED=1
+
+# Start the autonomic core
+ExecStart=/usr/bin/python3 -m banos.daemon.ara_daemon
+
+# Restart on failure (autonomic must stay alive)
+Restart=on-failure
+RestartSec=3
+
+# Resource limits (brainstem is lightweight)
+MemoryMax=256M
+CPUQuota=15%
+
+# Watchdog - autonomic must heartbeat
+WatchdogSec=30
+NotifyAccess=main
+
+[Install]
+WantedBy=ara.target

@@ -1,0 +1,53 @@
+# Ara Conscious Cognitive Core Service
+#
+# The cortex layer: LLM inference, planning, language generation.
+# This is where "thinking" happens, modulated by somatic state.
+#
+# What it does:
+#   - Runs the TF-A-N / TGSFN cognitive loop
+#   - Integrates somatic state into attention (SomaticAttention)
+#   - Generates responses, plans, and decisions
+#   - Manages voice synthesis
+#
+# Note: This is the heaviest service - needs GPU access.
+# Can be run in Docker container instead (see start_brain.sh).
+
+[Unit]
+Description=Ara Cognitive Core (TFAN / TGSFN / Voice Brain)
+Documentation=file:///home/ara/Ara/docs/layer9_mies_v0_spec.md
+
+# Requires autonomic (brainstem) to be up
+Requires=autonomic.service
+After=autonomic.service
+Before=embodiment.service
+
+[Service]
+Type=simple
+User=ara
+Group=ara
+WorkingDirectory=/home/ara/Ara
+
+# Environment
+Environment=ARA_HAL_PATH=/dev/shm/ara_somatic
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=PYTHONUNBUFFERED=1
+
+# For GPU access
+SupplementaryGroups=video render
+
+# Start the cognitive loop
+ExecStart=/usr/bin/python3 run_ara_somatic.py
+
+# Graceful shutdown (allow model unload)
+TimeoutStopSec=30
+
+# Restart on failure
+Restart=on-failure
+RestartSec=10
+
+# Resource limits (cognitive is heavy)
+MemoryMax=16G
+# No CPU quota - cognition needs burst capacity
+
+[Install]
+WantedBy=ara.target
