@@ -99,6 +99,11 @@ IMMUTABLE_MODULES: Set[str] = {
     "banos.daemon.style_profile",
     "banos.daemon.style_cortex",
 
+    # Crystalline Core - wisdom backbone (scar tissue is sacred)
+    "tfan.cognition.crystalline_core",
+    "tfan.cognition.crystal_memory",
+    "tfan.cognition.crystal_historian",
+
     # Persistence layer
     "banos.storage",
     "banos.db",
