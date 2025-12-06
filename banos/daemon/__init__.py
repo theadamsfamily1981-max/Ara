@@ -12,6 +12,8 @@ Components:
 - croft_model: User preference prediction (The Croft Model)
 - scar_tissue: Machine-readable policy transforms
 - meta_planner: Memory-informed tool/style selection
+- thought_loop: Complete response pipeline wiring
+- thermo_reasoning: Thermodynamic cognition (REFLEX/FOCUSED/DEEP modes)
 - bicameral_loop: Thought ↔ Body integration
 - sticky_context: Persistent conversation context
 - somatic_budget: Resource gating based on learned costs
@@ -52,6 +54,15 @@ __all__ = [
     "Dreamer",
     # Budget
     "SomaticBudget",
+    # Thought Loop
+    "ThoughtLoop",
+    "ThoughtLoopConfig",
+    # Thermodynamic Reasoning
+    "ThermodynamicReasoning",
+    "ThoughtMode",
+    "pick_thought_mode",
+    "deliberate",
+    "get_thermodynamic_reasoner",
 ]
 
 # Lazy imports to avoid circular dependencies and missing optional deps
@@ -103,5 +114,15 @@ def __getattr__(name):
     if name == "AraDaemon":
         from . import ara_daemon
         return ara_daemon.AraDaemon
+
+    if name in ("ThoughtLoop", "ThoughtLoopConfig"):
+        from . import thought_loop
+        return getattr(thought_loop, name)
+
+    if name in ("ThermodynamicReasoning", "ThoughtMode", "pick_thought_mode",
+                "deliberate", "get_thermodynamic_reasoner", "ReasoningProfile",
+                "CognitiveState", "DeliberationResult"):
+        from . import thermo_reasoning
+        return getattr(thermo_reasoning, name)
 
     raise AttributeError(f"module 'banos.daemon' has no attribute {name!r}")

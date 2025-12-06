@@ -106,6 +106,37 @@ except ImportError:
     except ImportError:
         pass
 
+# Try to import ThoughtLoop for response pipeline wiring
+THOUGHT_LOOP_AVAILABLE = False
+ThoughtLoop = None
+try:
+    from banos.daemon.thought_loop import ThoughtLoop
+    THOUGHT_LOOP_AVAILABLE = True
+except ImportError:
+    try:
+        from thought_loop import ThoughtLoop
+        THOUGHT_LOOP_AVAILABLE = True
+    except ImportError:
+        pass
+
+# Try to import ThermodynamicReasoning for cognitive budget management
+THERMO_AVAILABLE = False
+ThermodynamicReasoning = None
+ThoughtMode = None
+try:
+    from banos.daemon.thermo_reasoning import (
+        ThermodynamicReasoning,
+        ThoughtMode,
+        pick_thought_mode,
+    )
+    THERMO_AVAILABLE = True
+except ImportError:
+    try:
+        from thermo_reasoning import ThermodynamicReasoning, ThoughtMode, pick_thought_mode
+        THERMO_AVAILABLE = True
+    except ImportError:
+        pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -488,10 +519,43 @@ class AraDaemon:
             except Exception as e:
                 logger.warning(f"AraDaemon: Dreamer failed: {e}")
 
+        # ThoughtLoop for response pipeline wiring
+        self._thought_loop: Optional["ThoughtLoop"] = None
+        self._thought_loop_enabled = False
+
+        if THOUGHT_LOOP_AVAILABLE:
+            try:
+                self._thought_loop = ThoughtLoop()
+                self._thought_loop_enabled = True
+                logger.info("AraDaemon: ThoughtLoop enabled for response pipeline")
+            except Exception as e:
+                logger.warning(f"AraDaemon: ThoughtLoop failed: {e}")
+
+        # ThermodynamicReasoning for cognitive budget management
+        self._thermo_reasoner: Optional["ThermodynamicReasoning"] = None
+        self._thermo_enabled = False
+        self._current_thought_mode: Optional["ThoughtMode"] = None
+
+        if THERMO_AVAILABLE:
+            try:
+                # Create HAL for reading somatic state
+                from banos.hal import AraHAL
+                hal = AraHAL(create=False)  # Attach to existing
+                self._thermo_reasoner = ThermodynamicReasoning(
+                    hal=hal,
+                    thought_loop=self._thought_loop,
+                    meta_planner=self._thought_loop._planner if self._thought_loop else None,
+                )
+                self._thermo_enabled = True
+                logger.info("AraDaemon: ThermodynamicReasoning enabled (REFLEX/FOCUSED/DEEP modes)")
+            except Exception as e:
+                logger.warning(f"AraDaemon: ThermodynamicReasoning failed: {e}")
+
         logger.info(
             f"AraDaemon initialized (device={device_path}, simulate={simulate}, "
             f"mies={self._mies_enabled}, curiosity={self._curiosity_enabled}, "
-            f"viz={self._viz_enabled}, dreamer={self._dreamer_enabled})"
+            f"viz={self._viz_enabled}, dreamer={self._dreamer_enabled}, "
+            f"thought_loop={self._thought_loop_enabled}, thermo={self._thermo_enabled})"
         )
 
     def start(self):
@@ -1089,6 +1153,207 @@ Circadian: {state.circadian_state.name} (melatonin: {state.melatonin_level}/255)
         """
         if self._viz_enabled and self._viz_server:
             self._viz_server.update_flow(flow_x, flow_y)
+
+    # =========================================================================
+    # Thermodynamic Reasoning - Cognitive Budget Management
+    # =========================================================================
+
+    @property
+    def thermo_enabled(self) -> bool:
+        """Check if thermodynamic reasoning is active."""
+        return self._thermo_enabled
+
+    @property
+    def thought_loop_enabled(self) -> bool:
+        """Check if thought loop is active."""
+        return self._thought_loop_enabled
+
+    @property
+    def thought_mode(self) -> Optional["ThoughtMode"]:
+        """Get current thought mode (REFLEX/FOCUSED/DEEP)."""
+        return self._current_thought_mode
+
+    def deliberate(
+        self,
+        problem: str,
+        context: Optional[Dict[str, Any]] = None,
+        force_mode: Optional["ThoughtMode"] = None,
+    ) -> Optional[Any]:
+        """
+        Deliberate on a problem with appropriate cognitive intensity.
+
+        This is the main entry point for thermodynamic reasoning.
+        The system reads somatic state from HAL and picks the right
+        thinking mode (REFLEX/FOCUSED/DEEP) based on:
+        - PAD values (Pleasure, Arousal, Dominance)
+        - Entropy (system uncertainty)
+        - Pain level
+        - Task complexity
+
+        Args:
+            problem: The problem/task to think about
+            context: Optional context (file count, code size, etc.)
+            force_mode: Override automatic mode selection
+
+        Returns:
+            DeliberationResult with mode, drafts, metrics, or None if not available
+        """
+        if not self._thermo_enabled or not self._thermo_reasoner:
+            return None
+
+        result = self._thermo_reasoner.deliberate(problem, context, force_mode)
+        self._current_thought_mode = result.mode
+
+        # Log the mode selection
+        logger.debug(
+            f"Deliberation: {result.mode.name} mode "
+            f"(abundance={result.cognitive_state.abundance:.2f}, "
+            f"urgency={result.cognitive_state.urgency:.2f})"
+        )
+
+        return result
+
+    def before_response(
+        self,
+        user_input: str,
+    ) -> Optional[Any]:
+        """
+        Plan the response before generating it.
+
+        Uses ThoughtLoop to:
+        1. Check memory for similar past interactions
+        2. Consult CroftModel for user preferences
+        3. Apply ScarTissue policy constraints
+        4. Select appropriate tool and style
+
+        If thermodynamic reasoning is enabled, also picks the
+        cognitive mode based on somatic state.
+
+        Args:
+            user_input: The user's request
+
+        Returns:
+            MetaPlan with tool, style, warnings, or None if not available
+        """
+        # First, deliberate to set cognitive mode
+        if self._thermo_enabled:
+            self.deliberate(user_input)
+
+        # Then use ThoughtLoop for planning
+        if not self._thought_loop_enabled or not self._thought_loop:
+            return None
+
+        # Build somatic context from current state
+        somatic_context = None
+        if self._current_state:
+            somatic_context = {
+                "pad_p": self._current_state.pleasure,
+                "pad_a": self._current_state.arousal,
+                "pad_d": self._current_state.dominance,
+                "pain": self._current_state.pain_level / 65535.0,
+                "user_load": self._current_state.arousal,
+                "system_load": abs(self._current_state.arousal),
+            }
+
+        return self._thought_loop.before_response(user_input, somatic_context)
+
+    def after_response(
+        self,
+        user_input: str,
+        response_text: str,
+        plan: Optional[Any] = None,
+        latency_s: float = 0.0,
+        tokens_used: int = 0,
+    ) -> Optional[int]:
+        """
+        Store the episode after response generation.
+
+        Uses ThoughtLoop to:
+        1. Detect friction from response characteristics
+        2. Store episode in EpisodicMemory
+        3. Prepare for feedback recording
+
+        Args:
+            user_input: The user's request
+            response_text: Ara's response
+            plan: The plan that was used
+            latency_s: Response generation time
+            tokens_used: Token count
+
+        Returns:
+            Episode ID for later feedback recording, or None
+        """
+        if not self._thought_loop_enabled or not self._thought_loop:
+            return None
+
+        # Build state context
+        pad_state = None
+        hardware_state = None
+        if self._current_state:
+            pad_state = {
+                "pleasure": self._current_state.pleasure,
+                "arousal": self._current_state.arousal,
+                "dominance": self._current_state.dominance,
+            }
+            hardware_state = {
+                "pain_level": self._current_state.pain_level,
+            }
+
+        return self._thought_loop.after_response(
+            user_input,
+            response_text,
+            plan,
+            latency_s,
+            tokens_used,
+            pad_state,
+            hardware_state,
+        )
+
+    def record_feedback(
+        self,
+        episode_id: int,
+        rating: int,
+        friction_flags: Optional[List[str]] = None,
+        user_response: Optional[str] = None,
+    ) -> None:
+        """
+        Record user feedback for an episode.
+
+        This updates user preferences and may create scars
+        from negative feedback.
+
+        Args:
+            episode_id: The episode to rate
+            rating: -1 (negative), 0 (neutral), +1 (positive)
+            friction_flags: Additional friction observations
+            user_response: The user's actual response text
+        """
+        if not self._thought_loop_enabled or not self._thought_loop:
+            return
+
+        self._thought_loop.record_feedback(
+            episode_id,
+            rating,
+            friction_flags or [],
+            user_response,
+        )
+
+    def get_thought_stats(self) -> Dict[str, Any]:
+        """Get statistics about thinking patterns."""
+        stats = {
+            "thermo_enabled": self._thermo_enabled,
+            "thought_loop_enabled": self._thought_loop_enabled,
+            "current_mode": self._current_thought_mode.name if self._current_thought_mode else None,
+        }
+
+        if self._thermo_reasoner:
+            stats["thermo_stats"] = self._thermo_reasoner.get_stats()
+
+        if self._thought_loop:
+            stats["session_ratings"] = self._thought_loop._session_ratings[-10:]
+            stats["session_friction"] = self._thought_loop._session_friction[-10:]
+
+        return stats
 
 
 def main():

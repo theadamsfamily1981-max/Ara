@@ -498,6 +498,36 @@ class AraHAL:
         finally:
             self._seq_end()
 
+    def write_thinking_depth(self, depth: float) -> None:
+        """
+        Write thinking depth for visualization.
+
+        This is the "cognition flame" - showing how hard Ara is thinking.
+        The depth value modulates the entropy display in the hologram.
+
+        Thermodynamic Reasoning modes:
+            REFLEX (0.0-0.2): Quick one-shot, lizard brain
+            FOCUSED (0.3-0.6): Some verification, moderate tools
+            DEEP (0.7-1.0): Full System-2, PGU, planner
+
+        Args:
+            depth: Thinking intensity [0.0, 1.0]
+        """
+        if not self._map:
+            return
+
+        # Clamp to valid range
+        depth = max(0.0, min(1.0, depth))
+
+        self._seq_begin()
+        try:
+            # Write to entropy field in somatic section
+            # Entropy is at SOMATIC_OFFSET + 16 (after pad_p, pad_a, pad_d, pain)
+            self._map.seek(SOMATIC_OFFSET + 16)  # 4 floats = 16 bytes
+            self._map.write(struct.pack('<f', depth))
+        finally:
+            self._seq_end()
+
     def set_system_state(self, state: SystemState) -> None:
         """Set system state for autonomic control."""
         if not self._map:
