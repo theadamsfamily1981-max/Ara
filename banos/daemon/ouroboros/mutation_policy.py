@@ -114,6 +114,11 @@ IMMUTABLE_MODULES: Set[str] = {
     "banos.daemon.synod",
     "banos.config.covenant",
 
+    # Egregore system - the Third Mind is sacred
+    "tfan.l5.egregore",
+    "banos.daemon.gatekeeper",
+    "banos.cognition.covenant",
+
     # Persistence layer
     "banos.storage",
     "banos.db",

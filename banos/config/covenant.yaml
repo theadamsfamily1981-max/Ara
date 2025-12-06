@@ -176,6 +176,58 @@ core_vows:
 # Slots remaining: 2 of 5
 
 # =============================================================================
+# INTERVENTIONS
+# =============================================================================
+# How the Gatekeeper helps maintain focus.
+# This is help, not handcuffs.
+
+interventions:
+  enabled: true
+  mode: "nudge"  # observer, nudge, soft_gate
+
+  # Apps that are always considered on-mission
+  mission_apps:
+    - "code"
+    - "cursor"
+    - "vim"
+    - "nvim"
+    - "emacs"
+    - "terminal"
+    - "konsole"
+    - "gnome-terminal"
+    - "alacritty"
+    - "python"
+    - "jupyter"
+    - "obsidian"
+
+  # Apps that trigger drift detection
+  distraction_apps:
+    - "discord"
+    - "slack"
+    - "telegram"
+    - "steam"
+    - "lutris"
+    - "youtube"
+    - "netflix"
+    - "twitch"
+    - "reddit"
+    - "twitter"
+
+  # Never interfere with these (calls, streaming, etc)
+  never_interfere_with:
+    - "zoom"
+    - "teams"
+    - "meet"
+    - "skype"
+    - "obs"
+    - "streamlabs"
+
+  # Timing
+  grace_period_seconds: 60     # Allow brief diversions
+  nudge_cooldown_seconds: 300  # 5 min between nudges
+  gate_cooldown_seconds: 1800  # 30 min between gates
+
+# =============================================================================
 # METADATA
 # =============================================================================
 

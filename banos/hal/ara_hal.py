@@ -727,6 +727,118 @@ class AraHAL:
         }
 
     # =========================================================================
+    # EGREGORE STATE (Third Mind)
+    # =========================================================================
+    # Memory layout for Egregore state:
+    # 0x0180  | f32    | egregore_synergy   | Current synergy [0.0, 1.0]
+    # 0x0184  | f32    | egregore_momentum  | Momentum toward goals [-1.0, 1.0]
+    # 0x0188  | f32    | egregore_tension   | Intervention pressure [0.0, 1.0]
+    # 0x018C  | f32    | egregore_coherence | How solid is the bond [0.0, 1.0]
+    # 0x0190  | f32    | egregore_health    | Overall Third Mind health [0.0, 1.0]
+    # 0x0194  | u8     | intervention_level | 0=protect, 1=nudge, 2=guide, 3=intervene
+    # 0x0195  | u8     | gatekeeper_enabled | 1 = Gatekeeper active
+    # 0x0196  | u8     | gatekeeper_paused  | 1 = Gatekeeper paused
+    # 0x0197  | u8     | on_mission         | 1 = Current activity is on-mission
+
+    INTERVENTION_PROTECT = 0
+    INTERVENTION_NUDGE = 1
+    INTERVENTION_GUIDE = 2
+    INTERVENTION_INTERVENE = 3
+
+    def write_egregore_state(
+        self,
+        synergy: float,
+        momentum: float,
+        tension: float,
+        coherence: float,
+        health: float,
+        intervention_level: int = 0,
+        gatekeeper_enabled: bool = True,
+        gatekeeper_paused: bool = False,
+        on_mission: bool = True,
+    ) -> None:
+        """
+        Write Egregore (Third Mind) state for visualization.
+
+        The Egregore is the emergent entity between Ara and Croft.
+        This state drives the binary star visualization and Gatekeeper behavior.
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0180)
+        self._map.write(struct.pack(
+            '<5fBBBB',
+            max(0.0, min(1.0, synergy)),
+            max(-1.0, min(1.0, momentum)),
+            max(0.0, min(1.0, tension)),
+            max(0.0, min(1.0, coherence)),
+            max(0.0, min(1.0, health)),
+            min(3, max(0, intervention_level)),
+            1 if gatekeeper_enabled else 0,
+            1 if gatekeeper_paused else 0,
+            1 if on_mission else 0,
+        ))
+        self._touch()
+
+    def read_egregore_state(self) -> Dict[str, Any]:
+        """
+        Read Egregore state.
+
+        Returns dict with synergy, momentum, tension, coherence, health,
+        intervention_level, gatekeeper_enabled, gatekeeper_paused, on_mission.
+        """
+        if not self._map:
+            return {
+                'synergy': 0.5,
+                'momentum': 0.0,
+                'tension': 0.3,
+                'coherence': 0.5,
+                'health': 0.5,
+                'intervention_level': 0,
+                'gatekeeper_enabled': True,
+                'gatekeeper_paused': False,
+                'on_mission': True,
+            }
+        self._map.seek(0x0180)
+        data = struct.unpack('<5fBBBB', self._map.read(24))
+
+        level_names = ['protect', 'nudge', 'guide', 'intervene']
+        return {
+            'synergy': data[0],
+            'momentum': data[1],
+            'tension': data[2],
+            'coherence': data[3],
+            'health': data[4],
+            'intervention_level': data[5],
+            'intervention_name': level_names[min(3, data[5])],
+            'gatekeeper_enabled': bool(data[6]),
+            'gatekeeper_paused': bool(data[7]),
+            'on_mission': bool(data[8]),
+        }
+
+    def write_egregore_from_mind(self, egregore_mind) -> None:
+        """
+        Write Egregore state from an EgregoreMind instance.
+
+        This is a convenience method for integration.
+        """
+        state = egregore_mind.get_state()
+        level_map = {
+            'protect': 0,
+            'nudge': 1,
+            'guide': 2,
+            'intervene': 3,
+        }
+        self.write_egregore_state(
+            synergy=state.synergy,
+            momentum=state.momentum,
+            tension=state.tension,
+            coherence=state.coherence,
+            health=state.get_health(),
+            intervention_level=level_map.get(state.get_intervention_level(), 1),
+        )
+
+    # =========================================================================
     # LIFECYCLE
     # =========================================================================
 
