@@ -5,6 +5,7 @@ This package enables Ara to:
 2. Analyze those logs to learn how to use tools/teachers better
 3. Maintain a research agenda about improving herself
 4. Surface suggestions to Croft in natural, varied language
+5. Transform vague visions into concrete roadmaps (Architect)
 
 Think of this as: Ara studies herself to become a better engineer.
 
@@ -15,6 +16,8 @@ Components:
 - meta_brain: Coordination layer that ties everything together
 - natural_prompts: Verbalize suggestions in Ara's conversational style
 - config: Configuration loading and management
+- strategist: Turn Dreams into strategic Ideas
+- architect: Turn vague visions into phased roadmaps with manifestos
 
 Integration with ara/learning/:
 - This layer provides high-level coordination and natural language
@@ -107,6 +110,16 @@ from .strategist import (
     get_strategist,
 )
 
+from .architect import (
+    RhetoricalMode,
+    VisionPillar,
+    VisionPhase,
+    VisionPlan,
+    Architect,
+    get_architect,
+    architect_vision,
+)
+
 __all__ = [
     # Schemas
     "ToolCall",
@@ -173,4 +186,12 @@ __all__ = [
     "StrategicProposal",
     "Strategist",
     "get_strategist",
+    # Architect (Vision → Roadmap)
+    "RhetoricalMode",
+    "VisionPillar",
+    "VisionPhase",
+    "VisionPlan",
+    "Architect",
+    "get_architect",
+    "architect_vision",
 ]
