@@ -66,6 +66,29 @@ from .prompts import (
     format_report_prompt,
 )
 
+# Scientist Brain - LLM-driven investigation
+from .intrinsic import (
+    IntrinsicMotivation,
+    get_intrinsic_motivation,
+)
+
+from .notebook import (
+    LabNotebook,
+    get_lab_notebook,
+)
+
+from .scientist import (
+    Scientist,
+    LLMEngine,
+    MockLLMEngine,
+)
+
+from .tools_research import (
+    ResearchTool,
+    ResearchToolRunner,
+    get_research_runner,
+)
+
 __all__ = [
     # World Model
     "WorldObject",
@@ -95,4 +118,15 @@ __all__ = [
     "format_discovery_prompt",
     "format_investigation_prompt",
     "format_report_prompt",
+    # Scientist Brain
+    "IntrinsicMotivation",
+    "get_intrinsic_motivation",
+    "LabNotebook",
+    "get_lab_notebook",
+    "Scientist",
+    "LLMEngine",
+    "MockLLMEngine",
+    "ResearchTool",
+    "ResearchToolRunner",
+    "get_research_runner",
 ]
