@@ -10,6 +10,8 @@ Components:
 - Treasury (CFO): Tracks capital, audits investments, manages budget
 - Factory (COO): Manages production pipeline from idea to shipped product
 - Boardroom: Strategic review, executive briefings, decision making
+- OrgChart (HR): Fleet roster - machine employees with roles and contracts
+- Dispatcher (Taskmaster): SSH-based remote execution to Fleet machines
 
 Philosophy:
     "She stops being your tool and starts being your Asset Manager."
@@ -19,6 +21,8 @@ Usage:
         Treasury, Capital, get_treasury,
         Factory, Project, get_factory,
         Boardroom, hold_standup, executive_summary,
+        OrgChart, Employee, get_org_chart,
+        Dispatcher, get_dispatcher,
     )
 
     # CFO: Check if we can afford an investment
@@ -34,6 +38,13 @@ Usage:
 
     # Boardroom: Get executive briefing
     print(executive_summary())
+
+    # Fleet: Dispatch work to machines
+    org = get_org_chart()
+    dispatcher = get_dispatcher()
+    emp = org.get_employee_for_task(task_risk="high", needs_gpu=False)
+    if emp:
+        dispatcher.run_inline(emp, "print('hello from the intern')")
 """
 
 from .treasury import (
@@ -75,6 +86,19 @@ from .boardroom import (
     executive_summary,
 )
 
+from .org_chart import (
+    EmployeeRole,
+    EmployeeStatus,
+    Employee,
+    OrgChart,
+    get_org_chart,
+)
+
+from .dispatcher import (
+    Dispatcher,
+    get_dispatcher,
+)
+
 
 __all__ = [
     # Treasury (CFO)
@@ -110,4 +134,12 @@ __all__ = [
     "get_boardroom",
     "hold_standup",
     "executive_summary",
+    # Fleet (OrgChart + Dispatcher)
+    "EmployeeRole",
+    "EmployeeStatus",
+    "Employee",
+    "OrgChart",
+    "get_org_chart",
+    "Dispatcher",
+    "get_dispatcher",
 ]
