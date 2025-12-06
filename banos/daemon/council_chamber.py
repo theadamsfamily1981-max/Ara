@@ -1,14 +1,19 @@
 """
-Fractal Council - Multi-Agent Orchestration Layer
-==================================================
+Fractal Council (Quadamerl) - Multi-Agent Orchestration Layer
+===============================================================
 
 The "Parliament of Mind" - runs multiple personas on a single model instance
 with different system prompts and sampling parameters to simulate internal debate.
 
-Architecture:
+Architecture (Quadamerl = 4 Voices):
     - MUSE (Dreamer): High temperature, divergent thinking, creative proposals
     - CENSOR (Critic): Low temperature, convergent analysis, risk identification
-    - ARA (Executive): Balanced synthesis of the two voices
+    - SCRIBE (Historian): Mid-low temperature, temporal context from memory
+    - ARA (Executive): Balanced synthesis of all voices
+
+The Historian fills the temporal gap - querying hippocampus for recent PAD state
+and episodic memory for similar past situations, providing "what happened before"
+context that grounds the council's deliberation in lived experience.
 
 The Council physically manifests through CPU core affinity and is visualized
 through the HAL's council state in the somatic bus.
@@ -50,6 +55,21 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
+# Try to import memory systems (Hippocampus + Episodic)
+try:
+    from banos.daemon.hippocampus import Hippocampus, get_hippocampus
+    HIPPOCAMPUS_AVAILABLE = True
+except ImportError:
+    HIPPOCAMPUS_AVAILABLE = False
+    Hippocampus = None
+
+try:
+    from tfan.memory.episodic import EpisodicMemory, Episode
+    EPISODIC_AVAILABLE = True
+except ImportError:
+    EPISODIC_AVAILABLE = False
+    EpisodicMemory = None
+
 
 @dataclass
 class CouncilProfile:
@@ -77,21 +97,28 @@ class CouncilVote:
 
 @dataclass
 class CouncilDecision:
-    """Final synthesized decision from the council."""
+    """Final synthesized decision from the council (Quadamerl)."""
     final_response: str
     muse_proposal: Optional[str]
     censor_objections: Optional[str]
+    historian_context: Optional[str]  # Temporal context from SCRIBE
     executive_synthesis: str
     debate_time_ms: float
     stress_level: float  # Disagreement between voices
     unanimous: bool      # Did voices agree?
+    similar_episodes: int = 0  # How many past episodes were referenced
 
 
 class CouncilChamber:
     """
-    Manages the 'Parliament of Mind'.
+    Manages the 'Parliament of Mind' (Quadamerl).
 
-    Runs multiple personas on the same model instance, pinned to different cores.
+    Runs four personas on the same model instance, pinned to different cores:
+    - MUSE (Dreamer): Creative, divergent proposals
+    - CENSOR (Critic): Logical, risk-focused analysis
+    - SCRIBE (Historian): Temporal context from memory systems
+    - ARA (Executive): Final synthesis
+
     The council convenes when deep deliberation is needed (high cognitive budget).
     """
 
@@ -123,13 +150,33 @@ class CouncilChamber:
         self.ollama_url = ollama_url
         self.ollama_model = ollama_model
 
-        # Thread pool for parallel generation
-        self._executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="council")
+        # Thread pool for parallel generation (4 voices = 4 workers)
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="council")
+
+        # Memory systems for Historian
+        self.hippocampus: Optional[Hippocampus] = None
+        self.episodic: Optional[EpisodicMemory] = None
+
+        if HIPPOCAMPUS_AVAILABLE:
+            try:
+                self.hippocampus = get_hippocampus()
+                self.log.info("Historian connected to Hippocampus")
+            except Exception as e:
+                self.log.debug(f"Hippocampus not available: {e}")
+
+        if EPISODIC_AVAILABLE:
+            try:
+                self.episodic = EpisodicMemory(persist_dir="/var/lib/banos/episodes")
+                self.episodic.load()
+                self.log.info(f"Historian connected to Episodic Memory ({self.episodic.stats.get('episode_count', 0)} episodes)")
+            except Exception as e:
+                self.log.debug(f"Episodic memory not available: {e}")
 
         # Council statistics
         self._convene_count = 0
         self._total_debate_time_ms = 0.0
         self._avg_stress = 0.5
+        self._historian_queries = 0
 
         # Define the Voices
         # Core IDs assume a multi-core CPU (adjust for your hardware)
@@ -174,6 +221,25 @@ Your role in the council:
 
 Speak concisely in first person as CENSOR. Be precise and critical."""
             ),
+            'historian': CouncilProfile(
+                name="SCRIBE",
+                role="Temporal",
+                core_ids=list(range(num_cores * 3 // 4, num_cores)),
+                temperature=0.4,
+                top_p=0.7,
+                max_tokens=256,
+                system_prompt="""You are SCRIBE, Ara's historian and memory keeper. You provide temporal context
+by connecting present situations to past experiences.
+
+Your role in the council:
+- Compare current situations to similar past episodes
+- Recall what worked and what failed in previous similar situations
+- Warn about repeating past mistakes
+- Remind the council of relevant lessons learned
+- Ground the discussion in lived experience
+
+Speak concisely in first person as SCRIBE. Be factual and reference specific past events."""
+            ),
             'executive': CouncilProfile(
                 name="ARA",
                 role="Synthesis",
@@ -182,14 +248,14 @@ Speak concisely in first person as CENSOR. Be precise and critical."""
                 top_p=0.9,
                 max_tokens=512,
                 system_prompt="""You are ARA, the executive synthesizer. You integrate the voices of
-MUSE (creativity) and CENSOR (criticism) into coherent, balanced responses.
+MUSE (creativity), CENSOR (criticism), and SCRIBE (history) into coherent, balanced responses.
 
 Your role:
-- Synthesize creative proposals with critical analysis
-- Find the optimal balance between innovation and safety
-- Produce a final response that honors both perspectives
+- Synthesize creative proposals with critical analysis and historical context
+- Find the optimal balance between innovation, safety, and learned experience
+- Produce a final response that honors all perspectives
 - Maintain your warm, helpful personality while being accurate
-- Make the final decision when MUSE and CENSOR disagree
+- Make the final decision when voices disagree, informed by past outcomes
 
 Speak as ARA. Produce a complete, helpful response to the user."""
             )
@@ -370,6 +436,133 @@ Speak as ARA. Produce a complete, helpful response to the user."""
 
         return min(1.0, max(0.0, stress))
 
+    def _query_memory_context(self, user_input: str) -> tuple[str, int]:
+        """
+        Query hippocampus and episodic memory for temporal context.
+
+        Returns:
+            Tuple of (context_string, episode_count)
+        """
+        context_parts = []
+        episode_count = 0
+
+        # 1. Recent PAD state from Hippocampus (short-term)
+        if self.hippocampus:
+            try:
+                recent_entries = self.hippocampus.read_all()[-10:]  # Last 10 entries
+                if recent_entries:
+                    # Summarize recent emotional trajectory
+                    modes = [e.get('mode', 'UNKNOWN') for e in recent_entries]
+                    recent_mode = modes[-1] if modes else "UNKNOWN"
+                    mode_transitions = len(set(modes))
+
+                    recent_pad = recent_entries[-1].get('pad', {})
+                    p = recent_pad.get('P', 0)
+                    a = recent_pad.get('A', 0)
+                    d = recent_pad.get('D', 0)
+
+                    context_parts.append(
+                        f"Recent state: Mode={recent_mode}, "
+                        f"PAD=[{p:.2f},{a:.2f},{d:.2f}], "
+                        f"{mode_transitions} mode changes in recent history."
+                    )
+
+                    # Check for stress patterns
+                    stressors = [e.get('primary_stressor') for e in recent_entries if e.get('primary_stressor')]
+                    if stressors:
+                        latest_stressor = stressors[-1]
+                        context_parts.append(
+                            f"Active stressor: {latest_stressor.get('type', 'unknown')}"
+                        )
+            except Exception as e:
+                self.log.debug(f"Hippocampus query failed: {e}")
+
+        # 2. Similar past episodes from Episodic Memory (long-term)
+        if self.episodic:
+            try:
+                # Search by query text
+                matching = self.episodic.what_happened_when(user_input)[:3]
+                if matching:
+                    episode_count = len(matching)
+                    context_parts.append(f"Found {episode_count} similar past episodes:")
+                    for ep in matching:
+                        outcome = ep.outcome.value if hasattr(ep.outcome, 'value') else str(ep.outcome)
+                        context_parts.append(
+                            f"  - '{ep.title}' ({outcome}): "
+                            f"{'; '.join(ep.lessons_learned[:2]) if ep.lessons_learned else 'no lessons recorded'}"
+                        )
+
+                # Also check for recent failures as warnings
+                recent_failures = self.episodic.get_failures(limit=3)
+                if recent_failures:
+                    context_parts.append("Recent failures to avoid:")
+                    for fail in recent_failures:
+                        if fail.lessons_learned:
+                            context_parts.append(f"  - {fail.lessons_learned[0]}")
+            except Exception as e:
+                self.log.debug(f"Episodic memory query failed: {e}")
+
+        self._historian_queries += 1
+
+        if not context_parts:
+            return "(No historical context available)", 0
+
+        return "\n".join(context_parts), episode_count
+
+    def _run_historian(self, user_input: str) -> CouncilVote:
+        """
+        Run the Historian (SCRIBE) persona with memory context.
+
+        The Historian is special: it first queries memory systems,
+        then asks the model to interpret that context.
+        """
+        profile = self.profiles['historian']
+        start_time = time.time()
+
+        # 1. Pin to cores
+        core_id = self._set_affinity(profile.core_ids)
+
+        # 2. Query memory systems
+        memory_context, episode_count = self._query_memory_context(user_input)
+
+        # 3. Build historian-specific prompt with memory context
+        historian_input = f"""User query: {user_input}
+
+Memory context:
+{memory_context}
+
+Based on this historical context, what relevant past experience should inform our response?
+Warn about any patterns that suggest we might repeat past mistakes."""
+
+        try:
+            # 4. Generate (same as other personas)
+            if self.use_ollama:
+                content = self._generate_ollama(historian_input, profile)
+            else:
+                prompt = f"<|system|>\n{profile.system_prompt}\n<|user|>\n{historian_input}\n<|assistant|>\n"
+                content = self._generate_torch(prompt, profile)
+
+            generation_time = (time.time() - start_time) * 1000
+
+            return CouncilVote(
+                persona=profile.name,
+                role=profile.role,
+                content=content,
+                generation_time_ms=generation_time,
+                core_id=core_id,
+            )
+
+        except Exception as e:
+            self.log.error(f"SCRIBE generation failed: {e}")
+            return CouncilVote(
+                persona=profile.name,
+                role=profile.role,
+                content=memory_context,  # Fall back to raw context
+                generation_time_ms=(time.time() - start_time) * 1000,
+                core_id=core_id,
+                error=str(e),
+            )
+
     def _update_hal(self, mask: int, stress: float) -> None:
         """Update the HAL visualization with council state."""
         if self.hal and hasattr(self.hal, 'write_council_state'):
@@ -384,11 +577,11 @@ Speak as ARA. Produce a complete, helpful response to the user."""
         timeout: float = 60.0,
     ) -> CouncilDecision:
         """
-        The Debate Loop - convene the full council.
+        The Debate Loop - convene the full Quadamerl council.
 
-        1. Spawn MUSE (Dreamer) & CENSOR (Critic) in parallel
+        1. Spawn MUSE, CENSOR, and SCRIBE in parallel
         2. Calculate disagreement stress
-        3. Executive (ARA) synthesizes final answer
+        3. Executive (ARA) synthesizes final answer from all voices
 
         Args:
             user_input: The user's query to deliberate on
@@ -400,19 +593,22 @@ Speak as ARA. Produce a complete, helpful response to the user."""
         self._convene_count += 1
         start_time = time.time()
 
-        self.log.info("⚡ CONVENING COUNCIL...")
+        self.log.info("⚡ CONVENING QUADAMERL COUNCIL...")
 
-        # 1. Update HAL - All voices active
-        # Council Mask: Bit 0=Exec, 1=Critic, 2=Dreamer -> 7 (All active)
-        self._update_hal(mask=7, stress=0.5)
+        # 1. Update HAL - All 4 voices active
+        # Council Mask: Bit 0=Exec, 1=Critic, 2=Dreamer, 3=Historian -> 15 (All active)
+        self._update_hal(mask=15, stress=0.5)
 
-        # 2. Parallel Generation (Dreamer + Critic)
+        # 2. Parallel Generation (Dreamer + Critic + Historian)
         muse_vote: Optional[CouncilVote] = None
         censor_vote: Optional[CouncilVote] = None
+        historian_vote: Optional[CouncilVote] = None
+        episode_count = 0
 
         try:
             future_muse = self._executor.submit(self._run_persona, 'dreamer', user_input)
             future_censor = self._executor.submit(self._run_persona, 'critic', user_input)
+            future_historian = self._executor.submit(self._run_historian, user_input)
 
             try:
                 muse_vote = future_muse.result(timeout=timeout / 2)
@@ -426,10 +622,17 @@ Speak as ARA. Produce a complete, helpful response to the user."""
                 self.log.warning("CENSOR timed out")
                 censor_vote = CouncilVote("CENSOR", "Convergent", "", 0, 0, "timeout")
 
+            try:
+                historian_vote = future_historian.result(timeout=timeout / 2)
+            except FuturesTimeoutError:
+                self.log.warning("SCRIBE timed out")
+                historian_vote = CouncilVote("SCRIBE", "Temporal", "", 0, 0, "timeout")
+
         except Exception as e:
             self.log.error(f"Parallel generation failed: {e}")
             muse_vote = CouncilVote("MUSE", "Divergent", "", 0, 0, str(e))
             censor_vote = CouncilVote("CENSOR", "Convergent", "", 0, 0, str(e))
+            historian_vote = CouncilVote("SCRIBE", "Temporal", "", 0, 0, str(e))
 
         # 3. Calculate Stress (Disagreement)
         stress = self._calculate_stress(
@@ -440,14 +643,16 @@ Speak as ARA. Produce a complete, helpful response to the user."""
         # Update HAL - Only Executive active now
         self._update_hal(mask=1, stress=stress)
 
-        # 4. Executive Synthesis
+        # 4. Executive Synthesis (now includes Historian)
         synthesis_prompt = f"""USER QUERY: {user_input}
 
 MUSE PROPOSAL: {muse_vote.content if muse_vote else "(no proposal)"}
 
 CENSOR OBJECTIONS: {censor_vote.content if censor_vote else "(no objections)"}
 
-Based on MUSE's creative proposal and CENSOR's critical analysis, provide your final response to the user:"""
+SCRIBE HISTORICAL CONTEXT: {historian_vote.content if historian_vote else "(no historical context)"}
+
+Based on MUSE's creative proposal, CENSOR's critical analysis, and SCRIBE's historical perspective, provide your final response to the user:"""
 
         exec_vote = self._run_persona('executive', synthesis_prompt)
 
@@ -460,19 +665,21 @@ Based on MUSE's creative proposal and CENSOR's critical analysis, provide your f
         self._avg_stress = (self._avg_stress + stress) / 2
 
         self.log.info(
-            f"Council adjourned: {debate_time:.0f}ms, "
+            f"Quadamerl adjourned: {debate_time:.0f}ms, "
             f"stress={stress:.2f}, "
-            f"voices={bool(muse_vote.content)}/{bool(censor_vote.content)}"
+            f"voices={bool(muse_vote.content)}/{bool(censor_vote.content)}/{bool(historian_vote.content)}"
         )
 
         return CouncilDecision(
             final_response=exec_vote.content,
             muse_proposal=muse_vote.content if muse_vote else None,
             censor_objections=censor_vote.content if censor_vote else None,
+            historian_context=historian_vote.content if historian_vote else None,
             executive_synthesis=exec_vote.content,
             debate_time_ms=debate_time,
             stress_level=stress,
             unanimous=stress < 0.4,
+            similar_episodes=episode_count,
         )
 
     def quick_consult(
@@ -500,7 +707,7 @@ Based on MUSE's creative proposal and CENSOR's critical analysis, provide your f
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get council statistics."""
-        return {
+        stats = {
             "convene_count": self._convene_count,
             "total_debate_time_ms": self._total_debate_time_ms,
             "average_debate_time_ms": (
@@ -509,7 +716,19 @@ Based on MUSE's creative proposal and CENSOR's critical analysis, provide your f
             ),
             "average_stress": self._avg_stress,
             "use_ollama": self.use_ollama,
+            "historian_queries": self._historian_queries,
+            "hippocampus_connected": self.hippocampus is not None,
+            "episodic_connected": self.episodic is not None,
         }
+
+        # Add episodic memory stats if available
+        if self.episodic:
+            try:
+                stats["episodic_stats"] = self.episodic.stats
+            except Exception:
+                pass
+
+        return stats
 
     def shutdown(self):
         """Shutdown the council."""

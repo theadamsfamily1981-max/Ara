@@ -95,10 +95,11 @@ uniform vec2 uRes;
 uniform float uTime;
 uniform float uSpike;         // Pain level [0, 1]
 uniform vec2 uFlow;           // Optical flow vector from face movement
-uniform float uCouncilMask;   // Bitfield of active council members
+uniform float uCouncilMask;   // Bitfield of active council members (bit 0=Exec,1=Critic,2=Dreamer,3=Historian)
 uniform float uCouncilStress; // Disagreement level [0, 1]
 uniform vec2 uMusePos;        // MUSE (Dreamer) position
 uniform vec2 uCensorPos;      // CENSOR (Critic) position
+uniform vec2 uScribePos;      // SCRIBE (Historian) position
 
 in vec2 vUv;
 out vec4 nextState;
@@ -184,9 +185,36 @@ void main() {
         }
     }
 
-    // Stress-induced interference pattern when both voices active
-    if (uCouncilMask >= 6.0 && uCouncilStress > 0.3) {
-        // Create interference between the two voice positions
+    // Bit 3 = Historian (SCRIBE - Memory/Steady/Green)
+    // Active when mask & 8 is true
+    if (mod(floor(uCouncilMask / 8.0), 2.0) == 1.0) {
+        vec2 scribePos = uScribePos;
+        float d = distance(uv, scribePos);
+        if (d < 0.08) {
+            // Steady, rhythmic waves (Medium Frequency) - temporal memory patterns
+            // Like ripples from the past surfacing
+            float memoryWave = sin(uTime * 25.0 + d * 60.0) * (1.0 - d * 12.5);
+            // Add slight echo effect for "memory playback" feel
+            float echo = sin(uTime * 25.0 - 1.5 + d * 60.0) * 0.5 * (1.0 - d * 12.5);
+            Ez_new += (memoryWave + echo * 0.3) * 0.35;
+        }
+    }
+
+    // Quadamerl interference pattern - tetrahedron of mind
+    // When 3+ voices active (mask >= 14), create complex interference
+    if (uCouncilMask >= 14.0 && uCouncilStress > 0.3) {
+        // Create interference between all voice positions
+        float d1 = distance(uv, uMusePos);
+        float d2 = distance(uv, uCensorPos);
+        float d3 = distance(uv, uScribePos);
+        // Triple wave interference for "council deliberation" visual
+        float interference = sin((d1 - d2) * 40.0 + uTime * 20.0) * 0.5
+                           + sin((d2 - d3) * 40.0 + uTime * 22.0) * 0.3
+                           + sin((d3 - d1) * 40.0 + uTime * 18.0) * 0.2;
+        Ez_new += interference * uCouncilStress * 0.08;
+    }
+    // Legacy 2-voice interference (for backward compatibility)
+    else if (uCouncilMask >= 6.0 && uCouncilStress > 0.3) {
         float d1 = distance(uv, uMusePos);
         float d2 = distance(uv, uCensorPos);
         float interference = sin((d1 - d2) * 50.0 + uTime * 20.0) * uCouncilStress * 0.1;
@@ -353,6 +381,7 @@ const physLocs = {
     uCouncilStress: gl.getUniformLocation(physProg, 'uCouncilStress'),
     uMusePos: gl.getUniformLocation(physProg, 'uMusePos'),
     uCensorPos: gl.getUniformLocation(physProg, 'uCensorPos'),
+    uScribePos: gl.getUniformLocation(physProg, 'uScribePos'),
 };
 
 const rendLocs = {
@@ -368,10 +397,11 @@ const rendLocs = {
 
 let spikeVal = 0.0;
 let flowVal = [0.0, 0.0];
-let councilMask = 0.0;       // Bitfield: 1=Exec, 2=Critic, 4=Dreamer
+let councilMask = 0.0;       // Bitfield: 1=Exec, 2=Critic, 4=Dreamer, 8=Historian
 let councilStress = 0.0;     // Disagreement level
 let musePos = [0.7, 0.7];    // MUSE (Dreamer) position
 let censorPos = [0.3, 0.7];  // CENSOR (Critic) position
+let scribePos = [0.5, 0.3];  // SCRIBE (Historian) position
 let connected = false;
 let frameCount = 0;
 
@@ -397,6 +427,10 @@ async function pollSomaticData() {
                 councilStress = Math.max(0, Math.min(1, view[4]));
                 musePos = [view[5] || 0.7, view[6] || 0.7];
                 censorPos = [view[7] || 0.3, view[8] || 0.7];
+                // Historian position (Quadamerl extension)
+                if (view.length > 10) {
+                    scribePos = [view[9] || 0.5, view[10] || 0.3];
+                }
             }
 
             // Upload entropy texture (128x128 floats after header)
@@ -480,6 +514,7 @@ function render(t) {
     gl.uniform1f(physLocs.uCouncilStress, councilStress);
     gl.uniform2f(physLocs.uMusePos, musePos[0], musePos[1]);
     gl.uniform2f(physLocs.uCensorPos, censorPos[0], censorPos[1]);
+    gl.uniform2f(physLocs.uScribePos, scribePos[0], scribePos[1]);
 
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, faceTex);
