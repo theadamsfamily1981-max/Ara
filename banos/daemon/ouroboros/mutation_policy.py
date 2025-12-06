@@ -95,6 +95,10 @@ IMMUTABLE_MODULES: Set[str] = {
     "banos.daemon.gaze_tracker",
     "banos.daemon.appearance_selector",
 
+    # Style Cortex - taste and fashion brain (boundaries are sacred)
+    "banos.daemon.style_profile",
+    "banos.daemon.style_cortex",
+
     # Persistence layer
     "banos.storage",
     "banos.db",
