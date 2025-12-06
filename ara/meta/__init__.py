@@ -100,6 +100,13 @@ from .copilot import (
     interactive_suggest,
 )
 
+from .strategist import (
+    LLMProtocol,
+    StrategicProposal,
+    Strategist,
+    get_strategist,
+)
+
 __all__ = [
     # Schemas
     "ToolCall",
@@ -161,4 +168,9 @@ __all__ = [
     "get_copilot",
     "propose_workflow",
     "interactive_suggest",
+    # Strategist (Dreams → Ideas)
+    "LLMProtocol",
+    "StrategicProposal",
+    "Strategist",
+    "get_strategist",
 ]

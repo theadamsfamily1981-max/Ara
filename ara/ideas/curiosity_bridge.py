@@ -20,6 +20,7 @@ from typing import Optional, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ara.curiosity import CuriosityAgent, CuriosityReport, WorldObject
+    from ara.cognition.vision import VisionCore
     from .board import IdeaBoard
     from .models import Idea
 
@@ -56,13 +57,17 @@ class CuriosityBridge:
 
     This class monitors CuriosityAgent output and spawns ideas
     when interesting discoveries are made.
+
+    With VisionCore integration, discoveries that align with active
+    Dreams get a curiosity boost - strategic exploration, not random.
     """
 
     def __init__(
         self,
         board: "IdeaBoard",
         min_curiosity_score: float = 0.5,
-        auto_submit: bool = True
+        auto_submit: bool = True,
+        vision: Optional["VisionCore"] = None,
     ):
         """Initialize the bridge.
 
@@ -70,10 +75,12 @@ class CuriosityBridge:
             board: IdeaBoard to create ideas on
             min_curiosity_score: Minimum score to spawn an idea
             auto_submit: Automatically submit ideas to inbox
+            vision: Optional VisionCore for Dream alignment boost
         """
         self.board = board
         self.min_score = min_curiosity_score
         self.auto_submit = auto_submit
+        self.vision = vision
 
         # Track what we've already proposed
         self._proposed_objects: set = set()
@@ -179,7 +186,22 @@ class CuriosityBridge:
         Returns:
             Created Idea if interesting enough, None otherwise
         """
-        # Check score threshold
+        # === VISION ALIGNMENT BOOST ===
+        # Discoveries that match active Dreams get a curiosity boost
+        # This turns random exploration into strategic exploration
+        matched_dreams = []
+        if self.vision is not None:
+            obj_desc = f"{obj.name} {obj.category.name}"
+            matched_dreams = self.vision.find_matching_dreams(obj_desc)
+            if matched_dreams:
+                boost = self.vision.get_alignment_boost(obj_desc)
+                curiosity_score *= boost
+                logger.info(
+                    f"🌟 DISCOVERY ALIGNS WITH DREAM(S): {[d.id for d in matched_dreams]} "
+                    f"(boost={boost:.1f}x)"
+                )
+
+        # Check score threshold (after boost)
         if curiosity_score < self.min_score:
             return None
 
@@ -232,7 +254,7 @@ class CuriosityBridge:
             ],
             signals=signals,
             related_objects=[obj.obj_id],
-            tags=[obj.category.name.lower(), "discovery"],
+            tags=self._build_discovery_tags(obj, matched_dreams),
         )
 
         # Create and submit
@@ -243,6 +265,19 @@ class CuriosityBridge:
             return idea
 
         return None
+
+    def _build_discovery_tags(
+        self,
+        obj: "WorldObject",
+        matched_dreams: List = None,
+    ) -> List[str]:
+        """Build tags for a discovery idea."""
+        tags = [obj.category.name.lower(), "discovery"]
+        if matched_dreams:
+            tags.append("strategic")
+            for dream in matched_dreams:
+                tags.append(dream.id)
+        return tags
 
     def suggest_improvement(
         self,

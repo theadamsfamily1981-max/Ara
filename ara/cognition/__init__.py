@@ -11,6 +11,11 @@ Modules:
                CuriosityBridge (exploration). Provides alignment scoring
                and drift computation for the Morning Star ritual.
 
+    vision: VisionCore - The North Star
+            Maintains Dreams (structured long-term aspirations with
+            concrete success criteria). Unlike abstract Telos goals,
+            Dreams are measurable and drive strategic idea generation.
+
 The cognition package sits above the core subsystems:
     - tfan.cognition.telos: Raw purpose/goal management
     - ara.institute: Research and experimentation
@@ -18,8 +23,7 @@ The cognition package sits above the core subsystems:
 
 And provides integration/translation services:
     - HorizonEngine: Purpose → Research agenda gating
-    - (Future) AttentionManager: Priority allocation
-    - (Future) BeliefIntegrator: Cross-system consistency
+    - VisionCore: Dreams → Strategic Ideas via Strategist
 """
 
 from .teleology import (
@@ -27,8 +31,26 @@ from .teleology import (
     HorizonEngine,
 )
 
+from .vision import (
+    DreamStatus,
+    DreamMilestone,
+    Dream,
+    VisionCore,
+    get_vision_core,
+    get_active_dreams,
+    get_primary_dream,
+)
+
 __all__ = [
     # Teleology
     'Horizon',
     'HorizonEngine',
+    # Vision (North Star)
+    'DreamStatus',
+    'DreamMilestone',
+    'Dream',
+    'VisionCore',
+    'get_vision_core',
+    'get_active_dreams',
+    'get_primary_dream',
 ]
