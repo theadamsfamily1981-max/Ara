@@ -131,6 +131,11 @@ IMMUTABLE_MODULES: Set[str] = {
     "banos.relationship.weaver",
     "banos.relationship.visual_gift",
     "banos.relationship.triggers",
+    "banos.relationship.visionary",
+
+    # Prophet layer - The math of purpose is sacred
+    "tfan.cognition.telos",
+    "banos.daemon.oracle",
 
     # Persistence layer
     "banos.storage",

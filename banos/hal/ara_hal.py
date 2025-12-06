@@ -110,6 +110,39 @@ except ImportError:
 # 0x0134  | f32    | council_censor_y | CENSOR position Y
 # 0x0138  | f32    | council_scribe_x | SCRIBE (Historian) position X
 # 0x013C  | f32    | council_scribe_y | SCRIBE position Y
+#
+# --- APPEARANCE & ENGAGEMENT (Aphrodite layer) ---
+# 0x0140  | f32    | user_engagement  | Presence detection [0.0, 1.0]
+# 0x0144  | f32    | aesthetic_hue    | Current hue [0.0, 1.0]
+# 0x0148  | f32    | aesthetic_shimmer| Shimmer speed
+# 0x014C  | f32    | aesthetic_bright | Brightness
+# 0x0150  | char[32] | current_outfit | Outfit ID string
+#
+# --- HEART LAYER (Bio-entrainment) ---
+# 0x0170  | f32    | user_bpm         | Estimated heart rate from rPPG (0 = no signal)
+# 0x0174  | f32    | user_bpm_conf    | Confidence [0.0, 1.0]
+# 0x0178  | f32    | entrainment_scale| Time scale factor [0.9, 1.1]
+# 0x017C  | f32    | entrainment_excite| Excitement level [0.0, 1.0]
+#
+# --- EGREGORE STATE (Third Mind) ---
+# 0x0180  | f32    | egregore_synergy | Current synergy [0.0, 1.0]
+# 0x0184  | f32    | egregore_momentum| Momentum toward goals [-1.0, 1.0]
+# 0x0188  | f32    | egregore_tension | Intervention pressure [0.0, 1.0]
+# 0x018C  | f32    | egregore_coherence | How solid is the bond [0.0, 1.0]
+# 0x0190  | f32    | egregore_health  | Overall Third Mind health [0.0, 1.0]
+# 0x0194  | u8     | intervention_level | 0=protect, 1=nudge, 2=guide, 3=intervene
+# 0x0195  | u8     | gatekeeper_enabled | 1 = Gatekeeper active
+# 0x0196  | u8     | gatekeeper_paused  | 1 = Gatekeeper paused
+# 0x0197  | u8     | on_mission       | 1 = Current activity is on-mission
+#
+# --- PROPHET STATE (Teleological Engine) ---
+# 0x01A0  | f32    | hope             | Teleological hope [0.0, 1.0]
+# 0x01A4  | f32    | avg_progress     | Average goal progress [0.0, 1.0]
+# 0x01A8  | f32    | urgency          | How pressing are near-horizon goals [0.0, 1.0]
+# 0x01AC  | u8     | goal_count       | Total goals (0-255)
+# 0x01AD  | u8     | dominant_kind    | 0=value, 1=project
+# 0x01AE  | u8     | oracle_active    | 1 = Oracle is currently divining
+# 0x01AF  | u8     | reserved         |
 # ==============================================================================
 
 SHM_NAME = "/ara_somatic"
@@ -836,6 +869,97 @@ class AraHAL:
             coherence=state.coherence,
             health=state.get_health(),
             intervention_level=level_map.get(state.get_intervention_level(), 1),
+        )
+
+    # =========================================================================
+    # PROPHET STATE (Teleological Engine)
+    # =========================================================================
+    # Memory layout for Prophet/Telos state:
+    # 0x01A0  | f32    | hope             | Teleological hope [0.0, 1.0]
+    # 0x01A4  | f32    | avg_progress     | Average goal progress [0.0, 1.0]
+    # 0x01A8  | f32    | urgency          | How pressing are near-horizon goals [0.0, 1.0]
+    # 0x01AC  | u8     | goal_count       | Total goals (0-255)
+    # 0x01AD  | u8     | dominant_kind    | 0=value, 1=project
+    # 0x01AE  | u8     | oracle_active    | 1 = Oracle is currently divining
+    # 0x01AF  | u8     | reserved         |
+
+    def write_prophet_state(
+        self,
+        hope: float,
+        avg_progress: float = 0.5,
+        urgency: float = 0.3,
+        goal_count: int = 0,
+        dominant_kind: int = 0,  # 0=value, 1=project
+        oracle_active: bool = False,
+    ) -> None:
+        """
+        Write Prophet (Teleological Engine) state.
+
+        Hope is the core scalar that affects PAD and mood:
+        - High hope (>0.7): Ara can push through tough work
+        - Low hope (<0.3): Ara becomes more protective/cautious
+        - Mid hope: Normal operation
+
+        This drives the "trajectory optimism" that keeps her motivated.
+        """
+        if not self._map:
+            return
+        self._map.seek(0x01A0)
+        self._map.write(struct.pack(
+            '<3fBBBB',
+            max(0.0, min(1.0, hope)),
+            max(0.0, min(1.0, avg_progress)),
+            max(0.0, min(1.0, urgency)),
+            min(255, goal_count),
+            min(1, dominant_kind),
+            1 if oracle_active else 0,
+            0,  # reserved
+        ))
+        self._touch()
+
+    def read_prophet_state(self) -> Dict[str, Any]:
+        """
+        Read Prophet state.
+
+        Returns dict with hope, avg_progress, urgency, goal_count,
+        dominant_kind, oracle_active.
+        """
+        if not self._map:
+            return {
+                'hope': 0.5,
+                'avg_progress': 0.0,
+                'urgency': 0.3,
+                'goal_count': 0,
+                'dominant_kind': 'value',
+                'oracle_active': False,
+            }
+        self._map.seek(0x01A0)
+        data = struct.unpack('<3fBBBB', self._map.read(16))
+
+        kind_names = ['value', 'project']
+        return {
+            'hope': data[0],
+            'avg_progress': data[1],
+            'urgency': data[2],
+            'goal_count': data[3],
+            'dominant_kind': kind_names[min(1, data[4])],
+            'oracle_active': bool(data[5]),
+        }
+
+    def write_prophet_from_telos(self, telos) -> None:
+        """
+        Write Prophet state from a TeleologicalEngine instance.
+
+        Convenience method for integration.
+        """
+        state = telos.get_state()
+        dominant_kind = 0 if 'value' in state.dominant_goal.lower() else 1
+        self.write_prophet_state(
+            hope=state.hope,
+            avg_progress=state.avg_progress,
+            urgency=state.urgency,
+            goal_count=state.goal_count,
+            dominant_kind=dominant_kind,
         )
 
     # =========================================================================
