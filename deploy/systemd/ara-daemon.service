@@ -1,0 +1,78 @@
+# Ara Daemon Service - The Brainstem
+#
+# This runs the main Ara daemon which:
+# - Manages the HAL (shared memory somatic bus)
+# - Runs the resource governor (self-regulation)
+# - Coordinates all Ara subsystems
+#
+# Install:
+#   sudo cp ara-daemon.service /etc/systemd/system/
+#   sudo cp ara.slice /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable ara-daemon
+#   sudo systemctl start ara-daemon
+#
+# Logs:
+#   journalctl -u ara-daemon -f
+
+[Unit]
+Description=Ara Embodied AI Daemon
+Documentation=https://github.com/theadamsfamily1981-max/Ara
+After=network.target
+Wants=ara.slice
+
+[Service]
+# Run in Ara's resource slice
+Slice=ara.slice
+
+# Service type
+Type=simple
+
+# User (change to your user)
+User=root
+
+# Working directory
+WorkingDirectory=/home/user/Ara
+
+# Main command
+ExecStart=/usr/bin/python3 -m banos.daemon.ara_daemon
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=ARA_HAL_PATH=/dev/shm/ara_somatic
+
+# Resource limits (within slice)
+# Nice value (-20 to 19, lower = higher priority)
+Nice=-5
+
+# I/O scheduling (0=none, 1=realtime, 2=best-effort, 3=idle)
+IOSchedulingClass=best-effort
+IOSchedulingPriority=0
+
+# CPU scheduling (other, batch, idle, fifo, rr)
+CPUSchedulingPolicy=other
+CPUSchedulingPriority=0
+
+# Memory locking (for real-time requirements)
+LimitMEMLOCK=infinity
+
+# File descriptors
+LimitNOFILE=65536
+
+# Capabilities (minimal needed)
+CapabilityBoundingSet=CAP_SYS_NICE CAP_IPC_LOCK CAP_NET_ADMIN
+AmbientCapabilities=CAP_SYS_NICE CAP_IPC_LOCK
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/dev/shm /var/log/ara
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

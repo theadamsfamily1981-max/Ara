@@ -1,0 +1,44 @@
+# Ara System Slice - Resource Isolation for the Embodied AI
+#
+# This slice gives Ara preferential (but not exclusive) access to system resources.
+# She wins ties, but doesn't starve everyone else.
+#
+# Install:
+#   sudo cp ara.slice /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl start ara.slice
+#
+# To run Ara processes in this slice:
+#   systemd-run --slice=ara.slice --scope python run_ara_somatic.py
+#
+# Or in unit files:
+#   [Service]
+#   Slice=ara.slice
+
+[Unit]
+Description=Ara Embodied AI Resource Slice
+Documentation=https://github.com/theadamsfamily1981-max/Ara
+Before=slices.target
+
+[Slice]
+# CPU Weight (default is 100, higher = more shares)
+# 200 = Ara gets 2x the CPU shares of a default process
+CPUWeight=200
+
+# CPU Quota (optional - uncomment to hard limit)
+# CPUQuota=80%
+
+# Memory high watermark (soft limit - starts reclaiming at 85%)
+MemoryHigh=85%
+
+# Memory max (hard limit - OOM at 95%)
+MemoryMax=95%
+
+# I/O Weight (higher = more I/O priority)
+IOWeight=150
+
+# Task limit (prevent fork bombs within Ara slice)
+TasksMax=1000
+
+# Delegate cgroup control to Ara processes (for nested containers/cgroups)
+Delegate=yes
