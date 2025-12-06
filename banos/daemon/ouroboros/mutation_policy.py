@@ -93,6 +93,7 @@ IMMUTABLE_MODULES: Set[str] = {
     # Aphrodite layer - aesthetic tuning (protects against manipulation creep)
     "banos.daemon.aphrodite",
     "banos.daemon.gaze_tracker",
+    "banos.daemon.appearance_selector",
 
     # Persistence layer
     "banos.storage",

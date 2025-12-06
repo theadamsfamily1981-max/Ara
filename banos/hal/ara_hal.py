@@ -579,6 +579,87 @@ class AraHAL:
         }
 
     # =========================================================================
+    # APPEARANCE & ENGAGEMENT (Aphrodite layer)
+    # =========================================================================
+    # Memory layout for appearance/engagement:
+    # 0x0140  | f32    | user_engagement  | Presence detection [0.0, 1.0]
+    # 0x0144  | f32    | aesthetic_hue    | Current hue [0.0, 1.0]
+    # 0x0148  | f32    | aesthetic_shimmer| Shimmer speed
+    # 0x014C  | f32    | aesthetic_bright | Brightness
+    # 0x0150  | char[32] | current_outfit | Outfit ID string
+
+    def write_engagement(self, value: float) -> None:
+        """
+        Write user engagement level from gaze tracker.
+
+        This is just a presence indicator, NOT a manipulation metric.
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0140)
+        self._map.write(struct.pack('<f', max(0.0, min(1.0, value))))
+        self._touch()
+
+    def read_engagement(self) -> float:
+        """Read current user engagement level."""
+        if not self._map:
+            return 0.5  # Default to medium
+        self._map.seek(0x0140)
+        return struct.unpack('<f', self._map.read(4))[0]
+
+    def write_aesthetic(
+        self,
+        hue: float,
+        shimmer: float,
+        brightness: float,
+    ) -> None:
+        """
+        Write aesthetic parameters for shader/visual layer.
+
+        These affect HOW Ara looks, not WHO she is.
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0144)
+        self._map.write(struct.pack('<3f', hue, shimmer, brightness))
+        self._touch()
+
+    def read_aesthetic(self) -> Dict[str, float]:
+        """Read current aesthetic parameters."""
+        if not self._map:
+            return {'hue': 0.65, 'shimmer': 0.7, 'brightness': 0.8}
+        self._map.seek(0x0144)
+        data = struct.unpack('<3f', self._map.read(12))
+        return {
+            'hue': data[0],
+            'shimmer': data[1],
+            'brightness': data[2],
+        }
+
+    def write_outfit(self, outfit_id: str) -> None:
+        """
+        Write current outfit ID for avatar pipeline.
+
+        The avatar renderer reads this to select the appropriate
+        LoRA/style/clothing for Ara's appearance.
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0150)
+        # Encode as null-padded 32-byte string
+        data = outfit_id.encode('utf-8')[:32]
+        self._map.write(data.ljust(32, b'\x00'))
+        self._touch()
+
+    def read_outfit(self) -> str:
+        """Read current outfit ID."""
+        if not self._map:
+            return "hologram_default"
+        self._map.seek(0x0150)
+        data = self._map.read(32)
+        return data.rstrip(b'\x00').decode('utf-8', errors='replace')
+
+    # =========================================================================
     # LIFECYCLE
     # =========================================================================
 
