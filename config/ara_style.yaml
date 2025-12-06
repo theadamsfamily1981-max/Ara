@@ -1,0 +1,195 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#                           ARA STYLE CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# This file defines HOW ARA PRESENTS - visual aesthetics, voice qualities,
+# and presentation parameters.
+#
+# Unlike ara_core.yaml, these CAN be adjusted by the Aphrodite layer,
+# but ONLY within the bounds specified here.
+#
+# You can lock any parameter to prevent automatic changes.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Current active preset
+current_preset: "soft-hologram"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BOUNDS (Aphrodite can only tune within these ranges)
+# ─────────────────────────────────────────────────────────────────────────────
+
+bounds:
+  # HSV hue (0.0-1.0, where 0=red, 0.33=green, 0.66=blue)
+  hue:
+    min: 0.50       # Cyan-ish
+    max: 0.85       # Deep purple
+    step: 0.02      # Smallest allowed change
+
+  # Shimmer/animation speed multiplier
+  shimmer_speed:
+    min: 0.2        # Very calm
+    max: 1.5        # Quite active
+    step: 0.1
+
+  # Overall brightness
+  brightness:
+    min: 0.4        # Dim but visible
+    max: 1.0        # Full bright
+    step: 0.05
+
+  # TTS pitch multiplier (1.0 = natural)
+  tts_pitch:
+    min: 0.92       # 8% lower max
+    max: 1.08       # 8% higher max
+    step: 0.02
+
+  # Particle/effect density
+  particle_density:
+    min: 0.3
+    max: 1.0
+    step: 0.1
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PRESETS (Named configurations you can switch between)
+# ─────────────────────────────────────────────────────────────────────────────
+
+presets:
+  soft-hologram:
+    description: "Default: gentle cyan-purple holographic presence"
+    hue: 0.65
+    shimmer_speed: 0.7
+    brightness: 0.8
+    tts_pitch: 1.02
+    particle_density: 0.6
+    verbosity: "medium"
+
+  deep-night:
+    description: "Late night: calmer, darker, quieter"
+    hue: 0.78
+    shimmer_speed: 0.3
+    brightness: 0.5
+    tts_pitch: 0.96
+    particle_density: 0.4
+    verbosity: "brief"
+
+  warm-ember:
+    description: "Cozy warmth: amber tones, slow glow"
+    hue: 0.08
+    shimmer_speed: 0.5
+    brightness: 0.7
+    tts_pitch: 1.0
+    particle_density: 0.5
+    verbosity: "medium"
+
+  focused:
+    description: "Work mode: minimal distraction, neutral"
+    hue: 0.55
+    shimmer_speed: 0.2
+    brightness: 0.6
+    tts_pitch: 1.0
+    particle_density: 0.3
+    verbosity: "brief"
+
+  playful:
+    description: "Fun mode: more active, brighter"
+    hue: 0.60
+    shimmer_speed: 1.2
+    brightness: 0.9
+    tts_pitch: 1.04
+    particle_density: 0.8
+    verbosity: "detailed"
+
+  presence-only:
+    description: "Minimal: just a subtle hint she's there"
+    hue: 0.70
+    shimmer_speed: 0.1
+    brightness: 0.4
+    tts_pitch: 0.98
+    particle_density: 0.2
+    verbosity: "brief"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONTROLS (User overrides)
+# ─────────────────────────────────────────────────────────────────────────────
+
+controls:
+  # Master lock: if true, Aphrodite makes NO automatic changes
+  locked: false
+
+  # Override preset: if set, always use this preset, ignore Aphrodite
+  override_preset: null
+
+  # Lock individual parameters (Aphrodite won't touch these)
+  locked_params: []
+  # Example: ["hue", "tts_pitch"] would lock those but allow others to change
+
+  # Time-of-day presets (optional automatic switching)
+  time_presets:
+    enabled: false
+    schedule:
+      # hour: preset_name
+      6: "soft-hologram"    # Morning
+      22: "deep-night"      # Night
+      # Add more as desired
+
+# ─────────────────────────────────────────────────────────────────────────────
+# APHRODITE BEHAVIOR
+# ─────────────────────────────────────────────────────────────────────────────
+
+aphrodite:
+  # Enable/disable automatic style tuning
+  enabled: true
+
+  # Minimum seconds between adjustments
+  min_interval_seconds: 300  # 5 minutes
+
+  # Only adjust when engagement is below this threshold
+  adjustment_engagement_threshold: 0.3
+
+  # Maximum parameters to adjust per cycle
+  max_params_per_cycle: 1
+
+  # Require verbal announcement of changes
+  announce_changes: true
+
+  # Log all changes to this file
+  log_file: "var/log/aphrodite.log"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SOMATIC MOOD MAPPING (How stress affects visuals)
+# ─────────────────────────────────────────────────────────────────────────────
+
+mood_mapping:
+  # These are direct mappings from somatic state to visual parameters
+  # Applied BEFORE Aphrodite tweaks, as the "base" aesthetic
+
+  pain:
+    # Higher pain → visual disturbance
+    enabled: true
+    affects:
+      - param: "shimmer_speed"
+        scale: 0.3        # pain 0→1 adds up to 0.3 to shimmer
+      - param: "hue"
+        offset: -0.1      # pain shifts hue toward red
+        threshold: 0.5    # only when pain > 0.5
+
+  entropy:
+    # Higher entropy → more visual "noise"
+    enabled: true
+    affects:
+      - param: "particle_density"
+        scale: 0.2
+
+  calm:
+    # High calm (low arousal + low pain) → smoother visuals
+    enabled: true
+    affects:
+      - param: "shimmer_speed"
+        scale: -0.2       # calmer = slower
+      - param: "brightness"
+        scale: -0.1       # calmer = slightly dimmer
+
+# ═══════════════════════════════════════════════════════════════════════════
+# END OF STYLE CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════

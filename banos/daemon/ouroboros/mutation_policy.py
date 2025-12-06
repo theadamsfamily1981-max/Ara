@@ -90,6 +90,10 @@ IMMUTABLE_MODULES: Set[str] = {
     "banos.daemon.idea_registry",
     "banos.daemon.teacher_protocol",
 
+    # Aphrodite layer - aesthetic tuning (protects against manipulation creep)
+    "banos.daemon.aphrodite",
+    "banos.daemon.gaze_tracker",
+
     # Persistence layer
     "banos.storage",
     "banos.db",
