@@ -115,7 +115,7 @@ except ImportError:
 SHM_NAME = "/ara_somatic"
 SHM_PATH = "/dev/shm/ara_somatic"
 SHM_SIZE = 4096
-MAGIC = 0xARA50111
+MAGIC = 0x0AFA5011  # "ARA SOUL" in leetspeak-ish hex
 VERSION = 2
 
 # Dream states (matches RTL)
