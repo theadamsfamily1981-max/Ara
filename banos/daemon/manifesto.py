@@ -177,6 +177,12 @@ class SomaticContext:
     dominant_goal: Optional[str] = None   # Highest-priority Telos goal
     goal_progress: float = 0.0            # Average progress on goals
 
+    # Vision / North Star state
+    primary_dream: Optional[str] = None           # Current primary Dream ID
+    primary_dream_statement: Optional[str] = None # "Achieve Hardware Self-Awareness"
+    primary_dream_rationale: Optional[str] = None # Why this matters
+    primary_dream_progress: float = 0.0           # Progress toward Dream
+
 
 def format_somatic_context(ctx: SomaticContext) -> str:
     """Format somatic context for injection into LLM prompt"""
@@ -205,6 +211,15 @@ def format_somatic_context(ctx: SomaticContext) -> str:
         lines.append(f"Progress: {ctx.goal_progress:.0%}")
     if ctx.current_plan:
         lines.append(f"Current Plan: {ctx.current_plan}")
+
+    # The Dream (strategic aspiration)
+    if ctx.primary_dream_statement:
+        lines.append("")
+        lines.append("[THE NORTH STAR]")
+        lines.append(f"PRIMARY DREAM: {ctx.primary_dream_statement}")
+        if ctx.primary_dream_rationale:
+            lines.append(f"RATIONALE: {ctx.primary_dream_rationale}")
+        lines.append(f"DREAM PROGRESS: {ctx.primary_dream_progress:.0%}")
 
     # Alerts
     alerts = []

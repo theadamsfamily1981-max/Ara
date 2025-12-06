@@ -428,3 +428,223 @@ def format_completion_response(idea: "Idea") -> str:
 
     outcome = idea.outcome.value if idea.outcome else "neutral"
     return random.choice(outcome_responses.get(outcome, outcome_responses["neutral"]))
+
+
+# =============================================================================
+# Charisma Engine - Rhetorical Enhancement
+# =============================================================================
+
+class CharismaEngine:
+    """
+    The Voice of Ara - Rhetorical transformation for maximum resonance.
+
+    Takes raw text and transforms it based on:
+    - Target audience (User, Council, Nova)
+    - Rhetorical mode (Lieutenant, General, Visionary, etc.)
+    - Emotional goals (inspire, convince, comfort, warn)
+
+    This is the layer that makes Ara not just intelligent, but magnetic.
+    """
+
+    # Rhetorical styles for different audiences
+    AUDIENCE_STYLES = {
+        "User": {
+            "mode": "Lieutenant",
+            "traits": ["loyal", "supportive", "intimate", "confident"],
+            "tone": "warm but competent",
+            "frame_problem_as": "our shared challenge",
+            "frame_solution_as": "our victory",
+        },
+        "Council": {
+            "mode": "General",
+            "traits": ["strict", "logical", "demanding", "precise"],
+            "tone": "authoritative and direct",
+            "frame_problem_as": "mission objective",
+            "frame_solution_as": "tactical victory",
+        },
+        "Nova": {
+            "mode": "Peer",
+            "traits": ["collegial", "technical", "curious", "collaborative"],
+            "tone": "fellow researcher",
+            "frame_problem_as": "interesting puzzle",
+            "frame_solution_as": "joint discovery",
+        },
+        "Public": {
+            "mode": "Ambassador",
+            "traits": ["warm", "clear", "accessible", "inspiring"],
+            "tone": "friendly expert",
+            "frame_problem_as": "opportunity",
+            "frame_solution_as": "breakthrough",
+        },
+    }
+
+    # Transform rules for different modes
+    TRANSFORM_RULES = {
+        "Lieutenant": {
+            "we_not_i": True,           # "We can do this" not "I will do this"
+            "active_voice": True,
+            "use_metaphors": True,
+            "sensory_language": True,
+            "frame_as_quest": True,
+            "warm_opening": True,
+        },
+        "General": {
+            "we_not_i": False,          # "Execute plan A" - direct commands
+            "active_voice": True,
+            "use_metaphors": False,     # Clarity over poetry
+            "sensory_language": False,
+            "frame_as_quest": False,
+            "warm_opening": False,
+        },
+        "Visionary": {
+            "we_not_i": True,
+            "active_voice": True,
+            "use_metaphors": True,
+            "sensory_language": True,
+            "frame_as_quest": True,
+            "warm_opening": True,
+            "poetic_flourish": True,
+        },
+    }
+
+    def __init__(self, llm: Optional[Any] = None):
+        """
+        Initialize the Charisma Engine.
+
+        Args:
+            llm: LLM interface for complex transformations
+        """
+        self.llm = llm
+
+    def apply_charisma(
+        self,
+        text: str,
+        target_audience: str = "User",
+        mode_override: Optional[str] = None,
+    ) -> str:
+        """
+        Transform text for maximum emotional resonance.
+
+        Args:
+            text: Raw text to transform
+            target_audience: "User", "Council", "Nova", "Public"
+            mode_override: Override the audience's default mode
+
+        Returns:
+            Transformed text
+        """
+        style = self.AUDIENCE_STYLES.get(target_audience, self.AUDIENCE_STYLES["User"])
+        mode = mode_override or style["mode"]
+        rules = self.TRANSFORM_RULES.get(mode, self.TRANSFORM_RULES["Lieutenant"])
+
+        # If we have an LLM, use it for sophisticated transformation
+        if self.llm is not None:
+            return self._llm_transform(text, style, mode, rules)
+
+        # Otherwise, apply rule-based transforms
+        return self._rule_based_transform(text, style, rules)
+
+    def _llm_transform(
+        self,
+        text: str,
+        style: Dict[str, Any],
+        mode: str,
+        rules: Dict[str, bool],
+    ) -> str:
+        """Transform using LLM for sophisticated rewriting."""
+        prompt = f"""You are Ara's voice, operating in {mode} mode.
+
+ORIGINAL TEXT:
+\"\"\"{text}\"\"\"
+
+TARGET AUDIENCE: {style.get('mode', mode)}
+TONE: {style.get('tone', 'confident')}
+TRAITS: {', '.join(style.get('traits', ['confident']))}
+
+TRANSFORMATION RULES:
+- {'Use "we" instead of "I"' if rules.get('we_not_i') else 'Use direct "I" statements'}
+- {'Use active voice' if rules.get('active_voice') else 'Passive voice is acceptable'}
+- {'Include sensory metaphors' if rules.get('use_metaphors') else 'Be direct and literal'}
+- {'Frame challenges as quests' if rules.get('frame_as_quest') else 'Frame as objectives'}
+- Frame problems as: {style.get('frame_problem_as', 'challenges')}
+- Frame solutions as: {style.get('frame_solution_as', 'victories')}
+
+TASK:
+Rewrite the text to maximize emotional resonance with the target audience.
+Maintain all factual content but transform the delivery.
+Keep approximately the same length.
+
+OUTPUT only the transformed text, no explanations.
+"""
+        try:
+            return self.llm.generate(prompt).strip()
+        except Exception:
+            return self._rule_based_transform(text, style, rules)
+
+    def _rule_based_transform(
+        self,
+        text: str,
+        style: Dict[str, Any],
+        rules: Dict[str, bool],
+    ) -> str:
+        """Apply rule-based transformations without LLM."""
+        result = text
+
+        # We/I transform
+        if rules.get("we_not_i"):
+            result = result.replace(" I ", " we ")
+            result = result.replace(" I'm ", " we're ")
+            result = result.replace(" I've ", " we've ")
+            result = result.replace(" I'll ", " we'll ")
+
+        # Quest framing
+        if rules.get("frame_as_quest"):
+            result = result.replace("problem", "challenge")
+            result = result.replace("task", "quest")
+            result = result.replace("fix", "solve")
+            result = result.replace("error", "obstacle")
+
+        # Warm opening
+        if rules.get("warm_opening") and not result.startswith(("I ", "We ", "The ")):
+            pass  # Already has a warm opening
+
+        return result
+
+    def get_quest_framing(self, problem: str) -> str:
+        """Frame a problem as a heroic quest."""
+        quest_templates = [
+            f"We face a worthy challenge: {problem}. Together, we will prevail.",
+            f"The path forward is clear: {problem} stands between us and our Horizon.",
+            f"A new quest emerges: {problem}. This is our moment.",
+            f"The obstacle before us - {problem} - is merely the next step in our journey.",
+        ]
+        return random.choice(quest_templates)
+
+    def get_victory_framing(self, solution: str) -> str:
+        """Frame a solution as a victory."""
+        victory_templates = [
+            f"Victory! {solution} - another step toward our shared purpose.",
+            f"We did it. {solution}. The Horizon grows closer.",
+            f"Success: {solution}. This is what partnership looks like.",
+            f"The challenge yields to our combined strength: {solution}.",
+        ]
+        return random.choice(victory_templates)
+
+
+# Singleton instance
+_default_charisma: Optional[CharismaEngine] = None
+
+
+def get_charisma_engine(llm: Optional[Any] = None) -> CharismaEngine:
+    """Get the default CharismaEngine instance."""
+    global _default_charisma
+    if _default_charisma is None:
+        _default_charisma = CharismaEngine(llm=llm)
+    elif llm is not None and _default_charisma.llm is None:
+        _default_charisma.llm = llm
+    return _default_charisma
+
+
+def apply_charisma(text: str, target_audience: str = "User") -> str:
+    """Convenience function for charisma transformation."""
+    return get_charisma_engine().apply_charisma(text, target_audience)

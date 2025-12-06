@@ -137,6 +137,13 @@ IMMUTABLE_MODULES: Set[str] = {
     "tfan.cognition.telos",
     "banos.daemon.oracle",
 
+    # Ethics Stack - The moral architecture is sacred
+    # Layer 0: Hard constraints never change
+    # Layer 1: Covenant (already protected above)
+    # Layer 2: Conscience - the reflective layer
+    "tfan.cognition.conscience",
+    "banos.daemon.shadow",
+
     # Persistence layer
     "banos.storage",
     "banos.db",
