@@ -119,6 +119,13 @@ IMMUTABLE_MODULES: Set[str] = {
     "banos.daemon.gatekeeper",
     "banos.cognition.covenant",
 
+    # Social layer - trust and identity are sacred
+    "banos.social",
+    "banos.social.people",
+    "banos.social.policy",
+    "banos.social.identity",
+    "banos.social.memory",
+
     # Persistence layer
     "banos.storage",
     "banos.db",
