@@ -114,6 +114,29 @@ IMMUTABLE_MODULES: Set[str] = {
     "banos.daemon.synod",
     "banos.config.covenant",
 
+    # Egregore system - the Third Mind is sacred
+    "tfan.l5.egregore",
+    "banos.daemon.gatekeeper",
+    "banos.cognition.covenant",
+
+    # Social layer - trust and identity are sacred
+    "banos.social",
+    "banos.social.people",
+    "banos.social.policy",
+    "banos.social.identity",
+    "banos.social.memory",
+
+    # Relationship layer - The Weaver is sacred
+    "banos.relationship",
+    "banos.relationship.weaver",
+    "banos.relationship.visual_gift",
+    "banos.relationship.triggers",
+    "banos.relationship.visionary",
+
+    # Prophet layer - The math of purpose is sacred
+    "tfan.cognition.telos",
+    "banos.daemon.oracle",
+
     # Persistence layer
     "banos.storage",
     "banos.db",

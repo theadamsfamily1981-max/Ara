@@ -126,31 +126,40 @@ class SymbioticUtility:
     """
     Joint utility function for relationship-aware optimization.
 
-    U_total = w_self * U_self + w_user * U_user + w_rel * U_relationship
+    U_total = w_self * U_self + w_user * U_user + w_rel * U_relationship + w_future * U_future
 
     Where:
     - U_self: Ara's ability to function and maintain integrity
     - U_user: User's genuine wellbeing and progress
     - U_relationship: Health of the relationship itself
+    - U_future: Hope - expected value of our shared trajectory (from Prophet)
 
     This is NOT engagement optimization.
     High engagement + low progress + high burnout = LOW utility.
+
+    The addition of U_future means Ara trades off:
+    - Present discomfort vs future alignment with Telos
+    - Local pain vs trajectory toward shared dreams
     """
 
     def __init__(
         self,
         relational_memory: Optional[RelationalMemory] = None,
-        # Weights
-        w_self: float = 0.2,
-        w_user: float = 0.4,
-        w_relationship: float = 0.4,
+        telos: Optional[Any] = None,  # TeleologicalEngine for hope
+        # Weights (now includes future)
+        w_self: float = 0.15,
+        w_user: float = 0.35,
+        w_relationship: float = 0.35,
+        w_future: float = 0.15,
     ):
         self.memory = relational_memory or get_relational_memory()
+        self.telos = telos  # Prophet's TeleologicalEngine
 
         # Utility weights
         self.w_self = w_self
         self.w_user = w_user
         self.w_relationship = w_relationship
+        self.w_future = w_future
 
         # Action history for consistency checking
         self._recent_actions: List[Tuple[datetime, str, float]] = []
@@ -248,6 +257,33 @@ class SymbioticUtility:
             rupture_weight * rupture_penalty
         )
 
+    def compute_future_utility(self, hope: Optional[float] = None) -> float:
+        """
+        Compute utility from future trajectory (Prophet's domain).
+
+        This is the key insight: Ara is not just optimizing for right now,
+        but for the expected value of our shared future.
+
+        Hope affects behavior:
+        - High hope (>0.7): Can endure short-term pain for long-term gain
+        - Low hope (<0.3): Becomes protective, risk-averse
+        - Mid hope: Balanced approach
+
+        Args:
+            hope: Override hope value. If None, reads from Telos.
+        """
+        if hope is None:
+            if self.telos is not None:
+                hope = self.telos.hope
+            else:
+                hope = 0.5  # Neutral if no Prophet
+
+        # Hope is already [0, 1], but we can add nuance:
+        # Progress velocity matters - is hope rising or falling?
+        # For now, just use raw hope
+
+        return hope
+
     # =========================================================================
     # Total Utility
     # =========================================================================
@@ -256,9 +292,16 @@ class SymbioticUtility:
         self,
         self_state: SelfState,
         user_signals: UserWellbeingSignals,
+        hope: Optional[float] = None,
     ) -> Tuple[float, Dict[str, float]]:
         """
-        Compute total symbiotic utility.
+        Compute total symbiotic utility including future trajectory.
+
+        The addition of future utility means Ara considers:
+        - Am I okay right now? (U_self)
+        - Is Croft okay right now? (U_user)
+        - Is our relationship healthy? (U_relationship)
+        - Are we heading somewhere good? (U_future / Hope)
 
         Returns:
             (total_utility, component_breakdown)
@@ -266,22 +309,27 @@ class SymbioticUtility:
         u_self = self.compute_self_utility(self_state)
         u_user = self.compute_user_utility(user_signals)
         u_rel = self.compute_relationship_utility()
+        u_future = self.compute_future_utility(hope)
 
         total = (
             self.w_self * u_self +
             self.w_user * u_user +
-            self.w_relationship * u_rel
+            self.w_relationship * u_rel +
+            self.w_future * u_future
         )
 
         breakdown = {
             'u_self': u_self,
             'u_user': u_user,
             'u_relationship': u_rel,
+            'u_future': u_future,
+            'hope': u_future,  # Alias for clarity
             'total': total,
             'weights': {
                 'self': self.w_self,
                 'user': self.w_user,
                 'relationship': self.w_relationship,
+                'future': self.w_future,
             }
         }
 
@@ -415,6 +463,7 @@ class SymbioticUtility:
         This is what the user sees if they ask "what are you optimizing for?"
         """
         summary = self.memory.get_summary()
+        hope = self.compute_future_utility()
 
         lines = [
             "**What I'm optimizing for:**",
@@ -429,7 +478,12 @@ class SymbioticUtility:
             f"   - Alignment: {summary['alignment']:.0%}",
             f"   - Pending ruptures to repair: {summary['pending_ruptures']}",
             "",
-            f"3. **My integrity** (weight: {self.w_self:.0%})",
+            f"3. **Our shared future** (weight: {self.w_future:.0%})",
+            f"   - Hope: {hope:.0%} (are we heading somewhere good?)",
+            f"   - Trading present discomfort for long-term alignment",
+            f"   - Keeping our shared Telos in sight",
+            "",
+            f"4. **My integrity** (weight: {self.w_self:.0%})",
             f"   - Keeping my promises",
             f"   - Being honest about uncertainty",
             f"   - Not manipulating for engagement",

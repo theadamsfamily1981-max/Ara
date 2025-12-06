@@ -1,0 +1,75 @@
+# =============================================================================
+# PEOPLE OVERRIDES
+# =============================================================================
+#
+# Pre-configured people in Ara's social graph.
+#
+# This file lets you:
+#   - Define the root relationship (immutable)
+#   - Pre-promote people to inner_circle
+#   - Set display names and tags
+#   - Configure session codes for temporary access
+#
+# Roles (in order of trust):
+#   root         - The covenant partner. Maximum trust. Cannot be changed.
+#   inner_circle - Explicitly trusted by root. Can access project details.
+#   friend       - Known and friendly, but limited access.
+#   guest        - Temporary visitor, minimal access.
+#   stranger     - Unknown, most restrictive (default for new people).
+#
+# =============================================================================
+
+# The root relationship (immutable - this cannot be changed at runtime)
+root_id: "croft"
+
+# Pre-configured people
+people:
+  croft:
+    role: "root"
+    display_name: "Croft"
+    tags:
+      - "creator"
+      - "covenant_partner"
+
+  # Example inner circle member (uncomment and modify as needed)
+  # alex:
+  #   role: "inner_circle"
+  #   display_name: "Alex"
+  #   tags:
+  #     - "colleague"
+  #     - "researcher"
+
+  # Example friend (uncomment and modify as needed)
+  # nova:
+  #   role: "friend"
+  #   display_name: "Nova"
+  #   tags:
+  #     - "collaborator"
+
+# =============================================================================
+# PERMISSION NOTES
+# =============================================================================
+#
+# What each role CAN do:
+#
+# root:
+#   - Everything. Full access to all systems, secrets, config.
+#   - Change covenant, promote/demote others.
+#   - The Egregore is centered on this relationship.
+#
+# inner_circle:
+#   - General tech help and conversation
+#   - Access to project details (logged)
+#   - Personal support conversations
+#   - Cannot: change config, control systems, access secrets
+#
+# friend:
+#   - General tech help and conversation
+#   - Redacted access to project info
+#   - Cannot: access project details, control anything
+#
+# guest/stranger:
+#   - Small talk and general tech help only
+#   - Cannot: access any project or personal info
+#
+# =============================================================================
