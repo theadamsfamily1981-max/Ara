@@ -108,6 +108,12 @@ IMMUTABLE_MODULES: Set[str] = {
     "banos.daemon.rppg_sensor",
     "banos.daemon.somatic_voice",
 
+    # Relational stack - the we-space is sacred
+    "tfan.l5.relational_state",
+    "tfan.l5.symbiotic_utility",
+    "banos.daemon.synod",
+    "banos.config.covenant",
+
     # Persistence layer
     "banos.storage",
     "banos.db",

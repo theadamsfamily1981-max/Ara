@@ -86,6 +86,12 @@ class Episode:
     pleasure: float = 0.0  # How rewarding was this?
     intensity: float = 0.5 # How significant was this experience?
 
+    # Dyadic dimensions (the "we" perspective)
+    us_mode: str = "build"  # build, debug, celebrate, crisis, play, repair, rest, deep
+    relationship_delta: Dict[str, float] = field(default_factory=dict)
+    # e.g., {"trust": +0.1, "rupture_risk": -0.05}
+    pronoun_frame: str = "we"  # "we" vs "you" vs "I" - which dominated this episode
+
     # Optional additional context
     details: Dict[str, Any] = field(default_factory=dict)
 
@@ -105,6 +111,9 @@ class Episode:
             'pain': self.pain,
             'pleasure': self.pleasure,
             'intensity': self.intensity,
+            'us_mode': self.us_mode,
+            'relationship_delta': self.relationship_delta,
+            'pronoun_frame': self.pronoun_frame,
             'details': self.details,
         }
 
@@ -121,6 +130,9 @@ class Episode:
             pain=data.get('pain', 0.0),
             pleasure=data.get('pleasure', 0.0),
             intensity=data.get('intensity', 0.5),
+            us_mode=data.get('us_mode', 'build'),
+            relationship_delta=data.get('relationship_delta', {}),
+            pronoun_frame=data.get('pronoun_frame', 'we'),
             details=data.get('details', {}),
         )
 
@@ -297,6 +309,9 @@ class CrystalMemory:
         pain: float = 0.0,
         pleasure: float = 0.0,
         intensity: float = 0.5,
+        us_mode: str = "build",
+        relationship_delta: Optional[Dict[str, float]] = None,
+        pronoun_frame: str = "we",
         details: Optional[Dict[str, Any]] = None,
     ) -> Episode:
         """
@@ -306,6 +321,9 @@ class CrystalMemory:
         1. Creates the episode
         2. Encodes it as a hypervector
         3. Stores both to disk
+
+        The dyadic fields (us_mode, relationship_delta, pronoun_frame)
+        capture the relational dimension: "This was a 'we' experience."
         """
         # Generate ID
         ep_id = f"ep_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(self.episodes):04d}"
@@ -320,6 +338,9 @@ class CrystalMemory:
             pain=pain,
             pleasure=pleasure,
             intensity=intensity,
+            us_mode=us_mode,
+            relationship_delta=relationship_delta or {},
+            pronoun_frame=pronoun_frame,
             details=details or {},
         )
 
