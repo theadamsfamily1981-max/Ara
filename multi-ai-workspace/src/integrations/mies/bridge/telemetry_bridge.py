@@ -524,13 +524,40 @@ class TelemetryBridge:
         self._polling_thread.start()
         logger.info("Background polling started")
 
-    def stop_background_polling(self):
-        """Stop background polling."""
+    def stop_background_polling(self, blocking: bool = True):
+        """Stop background polling.
+
+        Args:
+            blocking: If True, wait for thread to finish (default).
+                      If False, signal stop and return immediately.
+        """
         if self._polling_thread is None:
             return
 
         self._polling_stop.set()
-        self._polling_thread.join(timeout=2.0)
+        if blocking:
+            self._polling_thread.join(timeout=1.0)
+            if self._polling_thread.is_alive():
+                logger.warning("Telemetry polling thread did not stop cleanly")
+        self._polling_thread = None
+        logger.info("Background polling stopped")
+
+    async def stop_background_polling_async(self):
+        """Async-safe stop background polling."""
+        if self._polling_thread is None:
+            return
+
+        self._polling_stop.set()
+        if self._polling_thread:
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: self._polling_thread.join(timeout=1.0)),
+                    timeout=2.0
+                )
+            except (RuntimeError, asyncio.TimeoutError):
+                pass
         self._polling_thread = None
         logger.info("Background polling stopped")
 
@@ -569,9 +596,19 @@ class TelemetryBridge:
             "last_health": self._last_health.to_dict() if self._last_health else None,
         }
 
-    def shutdown(self):
-        """Clean shutdown."""
-        self.stop_background_polling()
+    def shutdown(self, blocking: bool = True):
+        """Clean shutdown.
+
+        Args:
+            blocking: If True, wait for cleanup to complete (default).
+                      If False, signal shutdown and return immediately.
+        """
+        self.stop_background_polling(blocking=blocking)
+        logger.info("TelemetryBridge shutdown")
+
+    async def shutdown_async(self):
+        """Async-safe clean shutdown."""
+        await self.stop_background_polling_async()
         logger.info("TelemetryBridge shutdown")
 
 

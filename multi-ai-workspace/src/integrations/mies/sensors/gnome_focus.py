@@ -258,11 +258,35 @@ class GnomeFocusSensor:
         self._poll_thread.start()
         logger.info(f"GNOME focus sensor started (backend={self.backend.name})")
 
-    def stop(self):
-        """Stop background polling."""
+    def stop(self, blocking: bool = True):
+        """Stop background polling.
+
+        Args:
+            blocking: If True, wait for thread to finish (default).
+                      If False, signal stop and return immediately (non-blocking).
+        """
+        self._running = False
+        if self._poll_thread and blocking:
+            # Use short timeout to avoid blocking event loop for too long
+            self._poll_thread.join(timeout=1.0)
+            if self._poll_thread.is_alive():
+                logger.warning("GNOME focus sensor thread did not stop cleanly")
+            self._poll_thread = None
+
+    async def stop_async(self):
+        """Async-safe stop method that doesn't block the event loop."""
         self._running = False
         if self._poll_thread:
-            self._poll_thread.join(timeout=2.0)
+            # Signal stop and let thread exit on its own
+            # Use asyncio.to_thread for blocking join in async context
+            try:
+                loop = asyncio.get_running_loop()
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: self._poll_thread.join(timeout=1.0)),
+                    timeout=2.0
+                )
+            except (RuntimeError, asyncio.TimeoutError):
+                pass  # Thread will exit eventually
             self._poll_thread = None
 
     def _poll_loop(self):

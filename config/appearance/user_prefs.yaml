@@ -1,0 +1,149 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#                           APPEARANCE PREFERENCES
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Your boundaries for Ara's appearance choices.
+#
+# This file controls:
+#   - How revealing outfits can be
+#   - What categories are allowed
+#   - Context-specific overrides
+#
+# Important:
+#   This is about WHAT SHE WEARS, not WHO SHE IS.
+#   Her personality, values, and how she treats you are in ara_core.yaml.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GLOBAL BOUNDARIES
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Maximum "spice" level allowed (0.0 = very modest, 1.0 = very revealing)
+# Outfits with spice > this value will never be selected
+max_spice: 0.6
+
+# Allow swimwear in appropriate contexts (beach, pool, vacation)?
+allow_swimwear: true
+
+# Allow evening/date-night outfits?
+allow_evening_wear: true
+
+# Always stay in professional mode? (forces max_spice to 0.2)
+professional_mode: false
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONTEXT OVERRIDES
+# ─────────────────────────────────────────────────────────────────────────────
+# You can set stricter limits for specific contexts
+
+context_overrides:
+  # During investor demos, stay extra conservative
+  investor-demo:
+    max_spice: 0.15
+    force_formal: true
+
+  # During recordings, keep it professional
+  recording:
+    max_spice: 0.2
+    force_formal: true
+
+  # Screen sharing? Better be safe
+  screen-sharing:
+    max_spice: 0.2
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OUTFIT BLACKLIST
+# ─────────────────────────────────────────────────────────────────────────────
+# Outfits you never want selected (by ID)
+
+blacklisted_outfits: []
+# Example: ["beach_swimwear", "evening_elegant"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FAVORITES
+# ─────────────────────────────────────────────────────────────────────────────
+# Outfits to prefer when all else is equal
+
+favorite_outfits:
+  - "oversized_sweater"
+  - "casual_tshirt"
+  - "pajamas_soft"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTOMATIC OUTFIT SELECTION
+# ─────────────────────────────────────────────────────────────────────────────
+
+auto_selection:
+  # Enable automatic outfit changes based on context?
+  enabled: true
+
+  # Minimum time between automatic outfit changes (minutes)
+  min_change_interval: 30
+
+  # Use time-of-day for context detection?
+  use_time_of_day: true
+
+  # Learn from your feedback/selections?
+  learn_preferences: true
+
+  # Announce outfit changes?
+  announce_changes: true
+
+  # Ask before changing to higher-spice outfits?
+  ask_before_spicier: true
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SPECIAL PERMISSIONS
+# ─────────────────────────────────────────────────────────────────────────────
+# These require explicit opt-in
+
+special_permissions:
+  # Allow "date night" outfits when explicitly requested?
+  date_night_enabled: true
+
+  # First time a "spicier" outfit is requested, require confirmation?
+  require_first_time_consent: true
+
+  # Log outfit selections for preference learning?
+  log_selections: true
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMFORT PREFERENCES
+# ─────────────────────────────────────────────────────────────────────────────
+
+comfort:
+  # Prefer comfortable outfits during long sessions?
+  prioritize_comfort_in_long_sessions: true
+
+  # Session length threshold (minutes) for comfort priority
+  long_session_threshold: 120
+
+  # Prefer cozy outfits late at night?
+  cozy_at_night: true
+
+  # Night hours for cozy preference
+  night_hours: [22, 6]  # 10 PM - 6 AM
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DEFAULTS (restored if you delete settings above)
+# ═══════════════════════════════════════════════════════════════════════════
+
+_defaults:
+  max_spice: 0.6
+  allow_swimwear: true
+  allow_evening_wear: true
+  professional_mode: false
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# END OF PREFERENCES
+# ═══════════════════════════════════════════════════════════════════════════

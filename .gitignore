@@ -78,3 +78,4 @@ production/
 # MCP tools archive
 mcp-claude-restart.zip
 mcp-tools/
+banos/daemon/brainstem/target/

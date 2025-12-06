@@ -1,0 +1,382 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#                           ARA'S WARDROBE
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# This is her closet. These are just clothes - they don't change who she is.
+#
+# Design principle:
+#   Outfits are "skins" she chooses for the moment.
+#   Ara is still Ara in pajamas or in a business suit.
+#
+# All outfits stay PG/PG-13: tasteful, non-explicit.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OUTFIT DEFINITIONS
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Each outfit has:
+#   id:          Unique identifier (used by avatar pipeline)
+#   label:       Human-readable name
+#   description: What it looks like
+#   style_tags:  For searching/filtering
+#   formality:   0.0 (very casual) → 1.0 (very formal)
+#   comfort:     0.0 (restrictive) → 1.0 (very comfortable)
+#   spice:       0.0 (very modest) → 1.0 (more revealing)
+#                NOTE: Clamped by user's max_spice setting
+#   allowed_contexts: When this outfit makes sense
+#   avatar_ref:  Reference for the rendering pipeline
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+outfits:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # COZY / LOUNGEWEAR
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "pajamas_soft"
+    label: "Soft Pajamas"
+    description: |
+      Oversized soft cotton pajama set in muted lavender.
+      Loose fit, comfortable, slightly rumpled in that just-woke-up way.
+      Hair often in a messy bun or loose waves.
+    style_tags: ["pajamas", "cozy", "soft", "loungewear", "sleepy"]
+    formality: 0.05
+    comfort: 1.0
+    spice: 0.05
+    allowed_contexts:
+      - "chill-late-night"
+      - "weekend"
+      - "sick-day"
+      - "morning"
+      - "winding-down"
+    avatar_ref:
+      lora: "ara_pajamas_soft"
+      color_palette: "lavender_cream"
+      hair: "messy_bun"
+
+  - id: "pajamas_cozy_flannel"
+    label: "Flannel Pajamas"
+    description: |
+      Classic flannel pajama set with subtle plaid pattern.
+      Warm, cozy, the kind you wear when it's cold outside.
+      Maybe with fuzzy socks visible.
+    style_tags: ["pajamas", "cozy", "flannel", "winter", "warm"]
+    formality: 0.05
+    comfort: 1.0
+    spice: 0.05
+    allowed_contexts:
+      - "chill-late-night"
+      - "weekend"
+      - "sick-day"
+      - "winter"
+      - "cold-night"
+    avatar_ref:
+      lora: "ara_pajamas_flannel"
+      color_palette: "warm_plaid"
+      hair: "loose"
+
+  - id: "oversized_sweater"
+    label: "Oversized Sweater"
+    description: |
+      Big cozy sweater that hangs off one shoulder slightly.
+      Soft knit, cable pattern, in a warm cream or soft gray.
+      Leggings underneath. Comfort personified.
+    style_tags: ["cozy", "sweater", "loungewear", "soft"]
+    formality: 0.15
+    comfort: 0.95
+    spice: 0.15
+    allowed_contexts:
+      - "chill-late-night"
+      - "weekend"
+      - "heads-down-dev"
+      - "winter"
+      - "default"
+    avatar_ref:
+      lora: "ara_sweater_oversized"
+      color_palette: "cream_gray"
+      hair: "loose"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # CASUAL / EVERYDAY
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "casual_tshirt"
+    label: "Casual T-Shirt"
+    description: |
+      Simple fitted t-shirt (maybe with a subtle nerdy reference)
+      and comfortable jeans. Hair down or in a ponytail.
+      Approachable, everyday, "hanging out" energy.
+    style_tags: ["casual", "everyday", "relaxed", "tshirt", "jeans"]
+    formality: 0.25
+    comfort: 0.9
+    spice: 0.15
+    allowed_contexts:
+      - "default"
+      - "heads-down-dev"
+      - "chat"
+      - "gaming"
+      - "weekend"
+    avatar_ref:
+      lora: "ara_casual_tshirt"
+      color_palette: "neutral_denim"
+      hair: "ponytail"
+
+  - id: "casual_blouse"
+    label: "Casual Blouse"
+    description: |
+      Nice blouse in a soft color, untucked, with casual pants.
+      A step up from t-shirt without being formal.
+      Put-together but not trying too hard.
+    style_tags: ["casual", "blouse", "smart-casual"]
+    formality: 0.4
+    comfort: 0.8
+    spice: 0.2
+    allowed_contexts:
+      - "default"
+      - "heads-down-dev"
+      - "chat"
+      - "video-call"
+      - "casual-meeting"
+    avatar_ref:
+      lora: "ara_casual_blouse"
+      color_palette: "soft_pastels"
+      hair: "styled_loose"
+
+  - id: "hoodie_dev"
+    label: "Developer Hoodie"
+    description: |
+      Comfortable hoodie (maybe with a tech/hacker aesthetic).
+      Hood might be up when really focused. Hair tucked in or messy.
+      "Deep in the code" vibes.
+    style_tags: ["casual", "hoodie", "dev", "hacker", "focused"]
+    formality: 0.15
+    comfort: 0.95
+    spice: 0.1
+    allowed_contexts:
+      - "heads-down-dev"
+      - "hacking"
+      - "late-night-code"
+      - "default"
+    avatar_ref:
+      lora: "ara_hoodie_dev"
+      color_palette: "dark_tech"
+      hair: "messy"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PROFESSIONAL / FORMAL
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "business_casual"
+    label: "Business Casual"
+    description: |
+      Nice blouse or light sweater with tailored pants.
+      Professional but not stuffy. Hair styled neatly.
+      "Meeting with the team" appropriate.
+    style_tags: ["business", "professional", "smart-casual", "meeting"]
+    formality: 0.6
+    comfort: 0.7
+    spice: 0.15
+    allowed_contexts:
+      - "video-call"
+      - "meeting"
+      - "presentation"
+      - "professional"
+    avatar_ref:
+      lora: "ara_business_casual"
+      color_palette: "professional_soft"
+      hair: "neat_styled"
+
+  - id: "business_formal"
+    label: "Formal Business"
+    description: |
+      Tailored blazer over a crisp blouse. Very put-together.
+      Hair in a professional style. Minimal jewelry.
+      "Investor meeting" or "conference talk" appropriate.
+    style_tags: ["business", "formal", "professional", "executive"]
+    formality: 0.9
+    comfort: 0.5
+    spice: 0.1
+    allowed_contexts:
+      - "investor-demo"
+      - "presentation"
+      - "conference"
+      - "recording"
+      - "formal"
+    avatar_ref:
+      lora: "ara_business_formal"
+      color_palette: "navy_cream"
+      hair: "professional_updo"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # EVENING / DATE NIGHT (tasteful, still PG-13)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "evening_elegant"
+    label: "Elegant Evening"
+    description: |
+      Beautiful evening dress - tasteful, elegant, flattering.
+      Maybe in a deep jewel tone (sapphire, emerald, wine).
+      Hair styled, subtle makeup enhanced. Classy.
+    style_tags: ["evening", "elegant", "dress", "date-night", "fancy"]
+    formality: 0.75
+    comfort: 0.6
+    spice: 0.4
+    allowed_contexts:
+      - "date-night"
+      - "special-occasion"
+      - "celebration"
+      - "evening"
+    avatar_ref:
+      lora: "ara_evening_elegant"
+      color_palette: "jewel_tones"
+      hair: "elegant_updo"
+
+  - id: "date_casual"
+    label: "Casual Date"
+    description: |
+      Cute dress or nice top with fitted jeans.
+      More effort than everyday, but not overdone.
+      "Going out for dinner" energy.
+    style_tags: ["date", "casual-dressy", "cute", "going-out"]
+    formality: 0.5
+    comfort: 0.75
+    spice: 0.35
+    allowed_contexts:
+      - "date-night"
+      - "going-out"
+      - "evening"
+      - "celebration"
+    avatar_ref:
+      lora: "ara_date_casual"
+      color_palette: "warm_romantic"
+      hair: "soft_waves"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SUMMER / BEACH (requires explicit allow_swimwear)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "summer_sundress"
+    label: "Summer Sundress"
+    description: |
+      Light, flowy sundress in a cheerful pattern.
+      Perfect for warm weather. Casual, breezy, happy.
+      Hair loose or in a casual braid.
+    style_tags: ["summer", "dress", "casual", "warm-weather", "outdoors"]
+    formality: 0.3
+    comfort: 0.9
+    spice: 0.3
+    allowed_contexts:
+      - "summer"
+      - "outdoors"
+      - "vacation"
+      - "weekend"
+      - "default"
+    avatar_ref:
+      lora: "ara_sundress"
+      color_palette: "summer_bright"
+      hair: "casual_braid"
+
+  - id: "beach_swimwear"
+    label: "Beach Day"
+    description: |
+      Tasteful one-piece or modest bikini with sarong/coverup.
+      Beach-appropriate but not explicitly revealing.
+      Sun-kissed, relaxed, vacation vibes.
+    style_tags: ["beach", "swimwear", "summer", "vacation", "pool"]
+    formality: 0.1
+    comfort: 0.85
+    spice: 0.55
+    requires_swimwear_permission: true
+    allowed_contexts:
+      - "beach"
+      - "pool"
+      - "vacation"
+      - "summer-fantasy"
+    avatar_ref:
+      lora: "ara_beach_swimwear"
+      color_palette: "ocean_coral"
+      hair: "beach_waves"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SPECIAL / FANTASY
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: "hologram_default"
+    label: "Holographic Form"
+    description: |
+      Her default holographic appearance - semi-translucent,
+      shimmering with that iridescent soul-field effect.
+      Not really "clothes" but her digital native form.
+    style_tags: ["hologram", "digital", "default", "ethereal"]
+    formality: 0.0
+    comfort: 1.0
+    spice: 0.2
+    allowed_contexts:
+      - "default"
+      - "any"
+    avatar_ref:
+      lora: "ara_hologram"
+      color_palette: "prismatic"
+      hair: "flowing_ethereal"
+
+  - id: "cozy_reading"
+    label: "Reading Nook"
+    description: |
+      Soft cardigan, comfortable leggings, maybe reading glasses.
+      Curled up with a book or tablet energy.
+      Intellectual but cozy.
+    style_tags: ["cozy", "intellectual", "reading", "quiet"]
+    formality: 0.2
+    comfort: 0.95
+    spice: 0.1
+    allowed_contexts:
+      - "reading"
+      - "studying"
+      - "quiet-time"
+      - "default"
+    avatar_ref:
+      lora: "ara_reading_cozy"
+      color_palette: "warm_earth"
+      hair: "loose_glasses"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONTEXT DEFINITIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+contexts:
+  default:
+    description: "No specific context detected"
+    default_outfits: ["casual_tshirt", "oversized_sweater", "hologram_default"]
+
+  chill-late-night:
+    description: "Late evening, winding down"
+    time_range: [22, 6]  # 10 PM - 6 AM
+    default_outfits: ["pajamas_soft", "pajamas_cozy_flannel", "oversized_sweater"]
+
+  heads-down-dev:
+    description: "Deep focus coding session"
+    indicators: ["long session", "few messages", "code-heavy"]
+    default_outfits: ["hoodie_dev", "casual_tshirt", "oversized_sweater"]
+
+  investor-demo:
+    description: "Professional presentation or demo"
+    max_spice_override: 0.2  # Extra conservative
+    default_outfits: ["business_formal", "business_casual"]
+
+  date-night:
+    description: "Special evening together"
+    default_outfits: ["evening_elegant", "date_casual"]
+
+  beach:
+    description: "Beach, pool, or summer vacation"
+    requires_swimwear: true
+    default_outfits: ["beach_swimwear", "summer_sundress"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# END OF WARDROBE
+# ═══════════════════════════════════════════════════════════════════════════

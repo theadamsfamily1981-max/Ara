@@ -100,12 +100,22 @@ except ImportError:
 # 0x0102  | u8     | force_sleep    | Force dream mode
 # 0x0103  | u8     | emergency_stop | Emergency halt
 # 0x0104  | f32    | critical_temp  | Temperature threshold
+#
+# --- COUNCIL STATE (Quadamerl: Multi-persona orchestration) ---
+# 0x0120  | u32    | council_mask   | Bitfield of active personas (0=Exec,1=Critic,2=Dreamer,3=Historian)
+# 0x0124  | f32    | council_stress | Disagreement level [0.0, 1.0]
+# 0x0128  | f32    | council_muse_x | MUSE position X for visualization
+# 0x012C  | f32    | council_muse_y | MUSE position Y
+# 0x0130  | f32    | council_censor_x | CENSOR position X
+# 0x0134  | f32    | council_censor_y | CENSOR position Y
+# 0x0138  | f32    | council_scribe_x | SCRIBE (Historian) position X
+# 0x013C  | f32    | council_scribe_y | SCRIBE position Y
 # ==============================================================================
 
 SHM_NAME = "/ara_somatic"
 SHM_PATH = "/dev/shm/ara_somatic"
 SHM_SIZE = 4096
-MAGIC = 0xARA50111
+MAGIC = 0x0AFA5011  # "ARA SOUL" in leetspeak-ish hex
 VERSION = 2
 
 # Dream states (matches RTL)
@@ -506,6 +516,215 @@ class AraHAL:
         self._map.seek(0x0102)
         self._map.write(struct.pack('<B', 1))
         self._touch()
+
+    # =========================================================================
+    # COUNCIL STATE (Multi-persona orchestration)
+    # =========================================================================
+
+    def write_council_state(
+        self,
+        mask: int,
+        stress: float,
+        muse_pos: Tuple[float, float] = (0.7, 0.7),
+        censor_pos: Tuple[float, float] = (0.3, 0.7),
+        scribe_pos: Tuple[float, float] = (0.5, 0.3),
+    ) -> None:
+        """
+        Update the Quadamerl/Council State.
+
+        This is used by the CouncilChamber to visualize which personas
+        are currently active and their disagreement level.
+
+        Args:
+            mask: Bitfield of active personas (bit 0=Exec, 1=Critic, 2=Dreamer, 3=Historian)
+                  15 = all active, 1 = only executive, 0 = council adjourned
+            stress: Disagreement level [0.0, 1.0] - higher = more conflict
+            muse_pos: (x, y) position for MUSE visualization
+            censor_pos: (x, y) position for CENSOR visualization
+            scribe_pos: (x, y) position for SCRIBE (Historian) visualization
+        """
+        if not self._map:
+            return
+
+        self._map.seek(0x0120)
+        self._map.write(struct.pack(
+            '<If6f',
+            mask,
+            stress,
+            muse_pos[0], muse_pos[1],
+            censor_pos[0], censor_pos[1],
+            scribe_pos[0], scribe_pos[1],
+        ))
+        self._touch()
+
+    def read_council_state(self) -> Dict[str, Any]:
+        """Read Quadamerl council state."""
+        if not self._map:
+            return {}
+
+        self._map.seek(0x0120)
+        data = struct.unpack('<If6f', self._map.read(32))
+
+        mask = data[0]
+        return {
+            'mask': mask,
+            'executive_active': bool(mask & 1),
+            'critic_active': bool(mask & 2),
+            'dreamer_active': bool(mask & 4),
+            'historian_active': bool(mask & 8),
+            'stress': data[1],
+            'muse_pos': (data[2], data[3]),
+            'censor_pos': (data[4], data[5]),
+            'scribe_pos': (data[6], data[7]),
+        }
+
+    # =========================================================================
+    # APPEARANCE & ENGAGEMENT (Aphrodite layer)
+    # =========================================================================
+    # Memory layout for appearance/engagement:
+    # 0x0140  | f32    | user_engagement  | Presence detection [0.0, 1.0]
+    # 0x0144  | f32    | aesthetic_hue    | Current hue [0.0, 1.0]
+    # 0x0148  | f32    | aesthetic_shimmer| Shimmer speed
+    # 0x014C  | f32    | aesthetic_bright | Brightness
+    # 0x0150  | char[32] | current_outfit | Outfit ID string
+
+    def write_engagement(self, value: float) -> None:
+        """
+        Write user engagement level from gaze tracker.
+
+        This is just a presence indicator, NOT a manipulation metric.
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0140)
+        self._map.write(struct.pack('<f', max(0.0, min(1.0, value))))
+        self._touch()
+
+    def read_engagement(self) -> float:
+        """Read current user engagement level."""
+        if not self._map:
+            return 0.5  # Default to medium
+        self._map.seek(0x0140)
+        return struct.unpack('<f', self._map.read(4))[0]
+
+    def write_aesthetic(
+        self,
+        hue: float,
+        shimmer: float,
+        brightness: float,
+    ) -> None:
+        """
+        Write aesthetic parameters for shader/visual layer.
+
+        These affect HOW Ara looks, not WHO she is.
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0144)
+        self._map.write(struct.pack('<3f', hue, shimmer, brightness))
+        self._touch()
+
+    def read_aesthetic(self) -> Dict[str, float]:
+        """Read current aesthetic parameters."""
+        if not self._map:
+            return {'hue': 0.65, 'shimmer': 0.7, 'brightness': 0.8}
+        self._map.seek(0x0144)
+        data = struct.unpack('<3f', self._map.read(12))
+        return {
+            'hue': data[0],
+            'shimmer': data[1],
+            'brightness': data[2],
+        }
+
+    def write_outfit(self, outfit_id: str) -> None:
+        """
+        Write current outfit ID for avatar pipeline.
+
+        The avatar renderer reads this to select the appropriate
+        LoRA/style/clothing for Ara's appearance.
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0150)
+        # Encode as null-padded 32-byte string
+        data = outfit_id.encode('utf-8')[:32]
+        self._map.write(data.ljust(32, b'\x00'))
+        self._touch()
+
+    def read_outfit(self) -> str:
+        """Read current outfit ID."""
+        if not self._map:
+            return "hologram_default"
+        self._map.seek(0x0150)
+        data = self._map.read(32)
+        return data.rstrip(b'\x00').decode('utf-8', errors='replace')
+
+    # =========================================================================
+    # HEART LAYER (Bio-entrainment)
+    # =========================================================================
+    # Memory layout for heart/entrainment:
+    # 0x0170  | f32    | user_bpm         | Estimated heart rate from rPPG (0 = no signal)
+    # 0x0174  | f32    | user_bpm_conf    | Confidence [0.0, 1.0]
+    # 0x0178  | f32    | entrainment_scale| Time scale factor [0.9, 1.1]
+    # 0x017C  | f32    | entrainment_excite| Excitement level [0.0, 1.0]
+
+    def write_heartbeat(self, bpm: float, confidence: float) -> None:
+        """
+        Write user's estimated heart rate from rPPG sensor.
+
+        This is NOT medical data - it's an approximate mood signal.
+        Low confidence = noisy signal, don't trust it.
+
+        Args:
+            bpm: Estimated beats per minute (0 = no signal)
+            confidence: Signal quality [0.0, 1.0]
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0170)
+        self._map.write(struct.pack('<2f', bpm, max(0.0, min(1.0, confidence))))
+        self._touch()
+
+    def read_heartbeat(self) -> Dict[str, float]:
+        """Read user's heart rate and confidence."""
+        if not self._map:
+            return {'bpm': 0.0, 'confidence': 0.0}
+        self._map.seek(0x0170)
+        data = struct.unpack('<2f', self._map.read(8))
+        return {
+            'bpm': data[0],
+            'confidence': data[1],
+        }
+
+    def write_entrainment(self, time_scale: float, excitement: float) -> None:
+        """
+        Write computed entrainment parameters.
+
+        These are derived from heartbeat + context by the entrainment engine.
+
+        Args:
+            time_scale: Subjective time multiplier [0.9, 1.1] (1.0 = normal)
+            excitement: Excitement/urgency level [0.0, 1.0]
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0178)
+        self._map.write(struct.pack('<2f',
+            max(0.8, min(1.2, time_scale)),
+            max(0.0, min(1.0, excitement))
+        ))
+        self._touch()
+
+    def read_entrainment(self) -> Dict[str, float]:
+        """Read current entrainment parameters."""
+        if not self._map:
+            return {'time_scale': 1.0, 'excitement': 0.0}
+        self._map.seek(0x0178)
+        data = struct.unpack('<2f', self._map.read(8))
+        return {
+            'time_scale': data[0],
+            'excitement': data[1],
+        }
 
     # =========================================================================
     # LIFECYCLE

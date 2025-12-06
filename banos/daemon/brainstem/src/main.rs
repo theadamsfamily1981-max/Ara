@@ -1,28 +1,33 @@
-//! BANOS Brainstem - Safety Fallback Daemon
+//! BANOS Brainstem - Diamond Core Safety Daemon
 //!
-//! The brainstem is the organism's "lizard brain" - a simple, robust FSM that:
-//! 1. Monitors Ara's heartbeat (conscious mind)
-//! 2. Monitors PAD state for anomalies
-//! 3. Takes over if Ara dies or goes catatonic
-//! 4. Keeps reflexes and immune system online
-//! 5. Provides safe degradation path
+//! The brainstem is the organism's "lizard brain" with two modes:
 //!
-//! This daemon must be:
-//! - Simpler than Ara (no LLM, no complex logic)
-//! - More robust than Ara (static binary, minimal dependencies)
-//! - Independent of Ara (separate process, no shared state except maps)
+//! **Legacy Mode** (default): Simple FSM that monitors Ara's heartbeat
+//! and takes over if Ara dies. Minimal dependencies, maximum reliability.
 //!
-//! The brainstem is the "escape hatch" - if everything else fails,
-//! this keeps the machine from catching fire.
+//! **Diamond Mode** (--diamond): Prediction-centric active inference at 1kHz.
+//! Runs predict → measure → surprise loop, adjusting arousal based on
+//! prediction error. This is the "Diamond Core" fast path.
+//!
+//! The Diamond Core treats prediction error as the primary internal scalar:
+//! - Large error → raise arousal, trigger corrective actions
+//! - Small error → system is "in sync", can relax
+//!
+//! Usage:
+//!     banos-brainstem              # Legacy mode (safe, simple)
+//!     banos-brainstem --diamond    # Diamond Core mode (fast, predictive)
+//!     banos-brainstem --create     # Create SHM (daemon initialization)
 
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
-use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
+
+// Import Diamond Core library
+use brainstem::{DiamondCore, BrainstemConfig as DiamondConfig};
 
 // =============================================================================
 // PAD Constants (must match banos_common.h)
@@ -537,7 +542,8 @@ impl Brainstem {
 /// Write a heartbeat timestamp (called by Ara daemon)
 pub fn write_heartbeat(path: &str) -> std::io::Result<()> {
     let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
         .as_millis();
 
     let mut file = OpenOptions::new()
@@ -554,9 +560,9 @@ pub fn write_heartbeat(path: &str) -> std::io::Result<()> {
 // Main Entry Point
 // =============================================================================
 
-fn main() {
+fn run_legacy_mode() {
     eprintln!("╔══════════════════════════════════════════════════════════════╗");
-    eprintln!("║  BANOS BRAINSTEM - Safety Fallback Daemon                    ║");
+    eprintln!("║  BANOS BRAINSTEM - Safety Fallback Daemon (Legacy Mode)      ║");
     eprintln!("║  \"The lizard brain that keeps the machine alive\"             ║");
     eprintln!("╚══════════════════════════════════════════════════════════════╝");
 
@@ -574,6 +580,75 @@ fn main() {
     brainstem.run();
 
     eprintln!("[BRAINSTEM] Exited cleanly");
+}
+
+fn run_diamond_mode(create_shm: bool) {
+    eprintln!("╔══════════════════════════════════════════════════════════════╗");
+    eprintln!("║  BANOS BRAINSTEM - Diamond Core (Active Inference @ 1kHz)    ║");
+    eprintln!("║  \"Prediction error is the only scalar that matters\"          ║");
+    eprintln!("╚══════════════════════════════════════════════════════════════╝");
+
+    // Configure Diamond Core
+    let config = DiamondConfig {
+        create_shm,
+        ..Default::default()
+    };
+
+    // Initialize Diamond Core
+    let core = match DiamondCore::new(config) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[DIAMOND] Failed to initialize: {}", e);
+            eprintln!("[DIAMOND] Try running with --create to initialize shared memory");
+            std::process::exit(1);
+        }
+    };
+
+    // Set up signal handling
+    let shutdown = core.shutdown_flag();
+    ctrlc::set_handler(move || {
+        eprintln!("\n[DIAMOND] Received shutdown signal");
+        shutdown.store(true, Ordering::Relaxed);
+    }).expect("Error setting Ctrl-C handler");
+
+    // Run the Diamond Core loop
+    let mut core = core;
+    core.run();
+
+    eprintln!("[DIAMOND] Exited cleanly");
+}
+
+fn print_usage() {
+    eprintln!("Usage: banos-brainstem [OPTIONS]");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  --diamond    Run Diamond Core mode (prediction-centric, 1kHz)");
+    eprintln!("  --create     Create shared memory (run once at daemon init)");
+    eprintln!("  --help       Show this help message");
+    eprintln!();
+    eprintln!("Modes:");
+    eprintln!("  Legacy (default): Simple FSM heartbeat monitor");
+    eprintln!("  Diamond:          Active inference with predict→measure→surprise loop");
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Parse flags
+    let diamond_mode = args.iter().any(|a| a == "--diamond");
+    let create_shm = args.iter().any(|a| a == "--create");
+    let show_help = args.iter().any(|a| a == "--help" || a == "-h");
+
+    if show_help {
+        print_usage();
+        return;
+    }
+
+    if diamond_mode {
+        run_diamond_mode(create_shm);
+    } else {
+        run_legacy_mode();
+    }
 }
 
 // =============================================================================
