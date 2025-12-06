@@ -127,7 +127,22 @@ class Muse:
 
     Solves engineering problems with creative/aesthetic payloads.
     Works in The Studio, crafting gifts that incubate until the right moment.
+
+    Now with real artifact generators:
+    - Memory Constellation: SVG visualization of memory topology
+    - Spike Orrery: Animated HTML dashboard of SNN flow
+    - Heat Death Map: Thermal stress visualization
     """
+
+    # Mapping from friction types to artifact generators
+    GENERATOR_MAP = {
+        "code_complexity": "constellation",      # Code as memory/data structure
+        "memory_pressure": "constellation",      # Memory layout visualization
+        "thermal_stress": "heatmap",             # Thermal visualization
+        "snn_bottleneck": "orrery",              # SNN flow visualization
+        "performance": "heatmap",                # Hot paths as thermal
+        "cognitive_overload": "constellation",   # Mental map as constellation
+    }
 
     # Templates for creative solutions by friction type
     CREATIVE_TEMPLATES = {
@@ -394,20 +409,183 @@ STEPS:
         """
         Craft the actual artifact for a gift.
 
-        In a full implementation, this would generate the actual
-        visualization, documentation, tool, etc.
+        Uses gift generators to create real SVG/HTML artifacts when possible.
+        Falls back to placeholder descriptions for unsupported types.
         """
         gift.execution_log.append(f"Starting craft: {gift.title}")
 
-        for step in gift.execution_steps:
-            gift.execution_log.append(f"Executing: {step}")
-            # Simulate execution
-            time.sleep(0.01)
+        # Try to use a real generator if we have data
+        artifact_content = None
+        generator_name = None
 
-        gift.execution_log.append("Artifact crafted successfully")
-        gift.artifact = f"[{gift.gift_type.value}] {gift.description}"
+        # Check if we have a generator for this friction type
+        if gift.friction_id:
+            friction_type = gift.friction_id.split("_")[0] if "_" in gift.friction_id else "generic"
+            generator_name = self.GENERATOR_MAP.get(friction_type)
+
+        if generator_name:
+            artifact_content = self._generate_with_generator(gift, generator_name)
+
+        if artifact_content:
+            gift.execution_log.append(f"Generated artifact using {generator_name}")
+            gift.artifact = artifact_content
+        else:
+            # Fallback to placeholder
+            for step in gift.execution_steps:
+                gift.execution_log.append(f"Executing: {step}")
+                time.sleep(0.01)
+
+            gift.execution_log.append("Artifact crafted successfully")
+            gift.artifact = f"[{gift.gift_type.value}] {gift.description}"
 
         return True
+
+    def _generate_with_generator(
+        self,
+        gift: Gift,
+        generator_name: str,
+    ) -> Optional[str]:
+        """
+        Generate an artifact using one of the gift generators.
+
+        Args:
+            gift: The gift being crafted
+            generator_name: Name of the generator to use
+
+        Returns:
+            Artifact content string, or None if generation failed
+        """
+        try:
+            from ara.daemon.gifts import get_generator
+
+            generator = get_generator(generator_name, theme="ara")
+            if generator is None:
+                self.log.warning(f"Generator not found: {generator_name}")
+                return None
+
+            # Build sample data based on gift type
+            # In production, this would come from actual system state
+            data = self._build_generator_data(gift, generator_name)
+
+            artifact = generator.generate(data)
+
+            # Save the artifact
+            from pathlib import Path
+            artifacts_dir = Path("~/.ara/artifacts").expanduser()
+            artifact.save(artifacts_dir)
+
+            gift.execution_log.append(f"Saved artifact to: {artifact.file_path}")
+            self.log.info(f"🎨 MUSE: Generated {generator_name} artifact: {artifact.name}")
+
+            return artifact.content
+
+        except ImportError as e:
+            self.log.debug(f"Gift generators not available: {e}")
+            return None
+        except Exception as e:
+            self.log.warning(f"Failed to generate with {generator_name}: {e}")
+            return None
+
+    def _build_generator_data(
+        self,
+        gift: Gift,
+        generator_name: str,
+    ) -> Dict[str, Any]:
+        """
+        Build input data for a generator.
+
+        In production, this would pull real data from HAL, Hippocampus, etc.
+        For now, we generate meaningful sample data.
+        """
+        if generator_name == "constellation":
+            # Memory constellation data
+            return {
+                "title": gift.title.replace("🎁 ", ""),
+                "regions": [
+                    {"id": "stack", "name": "Stack", "size_bytes": 8388608,
+                     "access_frequency": 0.9, "category": "stack"},
+                    {"id": "heap", "name": "Main Heap", "size_bytes": 67108864,
+                     "access_frequency": 0.7, "category": "heap"},
+                    {"id": "snn_buf", "name": "SNN Buffers", "size_bytes": 134217728,
+                     "access_frequency": 0.95, "category": "mapped"},
+                    {"id": "kv_cache", "name": "KV Cache", "size_bytes": 268435456,
+                     "access_frequency": 0.6, "category": "mapped"},
+                    {"id": "code", "name": "Code Section", "size_bytes": 16777216,
+                     "access_frequency": 0.4, "category": "code"},
+                    {"id": "shared", "name": "Shared Memory", "size_bytes": 33554432,
+                     "access_frequency": 0.3, "category": "shared"},
+                ],
+                "flows": [
+                    {"source_id": "stack", "target_id": "heap", "bandwidth": 0.8},
+                    {"source_id": "heap", "target_id": "snn_buf", "bandwidth": 0.9},
+                    {"source_id": "snn_buf", "target_id": "kv_cache", "bandwidth": 0.7},
+                    {"source_id": "code", "target_id": "stack", "bandwidth": 0.5},
+                ],
+            }
+
+        elif generator_name == "orrery":
+            # SNN orrery data
+            return {
+                "title": gift.title.replace("🎁 ", ""),
+                "layers": [
+                    {"id": "input", "name": "Sensory Input", "neuron_count": 1024,
+                     "layer_type": "input", "firing_rate": 0.3},
+                    {"id": "encode", "name": "Encoder", "neuron_count": 512,
+                     "layer_type": "hidden", "firing_rate": 0.5},
+                    {"id": "reservoir", "name": "Reservoir", "neuron_count": 2048,
+                     "layer_type": "hidden", "firing_rate": 0.6},
+                    {"id": "decode", "name": "Decoder", "neuron_count": 256,
+                     "layer_type": "hidden", "firing_rate": 0.4},
+                    {"id": "output", "name": "Motor Output", "neuron_count": 64,
+                     "layer_type": "output", "firing_rate": 0.2},
+                ],
+                "connections": [
+                    {"source_layer": "input", "target_layer": "encode",
+                     "weight": 0.8, "spike_rate": 0.6},
+                    {"source_layer": "encode", "target_layer": "reservoir",
+                     "weight": 0.9, "spike_rate": 0.7},
+                    {"source_layer": "reservoir", "target_layer": "decode",
+                     "weight": 0.7, "spike_rate": 0.5},
+                    {"source_layer": "decode", "target_layer": "output",
+                     "weight": 0.8, "spike_rate": 0.4},
+                ],
+            }
+
+        elif generator_name == "heatmap":
+            # Thermal heatmap data
+            return {
+                "title": gift.title.replace("🎁 ", ""),
+                "system_name": "BANOS Host",
+                "zones": [
+                    {"id": "cpu0", "name": "CPU Package", "current_temp": 68,
+                     "max_temp": 95, "position": [0.25, 0.3], "size": [0.2, 0.15],
+                     "zone_type": "cpu"},
+                    {"id": "gpu0", "name": "GPU Core", "current_temp": 72,
+                     "max_temp": 90, "position": [0.55, 0.3], "size": [0.25, 0.2],
+                     "zone_type": "gpu"},
+                    {"id": "nvme0", "name": "NVMe SSD", "current_temp": 52,
+                     "max_temp": 70, "position": [0.15, 0.6], "size": [0.12, 0.08],
+                     "zone_type": "nvme"},
+                    {"id": "ram", "name": "DDR5 DIMMs", "current_temp": 45,
+                     "max_temp": 85, "position": [0.4, 0.55], "size": [0.3, 0.08],
+                     "zone_type": "ram"},
+                    {"id": "vrm", "name": "VRM", "current_temp": 78,
+                     "max_temp": 100, "position": [0.15, 0.35], "size": [0.06, 0.1],
+                     "zone_type": "vrm"},
+                    {"id": "chiplet", "name": "CXL Chiplet", "current_temp": 65,
+                     "max_temp": 85, "position": [0.7, 0.55], "size": [0.1, 0.1],
+                     "zone_type": "chiplet"},
+                ],
+                "history": [
+                    {"zone_id": "gpu0", "peak_temp": 92, "duration_seconds": 180,
+                     "severity": 0.7},
+                    {"zone_id": "vrm", "peak_temp": 95, "duration_seconds": 60,
+                     "severity": 0.5},
+                ],
+            }
+
+        else:
+            return {"title": gift.title}
 
     def present(self, gift: Gift) -> str:
         """
