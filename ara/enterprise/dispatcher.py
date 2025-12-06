@@ -26,8 +26,10 @@ Usage:
 """
 from __future__ import annotations
 
+import base64
 import logging
-from typing import Optional, Dict, Any
+import uuid
+from typing import Optional, Dict, Any, Tuple
 
 from .org_chart import Employee
 
@@ -206,10 +208,10 @@ class Dispatcher:
 
             if inline_code is not None:
                 log.debug("Dispatcher: writing inline code to %s", remote_path)
-                # Use a here-doc to write file on remote
-                safe_code = inline_code.replace("EOF", "EOX")  # naive safety
+                # Use base64 encoding for safe transfer (handles any content)
+                encoded = base64.b64encode(inline_code.encode('utf-8')).decode('ascii')
                 conn.run(
-                    f"cat << 'EOF' > {remote_path}\n{safe_code}\nEOF",
+                    f"echo '{encoded}' | base64 -d > {remote_path}",
                     hide=True,
                 )
 
@@ -224,8 +226,21 @@ class Dispatcher:
             remote_cmd = f"{env_prefix}{command}"
             log.debug("Dispatcher: executing on %s: %s", employee.hostname, remote_cmd)
 
-            result = conn.run(remote_cmd, hide=True)
+            result = conn.run(remote_cmd, hide=True, warn=True)  # warn=True prevents exception on non-zero
             stdout = result.stdout.strip()
+            stderr = result.stderr.strip() if result.stderr else ""
+
+            # Check exit code - non-zero means failure
+            if result.exited != 0:
+                log.error(
+                    "DISPATCHER: Task on %s FAILED (exit=%s)\nstdout: %s\nstderr: %s",
+                    employee.id,
+                    result.exited,
+                    stdout[:500] if stdout else "(empty)",
+                    stderr[:500] if stderr else "(empty)",
+                )
+                employee.status = "error"
+                return None
 
             log.info(
                 "DISPATCHER: Task on %s completed (exit=%s, out_len=%d)",
