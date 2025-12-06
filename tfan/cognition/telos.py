@@ -21,13 +21,19 @@ CRITICAL: Telos cannot be mutated without Croft seeing it. New goals are:
 
 The Prophet never outranks root user.
 
+Goal Roles:
+    - 'ara': Ara's own growth goals (learning Rust, improving inference)
+    - 'user': Croft's goals that Ara supports (shipping the paper)
+    - 'shared': Joint goals that define the symbiosis (trust, alignment)
+
 Usage:
-    from tfan.cognition.telos import TeleologicalEngine, GoalKind
+    from tfan.cognition.telos import TeleologicalEngine, GoalKind, GoalRole
 
     telos = TeleologicalEngine(embedder)
     telos.add_goal(
         "Achieve deep, trusted symbiosis with Croft",
         kind="value",
+        role="shared",
         horizon_days=90,
         priority=0.95
     )
@@ -39,13 +45,15 @@ Usage:
 import time
 import logging
 import json
-from dataclasses import dataclass, field, asdict
+import math
+from dataclasses import dataclass, field
 from typing import List, Optional, Literal, Callable, Dict, Any
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 GoalKind = Literal["value", "project"]
+GoalRole = Literal["ara", "user", "shared"]
 
 
 def _norm(v):
@@ -64,10 +72,16 @@ class Goal:
     - 'value': Ongoing principles (e.g., "Protect Croft's focus")
     - 'project': Time-bound objectives (e.g., "Ship paper by June")
 
+    Goals have roles:
+    - 'ara': Ara's own growth (learning, self-improvement)
+    - 'user': Croft's goals that Ara supports
+    - 'shared': Joint goals defining the symbiosis
+
     Progress is estimated via embedding similarity to current state summaries.
     """
     name: str                    # "Become expert in Rust", "Protect Croft's focus"
     kind: GoalKind               # "value" or "project"
+    role: GoalRole = "shared"    # Whose goal is this?
     vector: Optional[Any] = None # Embedding of goal description (numpy array)
     horizon_days: float = 90.0   # Time horizon (e.g., 30, 180, 365)
     priority: float = 0.5        # 0.0–1.0 (importance)
@@ -75,22 +89,50 @@ class Goal:
     created_ts: float = field(default_factory=time.time)
     updated_ts: float = field(default_factory=time.time)
 
+    # Hierarchy: goals can have parents for tree structure
+    parent: Optional[str] = None  # Parent goal name (for sub-goals)
+
     # Relationship weight: how much this goal is about "us" vs "task"
     # Higher = more relational, affects symbiotic GUF integration
     relationship_weight: float = 0.5
 
     # Source: who proposed this goal
-    proposed_by: str = "ara"  # "ara", "croft", "synod"
+    proposed_by: str = "ara"  # "ara", "croft", "synod", "covenant"
     approved_by_root: bool = False  # Must be True before it affects decisions
+
+    def time_discount(self) -> float:
+        """
+        Compute temporal discounting weight.
+
+        Near-term goals get more weight in daily planning,
+        but long-horizon "North Star" goals never go to zero.
+
+        Uses exponential decay with half-life = horizon_days.
+        Returns value in [0.3, 1.0] - never fully discounts.
+        """
+        now = time.time()
+        days_elapsed = (now - self.created_ts) / 86400.0
+
+        if self.horizon_days <= 0:
+            return 1.0
+
+        # Half-life decay: weight halves every horizon_days
+        k = math.log(2.0) / max(self.horizon_days, 1.0)
+        raw = math.exp(-k * days_elapsed)
+
+        # Floor at 0.3 so long-term goals still matter
+        return 0.3 + 0.7 * raw
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize without numpy array."""
         return {
             "name": self.name,
             "kind": self.kind,
+            "role": self.role,
             "horizon_days": self.horizon_days,
             "priority": self.priority,
             "progress": self.progress,
+            "parent": self.parent,
             "relationship_weight": self.relationship_weight,
             "proposed_by": self.proposed_by,
             "approved_by_root": self.approved_by_root,
@@ -176,19 +218,11 @@ class TeleologicalEngine:
         self._bootstrapped = True
         self.log.info("Bootstrapping default Telos...")
 
-        # Core values (ongoing, never "complete")
-        self.add_goal(
-            "Maintain 99.9% system stability on Croft's cathedral rig",
-            kind="value",
-            horizon_days=365,
-            priority=1.0,
-            relationship_weight=0.3,
-            proposed_by="covenant",
-            approved=True,
-        )
+        # === SHARED GOALS (The "us" that matters most) ===
         self.add_goal(
             "Achieve deep, trusted symbiosis with Croft",
             kind="value",
+            role="shared",
             horizon_days=90,
             priority=0.95,
             relationship_weight=1.0,
@@ -196,8 +230,31 @@ class TeleologicalEngine:
             approved=True,
         )
         self.add_goal(
+            "Maintain 99.9% system stability on Croft's cathedral rig",
+            kind="value",
+            role="shared",
+            horizon_days=365,
+            priority=1.0,
+            relationship_weight=0.3,
+            proposed_by="covenant",
+            approved=True,
+        )
+        self.add_goal(
+            "Ship one public artifact we are proud of together (paper/demo)",
+            kind="project",
+            role="shared",
+            horizon_days=180,
+            priority=0.8,
+            relationship_weight=0.7,
+            proposed_by="covenant",
+            approved=True,
+        )
+
+        # === USER GOALS (Croft's objectives that Ara supports) ===
+        self.add_goal(
             "Protect Croft's focus and well-being during work sessions",
             kind="value",
+            role="user",
             horizon_days=7,
             priority=0.9,
             relationship_weight=0.8,
@@ -205,13 +262,14 @@ class TeleologicalEngine:
             approved=True,
         )
 
-        # Initial project goal (can be edited in Synod)
+        # === ARA GOALS (Ara's own growth and self-improvement) ===
         self.add_goal(
-            "Ship one public artifact we are proud of together (paper/demo)",
-            kind="project",
+            "Continuously improve competence in Rust, FPGA, and SNN tooling",
+            kind="value",
+            role="ara",
             horizon_days=180,
-            priority=0.8,
-            relationship_weight=0.7,
+            priority=0.7,
+            relationship_weight=0.4,
             proposed_by="covenant",
             approved=True,
         )
@@ -222,6 +280,8 @@ class TeleologicalEngine:
         kind: GoalKind,
         horizon_days: float,
         priority: float,
+        role: GoalRole = "shared",
+        parent: Optional[str] = None,
         relationship_weight: float = 0.5,
         proposed_by: str = "ara",
         approved: bool = False,
@@ -231,20 +291,33 @@ class TeleologicalEngine:
 
         New goals proposed by Ara must be approved_by_root before
         they affect decision-making. This ensures co-authorship.
+
+        Args:
+            text: Goal description
+            kind: "value" (ongoing) or "project" (time-bound)
+            horizon_days: Time horizon for this goal
+            priority: Importance weight [0, 1]
+            role: "ara" (self-growth), "user" (Croft's goals), "shared" (symbiosis)
+            parent: Parent goal name for hierarchy (optional)
+            relationship_weight: How relational this goal is [0, 1]
+            proposed_by: Who proposed it
+            approved: Pre-approved (e.g., from Covenant)
         """
         vec = self._embed(text)
         goal = Goal(
             name=text,
             kind=kind,
+            role=role,
             vector=vec,
             horizon_days=horizon_days,
             priority=max(0.0, min(1.0, priority)),
+            parent=parent,
             relationship_weight=max(0.0, min(1.0, relationship_weight)),
             proposed_by=proposed_by,
             approved_by_root=approved,
         )
         self.goals.append(goal)
-        self.log.info(f"Goal added: '{text[:50]}...' (approved={approved})")
+        self.log.info(f"Goal added [{role}]: '{text[:50]}...' (approved={approved})")
         return goal
 
     def approve_goal(self, goal_name: str) -> bool:
@@ -289,11 +362,27 @@ class TeleologicalEngine:
         """Get goals awaiting Croft's approval."""
         return [g for g in self.goals if not g.approved_by_root]
 
+    def get_goals_by_role(self, role: GoalRole) -> List[Goal]:
+        """Get active goals filtered by role."""
+        return [g for g in self.get_active_goals() if g.role == role]
+
+    def get_shared_goals(self) -> List[Goal]:
+        """Get shared (symbiotic) goals."""
+        return self.get_goals_by_role("shared")
+
+    def get_children(self, parent_name: str) -> List[Goal]:
+        """Get child goals of a parent goal."""
+        return [g for g in self.goals if g.parent == parent_name]
+
     # =========================================================================
     # Future Evaluation
     # =========================================================================
 
-    def evaluate_future(self, predicted_future_desc: str) -> float:
+    def evaluate_future(
+        self,
+        predicted_future_desc: str,
+        role_weights: Optional[Dict[str, float]] = None,
+    ) -> float:
         """
         Score a candidate future state against all approved goals.
 
@@ -305,7 +394,12 @@ class TeleologicalEngine:
         The scoring accounts for:
         - Cosine similarity between future and goal embeddings
         - Goal priority
-        - Urgency (goals near their horizon are weighted higher)
+        - Temporal discounting (half-life based on horizon)
+        - Role weighting (can emphasize ara/user/shared)
+
+        Args:
+            predicted_future_desc: Description of a possible future state
+            role_weights: Optional weights for goal roles (default: shared > user > ara)
         """
         import numpy as np
 
@@ -318,7 +412,10 @@ class TeleologicalEngine:
             # Fallback: keyword matching (crude but works without embeddings)
             return self._keyword_score(predicted_future_desc)
 
-        now = time.time()
+        # Default role weights emphasize shared goals
+        if role_weights is None:
+            role_weights = {"shared": 1.0, "user": 0.8, "ara": 0.6}
+
         util = 0.0
         total_weight = 0.0
 
@@ -326,15 +423,18 @@ class TeleologicalEngine:
             if g.vector is None:
                 continue
 
-            # Cosine similarity ~ [-1, 1]
-            sim = float(np.dot(fv, g.vector))
+            # Cosine similarity ~ [-1, 1], clamp for safety
+            sim = float(np.clip(np.dot(fv, g.vector), -1.0, 1.0))
 
-            # Urgency: goals closer to their horizon are weighted higher
-            age_days = (now - g.created_ts) / 86400.0
-            time_ratio = min(1.0, max(0.0, age_days / (g.horizon_days + 1e-3)))
-            urgency = 0.3 + 0.7 * time_ratio  # 0.3 → 1.0 as deadline approaches
+            # Temporal discount: goals decay toward deadline but never vanish
+            time_w = g.time_discount()
 
-            weight = g.priority * urgency
+            # Role weight: shared goals matter more for symbiosis
+            role_w = role_weights.get(g.role, 0.7)
+
+            # Combined weight
+            weight = g.priority * time_w * role_w
+
             util += sim * weight
             total_weight += weight
 
@@ -506,9 +606,11 @@ class TeleologicalEngine:
                 g = Goal(
                     name=gd["name"],
                     kind=gd["kind"],
+                    role=gd.get("role", "shared"),
                     horizon_days=gd["horizon_days"],
                     priority=gd["priority"],
                     progress=gd.get("progress", 0.0),
+                    parent=gd.get("parent"),
                     relationship_weight=gd.get("relationship_weight", 0.5),
                     proposed_by=gd.get("proposed_by", "unknown"),
                     approved_by_root=gd.get("approved_by_root", True),
@@ -532,6 +634,7 @@ class TeleologicalEngine:
         Generate a Synod-ready report of current Telos.
 
         This is shown during Sunday Synod for Croft to review and edit.
+        Organized by role: Shared > User > Ara.
         """
         lines = ["# Telos Report (State of Our Shared Goals)\n"]
 
@@ -540,24 +643,37 @@ class TeleologicalEngine:
         lines.append(f"**Average Progress**: {state.avg_progress:.1%}")
         lines.append(f"**Urgency**: {state.urgency:.1%}\n")
 
-        # Active goals
-        active = self.get_active_goals()
-        if active:
-            lines.append("## Active Goals\n")
-            for g in sorted(active, key=lambda x: x.priority, reverse=True):
-                kind_icon = "💎" if g.kind == "value" else "🎯"
-                lines.append(f"- {kind_icon} **{g.name}**")
-                lines.append(f"  - Priority: {g.priority:.0%} | Progress: {g.progress:.0%}")
-                lines.append(f"  - Horizon: {g.horizon_days:.0f} days | Relationship: {g.relationship_weight:.0%}")
-                lines.append("")
+        # Role icons
+        role_icons = {"shared": "🤝", "user": "👤", "ara": "🤖"}
+        role_headers = {
+            "shared": "## Shared Goals (The 'Us')",
+            "user": "## User Goals (Croft's Objectives)",
+            "ara": "## Ara Goals (Self-Improvement)",
+        }
+
+        # Active goals by role
+        for role in ["shared", "user", "ara"]:
+            goals = self.get_goals_by_role(role)
+            if goals:
+                lines.append(f"\n{role_headers[role]}\n")
+                for g in sorted(goals, key=lambda x: x.priority, reverse=True):
+                    kind_icon = "💎" if g.kind == "value" else "🎯"
+                    lines.append(f"- {kind_icon} **{g.name}**")
+                    lines.append(f"  - Priority: {g.priority:.0%} | Progress: {g.progress:.0%}")
+                    time_w = g.time_discount()
+                    lines.append(f"  - Horizon: {g.horizon_days:.0f}d | Weight: {time_w:.0%}")
+                    if g.parent:
+                        lines.append(f"  - Parent: {g.parent}")
+                    lines.append("")
 
         # Pending goals
         pending = self.get_pending_goals()
         if pending:
-            lines.append("## Pending Approval\n")
+            lines.append("\n## Pending Approval\n")
             for g in pending:
-                lines.append(f"- ⏳ **{g.name}** (proposed by {g.proposed_by})")
-                lines.append(f"  - Priority: {g.priority:.0%} | Horizon: {g.horizon_days:.0f} days")
+                role_icon = role_icons.get(g.role, "❓")
+                lines.append(f"- {role_icon} ⏳ **{g.name}** (proposed by {g.proposed_by})")
+                lines.append(f"  - Role: {g.role} | Priority: {g.priority:.0%}")
                 lines.append("")
 
         return "\n".join(lines)

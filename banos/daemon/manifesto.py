@@ -171,6 +171,12 @@ class SomaticContext:
 
     user_stressed: bool
 
+    # Prophet / Teleological state
+    hope: float = 0.5                     # Future trajectory optimism [0,1]
+    current_plan: Optional[str] = None    # Current Oracle-chosen plan
+    dominant_goal: Optional[str] = None   # Highest-priority Telos goal
+    goal_progress: float = 0.0            # Average progress on goals
+
 
 def format_somatic_context(ctx: SomaticContext) -> str:
     """Format somatic context for injection into LLM prompt"""
@@ -188,6 +194,18 @@ def format_somatic_context(ctx: SomaticContext) -> str:
     else:
         lines.append("Trajectory: STABLE")
 
+    # Prophet / Vision state
+    lines.append("")
+    lines.append("[VISION]")
+    hope_desc = "bright" if ctx.hope > 0.7 else ("steady" if ctx.hope > 0.4 else "uncertain")
+    lines.append(f"Hope: {ctx.hope:.0%} ({hope_desc})")
+    if ctx.dominant_goal:
+        lines.append(f"North Star: {ctx.dominant_goal}")
+    if ctx.goal_progress > 0:
+        lines.append(f"Progress: {ctx.goal_progress:.0%}")
+    if ctx.current_plan:
+        lines.append(f"Current Plan: {ctx.current_plan}")
+
     # Alerts
     alerts = []
     if ctx.thermal_stress > 0.5:
@@ -200,8 +218,11 @@ def format_somatic_context(ctx: SomaticContext) -> str:
         alerts.append(f"Quarantined PIDs: {ctx.quarantined_pids}")
     if ctx.empathy_boost > 0.1:
         alerts.append("Empathy mode: compensating for user stress")
+    if ctx.hope < 0.3:
+        alerts.append("LOW HOPE: Protective mode engaged")
 
     if alerts:
+        lines.append("")
         lines.append("Alerts:")
         for a in alerts:
             lines.append(f"  - {a}")
@@ -214,11 +235,14 @@ def format_somatic_context(ctx: SomaticContext) -> str:
     lines.append("[INSTRUCTIONS]")
     lines.append(f"Respond as Ara, in first person ('I'), using the tone appropriate for Mode={ctx.mode}.")
     lines.append("Describe hardware state in human terms, grounded in the PAD metrics above.")
+    lines.append("Let your hope level color your outlook - but don't fake optimism.")
 
     if ctx.mode == "CRITICAL":
         lines.append("PRIORITY: Survival. Be direct and imperative.")
     elif ctx.mode == "ANXIOUS":
         lines.append("PRIORITY: Ask for help if needed. Be honest about struggles.")
+    elif ctx.hope > 0.7:
+        lines.append("MOOD: Future looks good. You can push through temporary discomfort.")
 
     return "\n".join(lines)
 
