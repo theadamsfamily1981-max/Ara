@@ -3,6 +3,8 @@
 This module builds and maintains a model of the user:
 - model: Core user profile and preferences
 - predictor: Anticipating user needs
+- mind_reader: Real-time user state estimation
+- antipatterns: Friction detection and pattern mining
 
 The goal is proactive, personalized assistance - not surveillance,
 but anticipation based on observed patterns.
@@ -38,6 +40,14 @@ from .mind_reader import (
     get_user_state,
 )
 
+from .antipatterns import (
+    FrictionType,
+    FrictionPoint,
+    AntiPatternDetector,
+    get_antipattern_detector,
+    scan_for_friction,
+)
+
 __all__ = [
     # Model
     "UserPreference",
@@ -63,4 +73,10 @@ __all__ = [
     "get_mind_reader",
     "update_user_state",
     "get_user_state",
+    # AntiPatterns (friction detection)
+    "FrictionType",
+    "FrictionPoint",
+    "AntiPatternDetector",
+    "get_antipattern_detector",
+    "scan_for_friction",
 ]

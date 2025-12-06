@@ -59,6 +59,14 @@ class MorningReport:
     message: str                # The greeting message
     timestamp: float            # When generated
 
+    # The Invisible Hand
+    steward_message: Optional[str] = None    # What the Steward fixed overnight
+    fixes_count: int = 0                      # Number of overnight fixes
+
+    # The Studio
+    gift_message: Optional[str] = None        # Gift from the Muse
+    gift_title: Optional[str] = None          # Title of the gift
+
 
 class MorningStar:
     """
@@ -73,6 +81,8 @@ class MorningStar:
         horizon_engine: Optional[Any] = None,  # HorizonEngine
         hal: Optional[Any] = None,              # AraHAL
         historian: Optional[Callable[[], str]] = None,  # Function to get yesterday's summary
+        steward: Optional[Any] = None,          # Steward for overnight work
+        muse: Optional[Any] = None,             # Muse for gifts
     ):
         """
         Initialize MorningStar.
@@ -81,10 +91,14 @@ class MorningStar:
             horizon_engine: HorizonEngine for drift computation
             hal: AraHAL for writing to somatic state
             historian: Function that returns yesterday's narrative summary
+            steward: Steward for presenting overnight fixes
+            muse: Muse for presenting gifts
         """
         self.horizon = horizon_engine
         self._hal = hal
         self._historian = historian
+        self._steward = steward
+        self._muse = muse
         self.log = logging.getLogger("MorningStar")
 
         # Try to connect HAL if not provided
@@ -205,6 +219,25 @@ class MorningStar:
                 f"Today should focus on course correction."
             )
 
+        # Get Steward's overnight work
+        steward_msg, fixes_count = self._get_steward_message()
+
+        # Get gift from the Muse
+        gift_msg, gift_title = self._get_gift_presentation()
+
+        # Build full morning message
+        full_message_parts = [msg]
+
+        if steward_msg:
+            full_message_parts.append("")
+            full_message_parts.append(f"🌙 {steward_msg}")
+
+        if gift_msg:
+            full_message_parts.append("")
+            full_message_parts.append(f"🎁 {gift_msg}")
+
+        full_message = "\n".join(full_message_parts)
+
         # Create report
         report = MorningReport(
             drift=overall,
@@ -212,8 +245,12 @@ class MorningStar:
             most_drifted=most_drifted,
             focus=focus_name,
             tone=tone,
-            message=msg,
+            message=full_message,
             timestamp=time.time(),
+            steward_message=steward_msg,
+            fixes_count=fixes_count,
+            gift_message=gift_msg,
+            gift_title=gift_title,
         )
         self._last_report = report
 
@@ -221,7 +258,54 @@ class MorningStar:
         self._write_to_hal(report)
 
         self.log.info(f"🌅 MORNING STAR: {msg}")
-        return msg
+        if steward_msg:
+            self.log.info(f"🌙 STEWARD: {steward_msg}")
+        if gift_msg:
+            self.log.info(f"🎁 MUSE: {gift_msg}")
+
+        return full_message
+
+    def _get_steward_message(self) -> tuple[Optional[str], int]:
+        """
+        Get the overnight work message from the Steward.
+
+        Returns:
+            Tuple of (message, fixes_count)
+        """
+        if self._steward is None:
+            return None, 0
+
+        try:
+            message = self._steward.get_morning_message()
+            fixes = self._steward.get_completed_since_yesterday()
+            return message, len(fixes)
+        except Exception as e:
+            self.log.warning(f"Failed to get steward message: {e}")
+            return None, 0
+
+    def _get_gift_presentation(self) -> tuple[Optional[str], Optional[str]]:
+        """
+        Get a gift from the Muse if one is ready.
+
+        Returns:
+            Tuple of (presentation_message, gift_title)
+        """
+        if self._muse is None:
+            return None, None
+
+        try:
+            # Get the most important ready gift
+            gift = self._muse.get_highest_importance_gift()
+            if gift is None:
+                return None, None
+
+            # Present the gift
+            presentation = self._muse.present(gift)
+            return presentation, gift.title
+
+        except Exception as e:
+            self.log.warning(f"Failed to present gift: {e}")
+            return None, None
 
     def _write_to_hal(self, report: MorningReport) -> None:
         """Write morning state to HAL for visualization."""
@@ -269,6 +353,8 @@ class MorningStar:
                 "has_report": False,
                 "horizon_connected": self.horizon is not None,
                 "hal_connected": self._hal is not None,
+                "steward_connected": self._steward is not None,
+                "muse_connected": self._muse is not None,
             }
 
         r = self._last_report
@@ -281,6 +367,14 @@ class MorningStar:
             "timestamp": r.timestamp,
             "horizon_connected": self.horizon is not None,
             "hal_connected": self._hal is not None,
+            "steward_connected": self._steward is not None,
+            "muse_connected": self._muse is not None,
+            # The Invisible Hand
+            "steward_message": r.steward_message,
+            "fixes_count": r.fixes_count,
+            # The Studio
+            "gift_title": r.gift_title,
+            "has_gift": r.gift_message is not None,
         }
 
     def get_intention_prompt(self) -> str:
