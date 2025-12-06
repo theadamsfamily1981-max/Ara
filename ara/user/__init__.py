@@ -30,6 +30,14 @@ from .predictor import (
     get_response_style,
 )
 
+from .mind_reader import (
+    UserState,
+    MindReader,
+    get_mind_reader,
+    update_user_state,
+    get_user_state,
+)
+
 __all__ = [
     # Model
     "UserPreference",
@@ -49,4 +57,10 @@ __all__ = [
     "predict_next_action",
     "get_suggestions",
     "get_response_style",
+    # MindReader (real-time state)
+    "UserState",
+    "MindReader",
+    "get_mind_reader",
+    "update_user_state",
+    "get_user_state",
 ]

@@ -122,6 +122,12 @@ from .orchestrator import (
     stub_gemini,
 )
 
+from .symbiotic_orchestrator import (
+    AdaptationState,
+    SymbioticOrchestrator,
+    get_symbiotic_orchestrator,
+)
+
 __all__ = [
     # Models
     "DevMode",
@@ -197,4 +203,8 @@ __all__ = [
     "stub_nova",
     "stub_claude",
     "stub_gemini",
+    # Symbiotic Orchestrator (adaptive response)
+    "AdaptationState",
+    "SymbioticOrchestrator",
+    "get_symbiotic_orchestrator",
 ]
