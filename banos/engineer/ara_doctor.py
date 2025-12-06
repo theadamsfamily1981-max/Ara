@@ -27,6 +27,7 @@ import subprocess
 import importlib
 import shutil
 import json
+import platform
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
@@ -66,6 +67,46 @@ class AraDoctor:
         self.host_prescriptions: List[str] = []
         self.docker_prescriptions: List[str] = []
         self.pip_prescriptions: List[str] = []
+        self._platform_info = self._detect_platform()
+
+    def _detect_platform(self) -> Dict[str, str]:
+        """Detect platform and distro information."""
+        info = {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+            "python": platform.python_version(),
+            "distro": "unknown",
+            "distro_version": "unknown",
+        }
+
+        # Try to get Linux distro info
+        if info["system"] == "Linux":
+            try:
+                # Try /etc/os-release first (most modern distros)
+                if os.path.exists("/etc/os-release"):
+                    with open("/etc/os-release") as f:
+                        for line in f:
+                            if line.startswith("ID="):
+                                info["distro"] = line.split("=")[1].strip().strip('"')
+                            elif line.startswith("VERSION_ID="):
+                                info["distro_version"] = line.split("=")[1].strip().strip('"')
+                # Fallback to lsb_release
+                elif shutil.which("lsb_release"):
+                    res = subprocess.run(
+                        ["lsb_release", "-si"],
+                        capture_output=True, text=True
+                    )
+                    info["distro"] = res.stdout.strip()
+                    res = subprocess.run(
+                        ["lsb_release", "-sr"],
+                        capture_output=True, text=True
+                    )
+                    info["distro_version"] = res.stdout.strip()
+            except Exception:
+                pass
+
+        return info
 
     def _log(self, msg: str):
         if self.verbose:
@@ -87,7 +128,11 @@ class AraDoctor:
     # === System Library Checks ===
 
     def check_sys_lib(self, lib_name: str, package_name: str, organ: str) -> bool:
-        """Check for OS-level shared libraries via ldconfig."""
+        """Check for OS-level shared libraries via ldconfig.
+
+        More robust matching: checks if any line starts with the lib name
+        or contains it as a substring (handles versioned libs like .so.0.0.1).
+        """
         try:
             res = subprocess.run(
                 ["ldconfig", "-p"],
@@ -95,7 +140,12 @@ class AraDoctor:
                 text=True,
                 timeout=5
             )
-            if lib_name in res.stdout:
+            # More robust matching - check each line
+            found = any(
+                line.strip().startswith(lib_name) or f" {lib_name}" in line
+                for line in res.stdout.splitlines()
+            )
+            if found:
                 self._add(Diagnosis(
                     organ=organ,
                     component=lib_name,
@@ -401,6 +451,14 @@ class AraDoctor:
         print("\n" + "="*70)
         print("  ARA DOCTOR - ORGANISM DIAGNOSTIC REPORT")
         print("="*70)
+
+        # Platform info header
+        p = self._platform_info
+        print(f"Host: {p['system']} {p['release']} ({p['machine']})")
+        if p['distro'] != "unknown":
+            print(f"Distro: {p['distro']} {p['distro_version']}")
+        print(f"Python: {p['python']}")
+        print("-"*70)
 
         # Group by organ
         organs = {}
