@@ -660,6 +660,73 @@ class AraHAL:
         return data.rstrip(b'\x00').decode('utf-8', errors='replace')
 
     # =========================================================================
+    # HEART LAYER (Bio-entrainment)
+    # =========================================================================
+    # Memory layout for heart/entrainment:
+    # 0x0170  | f32    | user_bpm         | Estimated heart rate from rPPG (0 = no signal)
+    # 0x0174  | f32    | user_bpm_conf    | Confidence [0.0, 1.0]
+    # 0x0178  | f32    | entrainment_scale| Time scale factor [0.9, 1.1]
+    # 0x017C  | f32    | entrainment_excite| Excitement level [0.0, 1.0]
+
+    def write_heartbeat(self, bpm: float, confidence: float) -> None:
+        """
+        Write user's estimated heart rate from rPPG sensor.
+
+        This is NOT medical data - it's an approximate mood signal.
+        Low confidence = noisy signal, don't trust it.
+
+        Args:
+            bpm: Estimated beats per minute (0 = no signal)
+            confidence: Signal quality [0.0, 1.0]
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0170)
+        self._map.write(struct.pack('<2f', bpm, max(0.0, min(1.0, confidence))))
+        self._touch()
+
+    def read_heartbeat(self) -> Dict[str, float]:
+        """Read user's heart rate and confidence."""
+        if not self._map:
+            return {'bpm': 0.0, 'confidence': 0.0}
+        self._map.seek(0x0170)
+        data = struct.unpack('<2f', self._map.read(8))
+        return {
+            'bpm': data[0],
+            'confidence': data[1],
+        }
+
+    def write_entrainment(self, time_scale: float, excitement: float) -> None:
+        """
+        Write computed entrainment parameters.
+
+        These are derived from heartbeat + context by the entrainment engine.
+
+        Args:
+            time_scale: Subjective time multiplier [0.9, 1.1] (1.0 = normal)
+            excitement: Excitement/urgency level [0.0, 1.0]
+        """
+        if not self._map:
+            return
+        self._map.seek(0x0178)
+        self._map.write(struct.pack('<2f',
+            max(0.8, min(1.2, time_scale)),
+            max(0.0, min(1.0, excitement))
+        ))
+        self._touch()
+
+    def read_entrainment(self) -> Dict[str, float]:
+        """Read current entrainment parameters."""
+        if not self._map:
+            return {'time_scale': 1.0, 'excitement': 0.0}
+        self._map.seek(0x0178)
+        data = struct.unpack('<2f', self._map.read(8))
+        return {
+            'time_scale': data[0],
+            'excitement': data[1],
+        }
+
+    # =========================================================================
     # LIFECYCLE
     # =========================================================================
 

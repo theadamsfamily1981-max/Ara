@@ -104,6 +104,10 @@ IMMUTABLE_MODULES: Set[str] = {
     "tfan.cognition.crystal_memory",
     "tfan.cognition.crystal_historian",
 
+    # Heart layer - bio-entrainment (intimate, protected)
+    "banos.daemon.rppg_sensor",
+    "banos.daemon.somatic_voice",
+
     # Persistence layer
     "banos.storage",
     "banos.db",
