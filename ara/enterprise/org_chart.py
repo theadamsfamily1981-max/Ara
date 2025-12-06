@@ -159,6 +159,50 @@ class OrgChart:
             )
         )
 
+        # ------------------------------------------------------------------ #
+        # NETWORK INFRASTRUCTURE (observe-only, never auto-configure)
+        # ------------------------------------------------------------------ #
+
+        # Juniper edge router - THE choke point, observe-only
+        self.hire(
+            Employee(
+                id="consultant-juniper-edge",
+                hostname="10.0.0.1",            # router mgmt IP
+                role=EmployeeRole.CONSULTANT,
+                capabilities=["network:edge", "monitor:snmp", "monitor:netconf", "bgp"],
+                allow_sudo=False,
+                allow_internet=False,           # IT IS the internet edge
+                allow_write_local_disk=False,   # never treat like a worker
+                labels={"tier": "network-core", "vendor": "juniper"},
+            )
+        )
+
+        # Print server - production service
+        self.hire(
+            Employee(
+                id="worker-print-prod",
+                hostname="192.168.1.50",        # print server IP
+                role=EmployeeRole.WORKER,
+                capabilities=["service:print", "cups", "python"],
+                allow_sudo=False,
+                allow_internet=False,           # prod service, locked down
+                labels={"tier": "prod", "service": "print-farm"},
+            )
+        )
+
+        # RedHat bounty box - lab/testing
+        self.hire(
+            Employee(
+                id="intern-redhat-bounty",
+                hostname="192.168.1.110",       # RHEL test box
+                role=EmployeeRole.INTERN,
+                capabilities=["python", "docker", "podman", "rhel"],
+                allow_sudo=False,
+                allow_internet=True,            # lab box, can be messy
+                labels={"tier": "sandbox", "os": "rhel"},
+            )
+        )
+
     def hire(self, employee: Employee) -> None:
         """
         Add or replace an employee record.
