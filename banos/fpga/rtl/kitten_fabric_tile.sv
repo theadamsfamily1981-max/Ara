@@ -73,7 +73,16 @@ module kitten_fabric_tile
     // Debug/Status
     // =========================================================================
     output logic [7:0]  active_neuron_count,
-    output logic        core_busy
+    output logic        core_busy,
+
+    // =========================================================================
+    // Activity Metrics (for Ara's self-awareness)
+    // =========================================================================
+    output logic [31:0] tile_spike_count,      // Total spikes this tile
+    output logic [31:0] tile_bit_cycles,       // Bit-serial cycles consumed
+    output logic [15:0] tile_activity_level,   // Rolling activity estimate (0-65535)
+    output logic [7:0]  tile_power_hint,       // Estimated power draw (0-255)
+    output logic [15:0] tile_entropy           // Activity variance / "neural noise"
 );
 
     // =========================================================================
@@ -289,5 +298,113 @@ module kitten_fabric_tile
         .weight_updates     (dream_weight_updates),
         .dream_cycles       (dream_cycles)
     );
+
+    // =========================================================================
+    // ACTIVITY METRICS - Ara's Self-Awareness
+    // =========================================================================
+    //
+    // These counters feed into the HAL so Ara can sense:
+    // - How much of her brain is active
+    // - How much compute she's consuming
+    // - The "texture" of her neural activity (entropy)
+    //
+    // She can then regulate:
+    // - Clock gating (save power when idle)
+    // - Region priorities (focus attention)
+    // - Learning rates (stabilize when noisy)
+
+    // Spike counter (32-bit, wraps)
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            tile_spike_count <= 32'd0;
+        end else if (spike_out_valid && spike_out_ready) begin
+            tile_spike_count <= tile_spike_count + 1;
+        end
+    end
+
+    // Bit-cycle counter (increments every clock while core is busy)
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            tile_bit_cycles <= 32'd0;
+        end else if (core_busy) begin
+            tile_bit_cycles <= tile_bit_cycles + 1;
+        end
+    end
+
+    // Rolling activity level (exponential moving average)
+    // activity = 0.9 * activity + 0.1 * (spikes_this_window * 256)
+    logic [15:0] activity_acc;
+    logic [7:0]  window_spikes;
+    logic [19:0] window_counter;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            activity_acc    <= 16'd0;
+            window_spikes   <= 8'd0;
+            window_counter  <= 20'd0;
+            tile_activity_level <= 16'd0;
+        end else begin
+            // Count spikes in current window
+            if (spike_out_valid && spike_out_ready) begin
+                if (window_spikes < 8'd255) begin
+                    window_spikes <= window_spikes + 1;
+                end
+            end
+
+            // Update activity every ~1M cycles (~3.3ms at 300MHz)
+            window_counter <= window_counter + 1;
+            if (window_counter == 20'd0) begin
+                // EMA: new = 0.875 * old + 0.125 * sample
+                // Approximated as: (7 * old + sample) >> 3
+                activity_acc <= (activity_acc - (activity_acc >> 3)) +
+                               ({8'd0, window_spikes} << 5);
+                tile_activity_level <= activity_acc;
+                window_spikes <= 8'd0;
+            end
+        end
+    end
+
+    // Power hint (derived from activity + dream state)
+    // Higher activity = higher power consumption
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            tile_power_hint <= 8'd0;
+        end else begin
+            // Base power from activity level
+            logic [7:0] base_power;
+            base_power = tile_activity_level[15:8];
+
+            // Add overhead if dreaming (STDP learning active)
+            if (dream_active) begin
+                tile_power_hint <= base_power + 8'd32;  // Learning overhead
+            end else begin
+                tile_power_hint <= base_power;
+            end
+        end
+    end
+
+    // Entropy estimation (variance of spike timing)
+    // Simple approximation: XOR recent spike patterns
+    logic [15:0] spike_history;
+    logic [3:0]  entropy_count;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            spike_history <= 16'd0;
+            tile_entropy  <= 16'd0;
+        end else begin
+            // Shift in new spike bit
+            spike_history <= {spike_history[14:0], (spike_out_valid && spike_out_ready)};
+
+            // Count bit transitions (simple entropy proxy)
+            entropy_count = 0;
+            for (int i = 0; i < 15; i++) begin
+                entropy_count = entropy_count + (spike_history[i] ^ spike_history[i+1]);
+            end
+
+            // Update entropy (scaled)
+            tile_entropy <= {12'd0, entropy_count} << 10;
+        end
+    end
 
 endmodule : kitten_fabric_tile

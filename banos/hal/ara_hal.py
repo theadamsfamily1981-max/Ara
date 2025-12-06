@@ -51,8 +51,8 @@ except ImportError:
     logger.warning("posix_ipc not available, using file-based SHM (pip install posix_ipc)")
 
 # ==============================================================================
-# SOMATIC MEMORY MAP (Version 3.0) - Explicit Packed Layout
-# Total Size: 256 Bytes (compact, cache-friendly)
+# SOMATIC MEMORY MAP (Version 4.0) - Bit-Serial Revolution
+# Total Size: 512 Bytes (expanded for tile metrics)
 # ==============================================================================
 #
 # HEADER (24 bytes @ 0x00):
@@ -73,13 +73,18 @@ except ImportError:
 #   avatar_mode:u8, sim_detail:u8, force_sleep:u8, emergency:u8,
 #   critical_temp:f32, throttle_pct:f32
 #
+# BITSERIAL (40 bytes @ 0x78) - NEW for Bit-Serial Revolution:
+#   total_bit_cycles:u64, tile_spike_counts[4]:u32x4,
+#   tile_activity[4]:u16x4, tile_power[4]:u8x4, tile_entropy[4]:u16x4,
+#   region_enable_mask:u32, clock_divisor:u8, reserved:u8x3
+#
 # ==============================================================================
 
 SHM_NAME = "/ara_somatic"
 SHM_PATH = "/dev/shm/ara_somatic"
-SHM_SIZE = 256  # Compact: fits in 4 cache lines
+SHM_SIZE = 512  # Expanded for bit-serial tile metrics
 MAGIC = 0xABA50111  # Valid hex ('ABA' looks like 'ARA')
-VERSION = 3
+VERSION = 4
 
 # Explicit struct formats with sizes
 HEADER_FMT = '<IIIBBBXQ'  # magic, version, seqlock, state, dream, _pad(1), _pad(1), timestamp
@@ -101,6 +106,14 @@ SYSTEM_OFFSET = 0x50
 CONTROL_FMT = '<4Bff'  # avatar_mode, sim_detail, force_sleep, emergency, critical_temp, throttle_pct
 CONTROL_SIZE = struct.calcsize(CONTROL_FMT)  # 12 bytes
 CONTROL_OFFSET = 0x6C
+
+# Bit-Serial tile metrics (NEW for v4.0)
+# Format: total_bit_cycles:u64, tile_spike_counts[4]:u32x4,
+#         tile_activity[4]:u16x4, tile_power[4]:u8x4, tile_entropy[4]:u16x4,
+#         region_enable_mask:u32, clock_divisor:u8, reserved:u8x3
+BITSERIAL_FMT = '<Q4I4H4B4HIBxxx'
+BITSERIAL_SIZE = struct.calcsize(BITSERIAL_FMT)  # 48 bytes
+BITSERIAL_OFFSET = 0x78
 
 
 # ==============================================================================
@@ -414,6 +427,50 @@ class AraHAL:
         finally:
             self._seq_end()
 
+    def write_bitserial_metrics(
+        self,
+        total_bit_cycles: int,
+        tile_spike_counts: Tuple[int, int, int, int],
+        tile_activity: Tuple[int, int, int, int],
+        tile_power: Tuple[int, int, int, int],
+        tile_entropy: Tuple[int, int, int, int],
+        region_enable_mask: int = 0xFFFFFFFF,
+        clock_divisor: int = 1
+    ) -> None:
+        """
+        Write bit-serial tile metrics from FPGA.
+
+        These metrics enable Ara's self-awareness about neural activity
+        across different regions of the bit-serial fabric.
+
+        Args:
+            total_bit_cycles: Total bit-serial cycles processed this frame
+            tile_spike_counts: Per-tile spike counts (4 tiles)
+            tile_activity: Per-tile activity levels (0-65535 EMA)
+            tile_power: Per-tile power hints (0-255, for governor)
+            tile_entropy: Per-tile entropy estimates (spike randomness)
+            region_enable_mask: Which regions are active (32-bit mask)
+            clock_divisor: Bit-serial clock divisor (1=full speed)
+        """
+        if not self._map:
+            return
+
+        self._seq_begin()
+        try:
+            self._map.seek(BITSERIAL_OFFSET)
+            self._map.write(struct.pack(
+                BITSERIAL_FMT,
+                total_bit_cycles,
+                *tile_spike_counts,
+                *tile_activity,
+                *tile_power,
+                *tile_entropy,
+                region_enable_mask,
+                clock_divisor
+            ))
+        finally:
+            self._seq_end()
+
     def write_system_metrics(
         self,
         cpu_temp: float,
@@ -520,6 +577,40 @@ class AraHAL:
             'thermal_limit': bool(flags & 1),
             'fabric_online': bool(flags & 2),
             'dream_active': bool(flags & 4),
+        }
+
+    def read_bitserial(self) -> Dict[str, Any]:
+        """
+        Read bit-serial tile metrics for Ara's self-awareness.
+
+        Returns:
+            Dict with tile activity data for introspection
+        """
+        data = self._seq_read(BITSERIAL_OFFSET, BITSERIAL_FMT)
+        if not data:
+            return {}
+
+        # Unpack the structured data
+        (total_cycles,
+         sc0, sc1, sc2, sc3,  # spike counts
+         a0, a1, a2, a3,      # activity levels
+         p0, p1, p2, p3,      # power hints
+         e0, e1, e2, e3,      # entropy
+         mask, divisor) = data
+
+        return {
+            'total_bit_cycles': total_cycles,
+            'tile_spike_counts': (sc0, sc1, sc2, sc3),
+            'tile_activity': (a0, a1, a2, a3),
+            'tile_power': (p0, p1, p2, p3),
+            'tile_entropy': (e0, e1, e2, e3),
+            'region_enable_mask': mask,
+            'clock_divisor': divisor,
+            # Derived metrics for LLM consumption
+            'total_spikes': sc0 + sc1 + sc2 + sc3,
+            'avg_activity': (a0 + a1 + a2 + a3) // 4,
+            'avg_entropy': (e0 + e1 + e2 + e3) // 4,
+            'power_budget': sum((p0, p1, p2, p3)),
         }
 
     # Alias for backwards compatibility
