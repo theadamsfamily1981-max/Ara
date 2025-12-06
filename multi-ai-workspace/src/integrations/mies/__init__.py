@@ -68,6 +68,14 @@ from .inference import (
     create_prompt_controller,
     LLAMA_CPP_AVAILABLE,
 )
+from .history import (
+    InteractionHistory,
+    ContextSignature,
+    InteractionRecord,
+    PatternStats,
+    OutcomeType,
+    detect_outcome_from_timing,
+)
 
 __all__ = [
     # Context
@@ -103,4 +111,11 @@ __all__ = [
     "PromptControllerConfig",
     "create_prompt_controller",
     "LLAMA_CPP_AVAILABLE",
+    # Interaction History (Pattern Memory)
+    "InteractionHistory",
+    "ContextSignature",
+    "InteractionRecord",
+    "PatternStats",
+    "OutcomeType",
+    "detect_outcome_from_timing",
 ]

@@ -16,7 +16,9 @@ but works out-of-box with heuristic energy functions.
 """
 
 import math
+import time
 import numpy as np
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Tuple
 from enum import Enum, auto
@@ -42,6 +44,7 @@ from ..modes import (
     DEFAULT_MODES,
     MODE_SILENT,
 )
+from ..history import InteractionHistory
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +80,16 @@ class EnergyFunction:
     - E_urgency: Information urgency (negative = important to deliver)
     - E_autonomy: Liveness/boredom pressure (builds over time)
     - E_thermodynamic: Internal energy constraints
+    - E_hardware: Hardware physiology state
+    - E_pad: Emotional state mapping
+    - E_history: Learned preferences from interaction outcomes
 
     Lower energy = better mode choice.
+
+    The E_history term enables emergent etiquette:
+    - Repeated negative outcomes (user closes avatar in IDE) → antibody forms
+    - Antibody increases friction for that mode in similar contexts
+    - No hard-coded rules needed - she learns what works from experience
     """
 
     def __init__(
@@ -89,6 +100,8 @@ class EnergyFunction:
         w_thermo: float = 0.5,
         w_hardware: float = 0.8,
         w_pad: float = 0.6,
+        w_history: float = 1.5,  # High weight - learned patterns matter
+        history: Optional[InteractionHistory] = None,
     ):
         self.w_friction = w_friction
         self.w_urgency = w_urgency
@@ -96,6 +109,8 @@ class EnergyFunction:
         self.w_thermo = w_thermo
         self.w_hardware = w_hardware
         self.w_pad = w_pad
+        self.w_history = w_history
+        self.history = history
 
         # Friction coefficients (learnable in full version)
         self.friction_coefficients = {
@@ -143,6 +158,7 @@ class EnergyFunction:
         e_thermo = self.e_thermodynamic(ctx, mode)
         e_hardware = self.e_hardware(ctx, mode)
         e_pad = self.e_pad(ctx, mode)
+        e_history = self.e_history(ctx, mode)
 
         total = (
             self.w_friction * e_friction +
@@ -150,7 +166,8 @@ class EnergyFunction:
             self.w_autonomy * e_autonomy +
             self.w_thermo * e_thermo +
             self.w_hardware * e_hardware +
-            self.w_pad * e_pad
+            self.w_pad * e_pad +
+            self.w_history * e_history
         )
 
         return total
@@ -421,6 +438,43 @@ class EnergyFunction:
 
         return cost
 
+    def e_history(self, ctx: ModalityContext, mode: ModalityMode) -> float:
+        """History-based energy - learned preferences from past interactions.
+
+        This is the emergent etiquette layer. When user repeatedly closes
+        avatar in IDE, an "antibody" forms - a learned aversion to that pattern.
+
+        Positive friction = antibody (learned avoidance, increases energy)
+        Negative friction = preference (learned attraction, decreases energy)
+
+        Example:
+        - User closes AVATAR_FULL in fullscreen IDE 3 times
+        - Pattern's EMA outcome becomes -0.7
+        - friction_for() returns +1.4 (antibody strength)
+        - E_history = 1.4, making avatar_full less likely in IDE
+
+        This allows Ara to learn user-specific preferences without
+        hard-coded rules. The "etiquette" emerges from memory.
+        """
+        if self.history is None:
+            return 0.0
+
+        # Get learned friction from history
+        friction = self.history.friction_for(ctx, mode.name)
+
+        # Log significant antibodies for debugging
+        if friction > 1.0:
+            logger.debug(
+                f"Antibody active: {mode.name} in {ctx.activity.name} "
+                f"(friction={friction:.2f})"
+            )
+
+        return friction
+
+    def set_history(self, history: InteractionHistory):
+        """Attach interaction history for learning."""
+        self.history = history
+
     def _get_pad_state(self, ctx: ModalityContext) -> Optional[PADState]:
         """Extract PAD state from context's system physiology."""
         if ctx.system_phys is None:
@@ -619,24 +673,36 @@ class ThermodynamicGovernor:
     Combines:
     - EnergyFunction for mode scoring
     - AEPOSampler for entropy-controlled sampling
+    - InteractionHistory for learned preferences
     - HeuristicBaseline as fallback
 
     Supports two modes:
     1. Deterministic (heuristic): Always pick lowest energy
     2. Stochastic (AEPO): Sample with entropy control
+
+    Learning from experience:
+    - Every mode decision can be followed by record_outcome()
+    - Outcomes train the InteractionHistory
+    - Future decisions incorporate learned preferences via E_history
     """
 
     def __init__(
         self,
         energy_function: Optional[EnergyFunction] = None,
         sampler: Optional[AEPOSampler] = None,
+        history: Optional[InteractionHistory] = None,
         use_stochastic: bool = False,
         fallback_to_heuristic: bool = True,
     ):
-        self.energy_fn = energy_function or EnergyFunction()
+        self.history = history
+        self.energy_fn = energy_function or EnergyFunction(history=history)
         self.sampler = sampler or AEPOSampler()
         self.use_stochastic = use_stochastic
         self.fallback_to_heuristic = fallback_to_heuristic
+
+        # Ensure energy function has history reference
+        if history and self.energy_fn.history is None:
+            self.energy_fn.set_history(history)
 
         # Policy network (for learned version)
         self.policy_network: Optional[PolicyNetwork] = None
@@ -644,6 +710,8 @@ class ThermodynamicGovernor:
         # State
         self._policy_state = PolicyState()
         self._last_decision: Optional[ModalityDecision] = None
+        self._last_ctx: Optional[ModalityContext] = None
+        self._last_mode_start_time: float = 0.0
 
     def select_modality(
         self,
@@ -727,8 +795,66 @@ class ThermodynamicGovernor:
         if len(self._policy_state.entropy_history) > 100:
             self._policy_state.entropy_history.pop(0)
 
+        # Save for outcome recording
         self._last_decision = decision
+        self._last_ctx = ctx
+        self._last_mode_start_time = time.time()
+
         return decision
+
+    def record_outcome(
+        self,
+        outcome_score: float,
+        outcome_type: str = "",
+        user_response_ms: int = 0,
+    ):
+        """Record the outcome of the last modality decision.
+
+        This is the learning signal. Call this when:
+        - User closes/dismisses Ara's output
+        - User responds/engages with content
+        - Content times out naturally
+        - User mutes audio/avatar
+
+        The outcome trains the InteractionHistory, which influences
+        future decisions through E_history in the energy function.
+
+        Args:
+            outcome_score: Outcome value (see OutcomeType in history.py)
+            outcome_type: Optional name for logging
+            user_response_ms: How quickly user responded (0 if N/A)
+
+        Example:
+            governor.select_modality(ctx)
+            # ... user closes avatar within 500ms ...
+            governor.record_outcome(OutcomeType.CLOSED_IMMEDIATE, "CLOSED_IMMEDIATE")
+            # This trains an antibody for avatar in this context
+        """
+        if self.history is None:
+            logger.debug("No history attached, outcome not recorded")
+            return
+
+        if self._last_decision is None or self._last_ctx is None:
+            logger.warning("No previous decision to record outcome for")
+            return
+
+        # Calculate duration
+        duration_ms = int((time.time() - self._last_mode_start_time) * 1000)
+
+        # Record to history
+        self.history.record(
+            ctx=self._last_ctx,
+            mode_name=self._last_decision.mode.name,
+            outcome_score=outcome_score,
+            outcome_type=outcome_type,
+            duration_ms=duration_ms,
+            user_response_ms=user_response_ms,
+        )
+
+        logger.debug(
+            f"Recorded outcome: {self._last_decision.mode.name} "
+            f"score={outcome_score:.2f} type={outcome_type}"
+        )
 
     def _get_candidates(self, ctx: ModalityContext) -> List[ModalityMode]:
         """Get candidate modes based on hard constraints."""
@@ -849,17 +975,63 @@ class ThermodynamicGovernor:
         """Get current entropy estimate."""
         return self.sampler.get_entropy()
 
+    def get_antibodies(self) -> List[Any]:
+        """Get learned antibodies (strong negative patterns).
+
+        Returns list of PatternStats where repeated negative outcomes
+        have formed aversions to certain modes in certain contexts.
+        """
+        if self.history is None:
+            return []
+        return self.history.get_antibodies()
+
+    def get_preferences(self) -> List[Any]:
+        """Get learned preferences (strong positive patterns).
+
+        Returns list of PatternStats where repeated positive outcomes
+        have formed attractions to certain modes in certain contexts.
+        """
+        if self.history is None:
+            return []
+        return self.history.get_preferences()
+
+    def get_history_stats(self) -> Dict[str, Any]:
+        """Get interaction history statistics."""
+        if self.history is None:
+            return {"history_enabled": False}
+        stats = self.history.get_stats()
+        stats["history_enabled"] = True
+        return stats
+
 
 # === Convenience ===
 
 def create_thermodynamic_governor(
     stochastic: bool = False,
     target_entropy: float = 0.4,
+    history_path: Optional[Path] = None,
+    enable_learning: bool = True,
 ) -> ThermodynamicGovernor:
-    """Create a thermodynamic governor."""
+    """Create a thermodynamic governor with optional learning.
+
+    Args:
+        stochastic: Use AEPO stochastic sampling vs deterministic
+        target_entropy: Target entropy for AEPO
+        history_path: Path to persist interaction history (None = in-memory)
+        enable_learning: Whether to create InteractionHistory
+
+    Returns:
+        Configured ThermodynamicGovernor
+    """
     sampler = AEPOSampler(target_entropy=target_entropy)
+
+    history = None
+    if enable_learning:
+        history = InteractionHistory(db_path=history_path)
+
     return ThermodynamicGovernor(
         sampler=sampler,
+        history=history,
         use_stochastic=stochastic,
     )
 
@@ -872,4 +1044,6 @@ __all__ = [
     "ContentMeta",
     "PolicyState",
     "create_thermodynamic_governor",
+    # Re-export from history for convenience
+    "InteractionHistory",
 ]
