@@ -55,6 +55,19 @@ from .kairos import (
     is_opportune,
 )
 
+from .stream_binding import (
+    StreamEvent,
+    ResonantStream,
+    ContextualStream,
+    get_resonant_stream,
+)
+
+from .hdc_codec import (
+    ConceptRecord,
+    HDCCodec,
+    get_hdc_codec,
+)
+
 __all__ = [
     # Teleology
     'Horizon',
@@ -73,4 +86,12 @@ __all__ = [
     'KairosEngine',
     'get_kairos_engine',
     'is_opportune',
+    # Holographic Spike (HDC + Resonant Stream)
+    'StreamEvent',
+    'ResonantStream',
+    'ContextualStream',
+    'get_resonant_stream',
+    'ConceptRecord',
+    'HDCCodec',
+    'get_hdc_codec',
 ]

@@ -48,6 +48,12 @@ from ara.neuro.binary.frontend import (
     BinaryFrontEndNumpy,
 )
 
+from ara.neuro.binary.holographic import (
+    HolographicConfig,
+    HolographicProcessor,
+    get_holographic_processor,
+)
+
 __all__ = [
     # Core primitives
     'pack_bits',
@@ -67,6 +73,11 @@ __all__ = [
     # Frontend (numpy fallback)
     'FrontEndConfig',
     'BinaryFrontEndNumpy',
+
+    # Holographic (HDC + SNN unified)
+    'HolographicConfig',
+    'HolographicProcessor',
+    'get_holographic_processor',
 ]
 
 # Conditionally export torch classes
