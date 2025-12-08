@@ -8,12 +8,19 @@ This module provides:
 - Binary hypervector operations (XOR binding, majority bundling)
 - Vocabulary management for roles, features, bins, tags
 - Cosine similarity for attractor matching
+- Capacity/interference diagnostics
+- Runtime health monitoring
 
 Canonical parameters:
 - Dimension: D = 16,384 bits
 - Representation: {0, 1} binary (internally converted to {-1, +1} for math)
 - Binding: XOR (self-inverse, associative)
 - Bundling: Majority vote (sum + sign)
+
+Health Contract (HTC-16k):
+- Codebook geometry: mean |cos| < 0.02, tail fraction < 1%
+- Attractor diversity: mean |cos| < 0.15, no >10% in tight clusters
+- Bundling capacity: ≤50 features/moment, signal ≥3σ above noise
 
 References:
 - Kanerva (2009): Hyperdimensional Computing
@@ -30,6 +37,12 @@ Usage:
 
     h_attr = bind(h_role, bind(h_feat, h_val))
     h_context = bundle([h_attr1, h_attr2, h_attr3])
+
+Health checks:
+    from ara.hd import run_full_health_check, get_health_monitor
+
+    report = run_full_health_check()
+    assert report.is_healthy, report.summary
 """
 
 from .ops import (
@@ -44,6 +57,24 @@ from .ops import (
 
 from .vocab import HDVocab, get_vocab
 
+from .diagnostics import (
+    HealthThresholds,
+    DEFAULT_THRESHOLDS,
+    SoulHealthReport,
+    check_codebook_geometry,
+    stress_test_bundling,
+    check_attractor_diversity,
+    run_full_health_check,
+)
+
+from .health import (
+    SoulHealthMonitor,
+    get_health_monitor,
+    HealthAlert,
+    AlertManager,
+    get_alert_manager,
+)
+
 __all__ = [
     # Constants
     'DIM',
@@ -57,4 +88,18 @@ __all__ = [
     # Vocabulary
     'HDVocab',
     'get_vocab',
+    # Diagnostics
+    'HealthThresholds',
+    'DEFAULT_THRESHOLDS',
+    'SoulHealthReport',
+    'check_codebook_geometry',
+    'stress_test_bundling',
+    'check_attractor_diversity',
+    'run_full_health_check',
+    # Health Monitoring
+    'SoulHealthMonitor',
+    'get_health_monitor',
+    'HealthAlert',
+    'AlertManager',
+    'get_alert_manager',
 ]
