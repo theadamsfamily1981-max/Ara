@@ -93,6 +93,16 @@ from .main import (
     demo,
 )
 
+from .htc import (
+    PlasticityMode,
+    PlasticityConfig,
+    PLASTICITY_CONFIGS,
+    ResonanceResult,
+    HolographicCore,
+    get_htc,
+    select_plasticity_mode,
+)
+
 __all__ = [
     # Initiative
     'Initiative',
@@ -140,4 +150,13 @@ __all__ = [
     'enter_safe_mode',
     'exit_safe_mode',
     'demo',
+
+    # Holographic Teleoplastic Core
+    'PlasticityMode',
+    'PlasticityConfig',
+    'PLASTICITY_CONFIGS',
+    'ResonanceResult',
+    'HolographicCore',
+    'get_htc',
+    'select_plasticity_mode',
 ]
