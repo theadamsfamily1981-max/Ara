@@ -54,6 +54,16 @@ from ara.neuro.binary.holographic import (
     get_holographic_processor,
 )
 
+from ara.neuro.binary.ensemble import (
+    LaneRole,
+    EnsembleConfig,
+    EnsembleJob,
+    EnsembleResult,
+    EnsembleChoir,
+    FieldMonitor,
+    get_ensemble_choir,
+)
+
 __all__ = [
     # Core primitives
     'pack_bits',
@@ -78,6 +88,15 @@ __all__ = [
     'HolographicConfig',
     'HolographicProcessor',
     'get_holographic_processor',
+
+    # Ensemble Choir (Iteration 31)
+    'LaneRole',
+    'EnsembleConfig',
+    'EnsembleJob',
+    'EnsembleResult',
+    'EnsembleChoir',
+    'FieldMonitor',
+    'get_ensemble_choir',
 ]
 
 # Conditionally export torch classes
