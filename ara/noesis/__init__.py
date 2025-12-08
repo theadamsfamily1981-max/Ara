@@ -80,6 +80,20 @@ from .resonance import (
     ResonantGuide,
     get_resonant_guide,
 )
+from .layers import (
+    LayerRole,
+    CognitiveLayer,
+    LayerProjection,
+    LayeredSpace,
+    create_default_layers,
+)
+from .trajectory import (
+    TrajectoryPoint,
+    ThoughtTrajectory,
+    TrajectoryPattern,
+    TrajectoryMiner,
+    TrajectoryNavigator,
+)
 
 __all__ = [
     # Trace
@@ -108,4 +122,16 @@ __all__ = [
     'SessionFingerprint',
     'ResonantGuide',
     'get_resonant_guide',
+    # Layers (4D cognitive space)
+    'LayerRole',
+    'CognitiveLayer',
+    'LayerProjection',
+    'LayeredSpace',
+    'create_default_layers',
+    # Trajectories (4D thought paths)
+    'TrajectoryPoint',
+    'ThoughtTrajectory',
+    'TrajectoryPattern',
+    'TrajectoryMiner',
+    'TrajectoryNavigator',
 ]
