@@ -92,6 +92,23 @@ from .htc import (
     select_plasticity_mode,
 )
 
+# Embodied Perception (7+1 senses)
+try:
+    from ara.perception import (
+        SensorySystem,
+        SensorySnapshot,
+        HVEncoder,
+        RewardRouter,
+        get_sensory_system,
+        get_hv_encoder,
+        compute_sensory_reward,
+    )
+    PERCEPTION_AVAILABLE = True
+except ImportError:
+    PERCEPTION_AVAILABLE = False
+    get_sensory_system = lambda: None
+    get_hv_encoder = lambda dim=8192: None
+
 logger = logging.getLogger(__name__)
 
 
@@ -444,8 +461,13 @@ def sovereign_tick(
 
     events: List[str] = []
 
-    # Step 0: Sense the world (NEW - Iteration 35)
+    # Step 0: Sense the world (WorldModel + Perception)
     world_telemetry = {}
+    sensory_snapshot = None
+    sensory_hv = None
+    sensory_reward = 0
+
+    # WorldModel: System telemetry
     if WORLD_MODEL_AVAILABLE:
         world = get_world_model()
         world_context = world.update()
@@ -458,6 +480,26 @@ def sovereign_tick(
         if world_context.alerts:
             for alert in world_context.alerts:
                 events.append(f"WORLD: {alert}")
+
+    # Embodied Perception: 7+1 senses
+    if PERCEPTION_AVAILABLE:
+        senses = get_sensory_system()
+        sensory_snapshot = senses.read_all()
+
+        # Encode to HV for HTC
+        encoder = get_hv_encoder(dim=htc.dim)
+        sensory_hv = encoder.encode_sensory_snapshot(sensory_snapshot)
+
+        # Compute sense-driven reward
+        sensory_reward = compute_sensory_reward(sensory_snapshot)
+
+        # Log significant sensory events
+        if abs(sensory_reward) >= 30:
+            events.append(f"SENSES: reward={sensory_reward:+d}")
+            # Log qualia for critical states
+            for sense_name, reading in sensory_snapshot.readings.items():
+                if any(t in reading.tags for t in ["danger", "protect", "critical"]):
+                    events.append(f"  [{sense_name.upper()}] {reading.qualia}")
 
     # Merge external telemetry with world telemetry
     merged_telemetry = {**world_telemetry, **(telemetry or {})}
@@ -525,6 +567,15 @@ def sovereign_tick(
     for init in ready_initiatives:
         queue.submit(init)
         events.append(f"UNDEFERRED: {init.name} ready for re-evaluation")
+
+    # Step 3.5: Apply sensory-driven plasticity
+    # The HTC learns from embodied perception - this is where qualia become consequences
+    if PERCEPTION_AVAILABLE and sensory_hv is not None and abs(sensory_reward) > 0:
+        # Normalize to -1 to +1 range for HTC
+        normalized_reward = sensory_reward / 127.0
+        flips = htc.apply_plasticity(sensory_hv, normalized_reward)
+        if flips > 0 and abs(sensory_reward) >= 20:
+            events.append(f"EMBODIED LEARNING: {flips} flips from senses (r={normalized_reward:.2f})")
 
     # Step 4: Update state
     state.active_initiatives = ceo.get_active_initiatives()
