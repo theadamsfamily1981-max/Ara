@@ -109,6 +109,32 @@ except ImportError:
     get_sensory_system = lambda: None
     get_hv_encoder = lambda dim=8192: None
 
+# Visual Cortex (Somatic Server) - GPU renderer bridge
+try:
+    from ara.daemon.somatic_server import (
+        SomaticServer,
+        DummyGPUClient,
+        get_somatic_server,
+    )
+    from ara.core.graphics.memory_palace import project_attractors
+    SOMATIC_AVAILABLE = True
+except ImportError:
+    SOMATIC_AVAILABLE = False
+    get_somatic_server = lambda: None
+
+# Spinal Cord (LAN Reflex Bridge) - eBPF event bridge
+try:
+    from ara.daemon.lan_reflex_bridge import (
+        LANReflexBridge,
+        DummyEventBus,
+        get_lan_reflex_bridge,
+    )
+    from ara.core.lan.node_agent import NodeRegistry
+    LAN_REFLEX_AVAILABLE = True
+except ImportError:
+    LAN_REFLEX_AVAILABLE = False
+    get_lan_reflex_bridge = lambda: None
+
 logger = logging.getLogger(__name__)
 
 
@@ -137,6 +163,14 @@ class SovereignState:
 
     # Soul state (placeholder for FPGA soul)
     soul_state_hv: Optional[Any] = None  # Will be numpy array or FPGA state
+
+    # Visual cortex state
+    last_affect: Dict[str, float] = field(default_factory=dict)
+    ui_events_this_tick: int = 0
+
+    # LAN/reflex state
+    reflex_events_this_tick: int = 0
+    numb_nodes: List[str] = field(default_factory=list)
 
     # Flags
     is_running: bool = False
@@ -503,6 +537,68 @@ def sovereign_tick(
 
     # Merge external telemetry with world telemetry
     merged_telemetry = {**world_telemetry, **(telemetry or {})}
+
+    # Step 0.5: Update visual cortex (Somatic Server)
+    ui_hv_events = []
+    if SOMATIC_AVAILABLE:
+        somatic = get_somatic_server()
+        if somatic:
+            # Get current resonance from HTC (or zeros if not available)
+            try:
+                resonance = htc.get_resonance_profile() if hasattr(htc, 'get_resonance_profile') else {}
+                resonance_vec = list(resonance.values()) if resonance else [0.5]
+            except Exception:
+                resonance_vec = [0.5]
+
+            # Get recent reward for affect computation
+            recent_reward = sensory_reward if PERCEPTION_AVAILABLE else 0
+
+            # Generate memory palace snapshot from HTC attractors (low rate)
+            attractor_snapshot = None
+            if state.tick_count % 10 == 0:  # Every 10 ticks (~1Hz at 10Hz loop)
+                try:
+                    if hasattr(htc, '_weights') and htc._weights is not None:
+                        import numpy as np
+                        # Project attractors to 3D for visualization
+                        attractor_matrix = np.array(htc._weights).reshape(1, -1) if htc._weights else None
+                        if attractor_matrix is not None:
+                            attractor_snapshot = project_attractors(attractor_matrix)
+                except Exception:
+                    pass
+
+            # Update somatic server - this drives avatar/UI and collects UI events
+            import numpy as np
+            resonance_array = np.array(resonance_vec, dtype=np.float32)
+            ui_hv_events = somatic.update_from_soul(
+                resonance=resonance_array,
+                reward=recent_reward,
+                attractor_snapshot=attractor_snapshot,
+            )
+
+            state.ui_events_this_tick = len(ui_hv_events)
+            state.last_affect = somatic.state.last_affect
+
+            if ui_hv_events:
+                events.append(f"UI: {len(ui_hv_events)} interaction events captured")
+
+    # Step 0.6: Poll LAN reflex bridge (spinal cord events)
+    reflex_events = []
+    if LAN_REFLEX_AVAILABLE:
+        lan_bridge = get_lan_reflex_bridge()
+        if lan_bridge:
+            # Poll for reflex events (pain packets, etc.)
+            reflex_events = lan_bridge.poll()
+            state.reflex_events_this_tick = len(reflex_events)
+
+            if reflex_events:
+                # Encode reflex events for HTC learning
+                reflex_hv_events = lan_bridge.encode_events(reflex_events)
+                events.append(f"REFLEX: {len(reflex_events)} spinal events (pain/anomaly)")
+
+                # High-severity reflex events get logged
+                for ev in reflex_events:
+                    if ev.severity > 0.7:
+                        events.append(f"  PAIN [{ev.event_type.value}]: severity={ev.severity:.2f}")
 
     # Step 1: Read user state (now with world telemetry!)
     user_state = mind_reader.read(merged_telemetry)
