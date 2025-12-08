@@ -75,6 +75,35 @@ from .health import (
     get_alert_manager,
 )
 
+from .hv_types import (
+    DenseHV,
+    SparseHV,
+    dense_to_sparse,
+    sparse_to_dense,
+    sparsify,
+    sparse_cosine,
+    sparse_bind,
+    sparse_bundle,
+)
+
+from .projection import (
+    HDProjection,
+    ProjectionRegistry,
+    ORGAN_DIMENSIONS,
+    get_projection_registry,
+    project_down,
+    project_up,
+)
+
+from .shards import (
+    ShardRole,
+    ShardConfig,
+    HTCShard,
+    SoftwareHTCShard,
+    ShardRegistry,
+    get_shard_registry,
+)
+
 __all__ = [
     # Constants
     'DIM',
@@ -102,4 +131,27 @@ __all__ = [
     'HealthAlert',
     'AlertManager',
     'get_alert_manager',
+    # HV Types (Sparse/Dense)
+    'DenseHV',
+    'SparseHV',
+    'dense_to_sparse',
+    'sparse_to_dense',
+    'sparsify',
+    'sparse_cosine',
+    'sparse_bind',
+    'sparse_bundle',
+    # Projections (MicroHD)
+    'HDProjection',
+    'ProjectionRegistry',
+    'ORGAN_DIMENSIONS',
+    'get_projection_registry',
+    'project_down',
+    'project_up',
+    # Shards
+    'ShardRole',
+    'ShardConfig',
+    'HTCShard',
+    'SoftwareHTCShard',
+    'ShardRegistry',
+    'get_shard_registry',
 ]
