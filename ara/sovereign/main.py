@@ -83,6 +83,15 @@ except ImportError:
     get_world_model = lambda: None
     WORLD_MODEL_AVAILABLE = False
 
+# Holographic Teleoplastic Core (research-grade HTC)
+from .htc import (
+    HolographicCore,
+    PlasticityMode,
+    PlasticityConfig,
+    get_htc,
+    select_plasticity_mode,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -281,17 +290,18 @@ class SoulStub:
         }
 
 
-# Global soul stub
+# Global soul stub (DEPRECATED - use get_htc() instead)
 _soul: Optional[SoulStub] = None
 
 
-def get_soul() -> SoulStub:
-    """Get the soul instance."""
-    global _soul
-    if _soul is None:
-        _soul = SoulStub()
-        _soul.initialize()
-    return _soul
+def get_soul() -> HolographicCore:
+    """
+    Get the soul instance.
+
+    DEPRECATED: Use get_htc() directly for access to polyplasticity modes.
+    This function now returns the HolographicCore for backward compatibility.
+    """
+    return get_htc()
 
 
 # =============================================================================
@@ -346,6 +356,45 @@ def submit_initiative(initiative: Initiative) -> None:
 
 
 # =============================================================================
+# HV Encoding Helpers
+# =============================================================================
+
+def _encode_initiative_hv(initiative: Initiative, dim: int) -> List[int]:
+    """
+    Encode an initiative into a hypervector.
+
+    Uses a simple hash-based encoding of initiative properties.
+    In production, this would use proper HD/VSA binding operations.
+    """
+    import hashlib
+    import random
+
+    # Create deterministic seed from initiative properties
+    seed_str = f"{initiative.name}:{initiative.type.value}:{sorted(initiative.tags.items())}"
+    seed = int(hashlib.sha256(seed_str.encode()).hexdigest()[:8], 16)
+
+    # Generate binary HV deterministically
+    rng = random.Random(seed)
+    return [rng.choice([-1, 1]) for _ in range(dim)]
+
+
+def _encode_protection_hv(dim: int) -> List[int]:
+    """
+    Encode a 'protection' concept into a hypervector.
+
+    This is a fixed pattern representing founder protection.
+    """
+    import hashlib
+    import random
+
+    # Fixed seed for protection concept
+    seed = int(hashlib.sha256(b"FOUNDER_PROTECTION_CONCEPT").hexdigest()[:8], 16)
+
+    rng = random.Random(seed)
+    return [rng.choice([-1, 1]) for _ in range(dim)]
+
+
+# =============================================================================
 # The Sovereign Tick
 # =============================================================================
 
@@ -384,7 +433,7 @@ def sovereign_tick(
     mind_reader = get_mind_reader()
     ceo = get_chief_of_staff()
     queue = get_initiative_queue()
-    soul = get_soul()
+    htc = get_htc()  # Research-grade HTC with polyplasticity
 
     # Update timing
     now = datetime.utcnow()
@@ -421,6 +470,24 @@ def sovereign_tick(
     if user_state.protection_level == ProtectionLevel.LOCKOUT:
         events.append(f"LOCKOUT: Night protection active")
 
+    # Step 1.5: Select HTC plasticity mode based on context
+    teleology_context = None
+    teleology_engine = get_teleology_engine()
+    if teleology_engine:
+        teleology_context = {
+            "is_core_workflow": teleology_engine.is_core_workflow() if hasattr(teleology_engine, 'is_core_workflow') else False,
+            "is_experimental": teleology_engine.is_experimental_context() if hasattr(teleology_engine, 'is_experimental_context') else False,
+        }
+
+    # Select mode: consolidation when resting, stabilizing for core work, etc.
+    is_downtime = user_state.current_mode == CognitiveMode.DECOMPRESS
+    plasticity_mode = select_plasticity_mode(
+        teleology_context=teleology_context,
+        user_mode=user_state.current_mode.value if user_state.current_mode else None,
+        is_downtime=is_downtime,
+    )
+    htc.set_mode(plasticity_mode)
+
     # Step 2: Process pending initiatives
     pending = queue.get_pending()
     decisions_made = 0
@@ -436,15 +503,22 @@ def sovereign_tick(
             f"CEO: {initiative.name} -> {result.decision.value}"
         )
 
-        # Update soul based on decision
+        # Update HTC based on decision (teleoplastic learning)
         if result.decision == CEODecision.EXECUTE:
             # Positive reward for executing strategic work
             reward = result.strategic_value * 0.5
-            soul.apply_plasticity([0.0] * 100, reward)  # Stub HV
+            # Generate context HV from initiative tags (simplified)
+            context_hv = _encode_initiative_hv(initiative, htc.dim)
+            flips = htc.apply_plasticity(context_hv, reward)
+            if flips > 0:
+                events.append(f"HTC: {flips} weight flips (reward={reward:.2f})")
         elif result.decision == CEODecision.PROTECT:
             # Positive reward for protecting the founder
-            soul.apply_plasticity([0.0] * 100, 0.3)  # Protection is good
+            context_hv = _encode_protection_hv(htc.dim)
+            flips = htc.apply_plasticity(context_hv, 0.3)
             events.append(f"PROTECT: Founder protection activated")
+            if flips > 0:
+                events.append(f"HTC: {flips} weight flips (protection)")
 
     # Step 3: Check deferred queue
     ready_initiatives = ceo.check_deferred_queue(user_state)
@@ -591,13 +665,14 @@ def get_status() -> Dict[str, Any]:
     """Get comprehensive status of the sovereign system."""
     state = get_state()
     ceo = get_chief_of_staff()
-    soul = get_soul()
+    htc = get_htc()
     covenant = get_covenant()
 
     return {
         "sovereign": state.to_dict(),
         "ceo": ceo.get_status(),
-        "soul": soul.get_status(),
+        "htc": htc.get_status(),  # Research-grade HTC status
+        "soul": htc.get_status(),  # Backward compatibility alias
         "covenant": covenant.to_dict(),
     }
 
@@ -631,10 +706,15 @@ def print_status() -> None:
     print(f"  Cognitive Burn: {ceo['cognitive_burn']:.0%}")
     print(f"  Trust Level: {ceo['trust_level']:.0f}")
 
-    soul = status["soul"]
-    print(f"\nSoul:")
-    print(f"  Initialized: {soul['initialized']}")
-    print(f"  Plasticity Events: {soul['plasticity_events']}")
+    htc = status["htc"]
+    print(f"\nHolographic Teleoplastic Core:")
+    print(f"  Initialized: {htc['initialized']}")
+    print(f"  Mode: {htc['mode']}")
+    print(f"  Dim: {htc['dim']}")
+    print(f"  Plasticity Events: {htc['plasticity_events']}")
+    if htc.get('recent_rewards'):
+        avg_reward = sum(htc['recent_rewards']) / len(htc['recent_rewards'])
+        print(f"  Recent Avg Reward: {avg_reward:.2f}")
 
     print("\n" + "=" * 60)
 
