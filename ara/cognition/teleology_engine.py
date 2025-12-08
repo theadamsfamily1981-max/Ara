@@ -43,7 +43,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Any, Callable
 import logging
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None  # Optional - only needed for advanced features
 
 logger = logging.getLogger(__name__)
 
@@ -367,16 +370,22 @@ class TeleologyEngine:
         """
         Classify a skill by its strategic role.
 
+        The thresholds are calibrated for realistic alignment scores:
+        - Critical skills with antifragility/cathedral tags get ~0.25-0.40
+        - Strategic skills get ~0.10-0.25
+        - Operational skills get ~0.03-0.10
+        - Secretary/mundane skills get ~0.01-0.03
+
         Returns:
             One of: "sovereign", "strategic", "operational", "secretary"
         """
         priority = self.strategic_priority(skill_tags)
 
-        if priority >= 0.75:
+        if priority >= 0.20:
             return "sovereign"     # Critical infrastructure, cathedral
-        elif priority >= 0.5:
+        elif priority >= 0.10:
             return "strategic"     # Research, hardware, code craft
-        elif priority >= 0.25:
+        elif priority >= 0.03:
             return "operational"   # Automation, organization
         else:
             return "secretary"     # Admin, mundane

@@ -563,8 +563,18 @@ class VisionAwareInternalization:
             elif candidate.success_rate >= 0.4:
                 alignment_floor = self.base_threshold * 0.8
 
-        # Final score
+        # Final score (for threshold comparison)
         final_score = max(raw_score, alignment_floor)
+
+        # Priority score (for sorting/ranking)
+        # Tier bonus ensures sovereign skills sort above secretary skills
+        tier_bonus = {
+            "sovereign": 10.0,    # Critical infrastructure always top priority
+            "strategic": 5.0,     # Research, hardware mastery
+            "operational": 2.0,   # Automation, organization
+            "secretary": 0.0,     # Admin, mundane - no bonus
+        }.get(classification, 0.0)
+        priority_score = final_score + tier_bonus
 
         # Check avoidance rules if curriculum provided
         avoidance_reason = None
@@ -586,6 +596,7 @@ class VisionAwareInternalization:
 
         return {
             "final_score": round(final_score, 3),
+            "priority_score": round(priority_score, 3),  # Use for sorting
             "should_internalize": should_internalize,
             "classification": classification,
             "avoidance_reason": avoidance_reason,
@@ -599,6 +610,7 @@ class VisionAwareInternalization:
                 "vision_factor": round(vision_factor, 3),
                 "alignment_floor": round(alignment_floor, 3),
                 "raw_score": round(raw_score, 3),
+                "tier_bonus": tier_bonus,
             },
         }
 
