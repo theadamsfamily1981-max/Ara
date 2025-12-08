@@ -453,18 +453,31 @@ class VolitionLoop:
         # Check volition
         intent = self.autonomy_engine.check_volition(self._current_drives)
 
-        # Notify callbacks
+        # Notify callbacks with timeout protection
         for callback in self._on_intent_callbacks:
             try:
-                callback(intent)
+                # Run callback in executor with timeout to prevent blocking
+                loop = asyncio.get_running_loop()
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, callback, intent),
+                    timeout=5.0  # 5 second timeout for callbacks
+                )
+            except asyncio.TimeoutError:
+                warnings.warn(f"Intent callback timed out after 5s")
             except Exception as e:
                 warnings.warn(f"Intent callback error: {e}")
 
-        # Execute if should act
+        # Execute if should act with timeout protection
         if intent.should_act and self.task_executor is not None:
             self._actions_initiated += 1
             try:
-                await self.task_executor(intent.task_type, intent.metadata)
+                # Task execution with 30 second timeout to prevent indefinite blocking
+                await asyncio.wait_for(
+                    self.task_executor(intent.task_type, intent.metadata),
+                    timeout=30.0  # 30 second timeout for task execution
+                )
+            except asyncio.TimeoutError:
+                warnings.warn(f"Task execution timed out after 30s: {intent.task_type.name}")
             except Exception as e:
                 warnings.warn(f"Task execution error: {e}")
 
