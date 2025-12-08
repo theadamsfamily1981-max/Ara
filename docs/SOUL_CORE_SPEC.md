@@ -130,14 +130,25 @@ Where:
 | ACC_WIDTH | 7 | 6-8 | Accumulator precision |
 | CHUNK_BITS | 512 | 256-1024 | Bits per memory access |
 
-### 3.3 Timing (Stratix-10 @ 450 MHz)
+### 3.3 Timing (Stratix-10 @ 350 MHz)
 
-| Operation | Latency | Throughput |
-|-----------|---------|------------|
-| Query (single attractor) | 36 cycles | 80 ns |
-| Query (all attractors) | 18,432 cycles | 41 µs |
-| Plasticity (single attractor) | 128 cycles | 284 ns |
-| Plasticity (full update) | 65,536 cycles | 146 µs |
+**Revised Architecture Numbers (axis_soul_core.sv):**
+
+| Operation | Cycles | Latency | Notes |
+|-----------|--------|---------|-------|
+| Query (stream in HV) | 32 | 91 ns | 32 chunks × 1 cycle |
+| Query (all rows, 8-parallel) | 32,768 | 94 µs | 256 batches × 32 chunks × 4 stages |
+| Query (total) | ~33k | ~94 µs | Stream + compute |
+| Plasticity (per row) | 128 | 366 ns | 32 chunks × 4 cycles |
+| Plasticity (full matrix) | 262,144 | 749 µs | 2048 rows × 128 cycles |
+| Plasticity (8-parallel) | 32,768 | 94 µs | With PAR_LAYERS=8 |
+
+**Key Insight:** A full plasticity update (~100 µs) is effectively "instant" for
+human timescales. The sovereign loop runs at 10 Hz, giving 100ms between ticks.
+
+**Memory Bandwidth:**
+- 8 banks × 512 bits × 350 MHz = 1.4 Tb/s aggregate
+- Each bank: 175 Gb/s
 
 ### 3.4 Memory Layout
 
@@ -153,26 +164,43 @@ Accumulator Memory (7-bit signed):
   Layout: Packed 7-bit values, aligned to 512-bit chunks
 ```
 
-### 3.5 Interface Signals
+### 3.5 Interface Signals (Revised - axis_soul_core.sv)
 
 ```systemverilog
-// AXI-Stream Input
-input  wire [DIM-1:0]     s_axis_tdata,   // Input HV
+// AXI-Stream Input (chunked, 512 bits at a time)
+input  wire [CHUNK-1:0]   s_axis_tdata,   // Input HV chunk
 input  wire               s_axis_tvalid,
 output wire               s_axis_tready,
+input  wire               s_axis_tlast,   // End of HV marker
 
-// AXI-Stream Output
-output wire [DIM-1:0]     m_axis_tdata,   // Response HV
+// AXI-Stream Output (scores)
+output wire [31:0]        m_axis_tdata,   // Top score
 output wire               m_axis_tvalid,
 input  wire               m_axis_tready,
+output wire               m_axis_tlast,
 
-// Control
-input  wire [7:0]         i_reward,       // Signed reward
-input  wire [1:0]         i_plasticity_mode,
-input  wire               i_learn_enable,
+// AXI-Lite Control (register interface)
+input  wire [7:0]         ctrl_addr,
+input  wire               ctrl_write,
+input  wire [31:0]        ctrl_wdata,
+output wire [31:0]        ctrl_rdata,
+
+// Status
 output wire               o_busy,
-output wire [31:0]        o_status,
+output wire               o_inference_done,
+output wire               o_plasticity_done,
 ```
+
+**Control Registers:**
+| Addr | Name | R/W | Description |
+|------|------|-----|-------------|
+| 0x00 | CMD | W | Command: 0=NOP, 1=Query, 2=Learn |
+| 0x04 | REWARD | W | Signed 8-bit reward for learning |
+| 0x08 | STATUS | R | {busy, infer_done, plast_done} |
+| 0x0C | QUERY_CNT | R | Total queries executed |
+| 0x10 | LEARN_CNT | R | Total learning events |
+| 0x14 | TOP_SCORE | R | Best matching score |
+| 0x18 | TOP_IDX | R | Best matching row index |
 
 ---
 
