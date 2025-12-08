@@ -130,3 +130,39 @@ try:
     __all__.append('hsf')
 except ImportError:
     hsf = None
+
+# Quantum Bridge (Neuromorphic Annealing for NP-Hard Problems)
+try:
+    from .quantum_bridge import (
+        AnnealMode,
+        Constraint,
+        CSPProblem,
+        TSPProblem,
+        GraphColorProblem,
+        SATProblem,
+        AnnealResult,
+        HTCInterface,
+        SoftwareHTCAnnealer,
+        QuantumBridge,
+        solve_nqueens,
+        solve_sudoku,
+    )
+    __all__.extend([
+        'AnnealMode', 'Constraint', 'CSPProblem', 'TSPProblem',
+        'GraphColorProblem', 'SATProblem', 'AnnealResult',
+        'HTCInterface', 'SoftwareHTCAnnealer', 'QuantumBridge',
+        'solve_nqueens', 'solve_sudoku',
+    ])
+except ImportError:
+    AnnealMode = None
+    Constraint = None
+    CSPProblem = None
+    TSPProblem = None
+    GraphColorProblem = None
+    SATProblem = None
+    AnnealResult = None
+    HTCInterface = None
+    SoftwareHTCAnnealer = None
+    QuantumBridge = None
+    solve_nqueens = None
+    solve_sudoku = None

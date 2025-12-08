@@ -48,6 +48,19 @@ from .dispatcher import (
     get_dispatcher,
 )
 
+from .math_sense import (
+    MathProblemType,
+    MathSenseEncoder,
+    get_math_encoder,
+    ROLE_MATH,
+    ROLE_VARIABLE,
+    ROLE_VALUE,
+    ROLE_CONSTRAINT,
+    ROLE_DOMAIN,
+    ROLE_OBJECTIVE,
+    ROLE_PROBLEM,
+)
+
 __all__ = [
     'IOChannel',
     'HDInputEvent',
@@ -55,4 +68,15 @@ __all__ = [
     'HV',
     'IODispatcher',
     'get_dispatcher',
+    # Math Sense
+    'MathProblemType',
+    'MathSenseEncoder',
+    'get_math_encoder',
+    'ROLE_MATH',
+    'ROLE_VARIABLE',
+    'ROLE_VALUE',
+    'ROLE_CONSTRAINT',
+    'ROLE_DOMAIN',
+    'ROLE_OBJECTIVE',
+    'ROLE_PROBLEM',
 ]
