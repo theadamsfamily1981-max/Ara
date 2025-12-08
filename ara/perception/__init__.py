@@ -29,6 +29,18 @@ from .sensory import (
 from .hv_encoder import (
     HVEncoder,
     get_hv_encoder,
+    # VSA operations
+    xor_bind,
+    bundle,
+    permute,
+    hamming_similarity,
+    # Affect decoder
+    AffectState,
+    decode_affect,
+    # Flow encoder
+    FlowFeatures,
+    FlowHVEncoder,
+    get_flow_encoder,
 )
 
 from .reward_router import (
@@ -37,12 +49,27 @@ from .reward_router import (
 )
 
 __all__ = [
+    # Sensory
     'SenseReading',
     'SensorySnapshot',
     'SensorySystem',
     'get_sensory_system',
+    # HV Encoding
     'HVEncoder',
     'get_hv_encoder',
+    # VSA Operations
+    'xor_bind',
+    'bundle',
+    'permute',
+    'hamming_similarity',
+    # Affect Decoder
+    'AffectState',
+    'decode_affect',
+    # Flow Encoding
+    'FlowFeatures',
+    'FlowHVEncoder',
+    'get_flow_encoder',
+    # Reward
     'RewardRouter',
     'compute_sensory_reward',
 ]

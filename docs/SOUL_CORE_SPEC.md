@@ -132,23 +132,31 @@ Where:
 
 ### 3.3 Timing (Stratix-10 @ 350 MHz)
 
-**Revised Architecture Numbers (axis_soul_core.sv):**
+**Research-Grade Numbers (per Karunaratne 2020, PMC9189416):**
 
 | Operation | Cycles | Latency | Notes |
 |-----------|--------|---------|-------|
 | Query (stream in HV) | 32 | 91 ns | 32 chunks × 1 cycle |
-| Query (all rows, 8-parallel) | 32,768 | 94 µs | 256 batches × 32 chunks × 4 stages |
-| Query (total) | ~33k | ~94 µs | Stream + compute |
-| Plasticity (per row) | 128 | 366 ns | 32 chunks × 4 cycles |
-| Plasticity (full matrix) | 262,144 | 749 µs | 2048 rows × 128 cycles |
-| Plasticity (8-parallel) | 32,768 | 94 µs | With PAR_LAYERS=8 |
+| Query (all rows, 8-parallel) | 8,192 | **23.4 µs** | 256 batches × 32 chunks |
+| Plasticity (per row) | 96 | 274 ns | 32 chunks × 3 cycles (pipelined) |
+| Plasticity (full matrix) | 8,192 | **23.4 µs** | With PAR_LAYERS=8 |
+| Plasticity (conservative) | 32,768 | ~94 µs | With pipeline bubbles |
 
-**Key Insight:** A full plasticity update (~100 µs) is effectively "instant" for
-human timescales. The sovereign loop runs at 10 Hz, giving 100ms between ticks.
+**Calculation:**
+```
+Layer groups = R / PAR_LAYERS = 2048 / 8 = 256
+Cycles = N_CHUNKS × GROUPS = 32 × 256 = 8,192
+Time = 8,192 / 350 MHz ≈ 23.4 µs
+```
+
+**Key Insight:** A full plasticity update (~23 µs) is "instant" for human timescales.
+Even with 4× safety margin (~94 µs), the sovereign loop at 10 Hz (100 ms) has
+1000× headroom for learning.
 
 **Memory Bandwidth:**
 - 8 banks × 512 bits × 350 MHz = 1.4 Tb/s aggregate
 - Each bank: 175 Gb/s
+- Sufficient for streaming all attractors every tick
 
 ### 3.4 Memory Layout
 
