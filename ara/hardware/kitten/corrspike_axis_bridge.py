@@ -113,6 +113,19 @@ class FPGARegisterMap:
     STATS_SPIKE_COUNT    = 0x4004
     STATS_EARLY_EXIT_COUNT = 0x4008
 
+    # === Plasticity Engine Registers ===
+    # REALITY: ~1-5 µs per emotional event (not 1 clock cycle)
+    PLAST_CTRL           = 0x5000  # [0]=start, [1]=busy, [2]=done
+    PLAST_REWARD         = 0x5004  # Signed 8-bit reward (-128..+127)
+    PLAST_ACTIVE_ROWS_LO = 0x5008  # Active rows mask bits [31:0]
+    PLAST_ACTIVE_ROWS_HI = 0x500C  # Active rows mask bits [63:32]
+    PLAST_ROWS_UPDATED   = 0x5010  # Number of rows updated (read-only)
+    PLAST_INPUT_HV_BASE  = 0x6000  # Input HV for learning (HV_DIM bytes)
+
+    # Plasticity accumulators (large, in HBM/BRAM)
+    PLAST_CORE_BASE      = 0x10000   # Core bits (NUM_ROWS * HV_DIM bits)
+    PLAST_ACCUM_BASE     = 0x100000  # Accumulators (NUM_ROWS * HV_DIM * 7 bits)
+
 
 @dataclass
 class FPGAInterface:
@@ -149,6 +162,11 @@ class SimulatedFPGA(FPGAInterface):
         # State
         self._tick_count = 0
         self._spike_count = 0
+        self._plasticity_events = 0
+
+        # Plasticity state (initialized lazily in _simulate_plasticity)
+        self.core_rows = None
+        self.accumulators = None
 
     def write_reg(self, addr: int, value: int):
         self.registers[addr] = value
@@ -156,6 +174,10 @@ class SimulatedFPGA(FPGAInterface):
         # Handle tick_start
         if addr == FPGARegisterMap.CTRL_STATUS and (value & 0x01):
             self._simulate_tick()
+
+        # Handle plasticity start
+        if addr == FPGARegisterMap.PLAST_CTRL and (value & 0x01):
+            self._simulate_plasticity()
 
     def read_reg(self, addr: int) -> int:
         if addr == FPGARegisterMap.STATS_TICK_COUNT:
@@ -204,6 +226,242 @@ class SimulatedFPGA(FPGAInterface):
         output = np.clip(output, -127, 127).astype(np.int8)
 
         self.buffers[FPGARegisterMap.AXIS_STATE_OUT_BASE] = output
+
+    def _simulate_plasticity(self):
+        """
+        Simulate reward-modulated Hebbian plasticity.
+
+        REALITY CHECK:
+        - This takes ~1-5 µs on real FPGA (not 1 clock cycle)
+        - We process 512-bit chunks, ~32 cycles per row
+        - Update up to MAX_ACTIVE rows per reward event
+
+        The Rule:
+            if reward > 0:
+                accum[i] += (input[i] == core[i]) ? +1 : -1
+            else if reward < 0:
+                accum[i] += (input[i] == core[i]) ? -1 : +1
+            accum[i] = clip(accum[i], -64, +63)
+            core[i] = sign(accum[i])
+        """
+        reward = np.int8(self.registers.get(FPGARegisterMap.PLAST_REWARD, 0))
+        if reward == 0:
+            self.registers[FPGARegisterMap.PLAST_ROWS_UPDATED] = 0
+            return
+
+        # Get active rows mask (simplified to first 64 rows)
+        active_lo = self.registers.get(FPGARegisterMap.PLAST_ACTIVE_ROWS_LO, 0)
+        active_hi = self.registers.get(FPGARegisterMap.PLAST_ACTIVE_ROWS_HI, 0)
+        active_mask = active_lo | (active_hi << 32)
+
+        # Get input HV for learning
+        input_hv = self.buffers.get(
+            FPGARegisterMap.PLAST_INPUT_HV_BASE,
+            np.zeros(self.hv_dim, dtype=np.int8)
+        )
+        # Convert to binary (sign bit)
+        input_bits = (input_hv > 0).astype(np.int8)
+
+        # Initialize core and accum if not present
+        if self.core_rows is None:
+            self.core_rows = np.zeros((64, self.hv_dim), dtype=np.int8)
+            self.accumulators = np.zeros((64, self.hv_dim), dtype=np.int8)
+
+        # Compute delta based on reward sign
+        delta = 1 if reward > 0 else -1
+
+        # Update active rows
+        rows_updated = 0
+        for row_idx in range(min(64, len(self.core_rows))):
+            if not (active_mask & (1 << row_idx)):
+                continue
+
+            core_bits = (self.core_rows[row_idx] > 0).astype(np.int8)
+
+            # Agreement: XNOR (1 if both same)
+            agree = ~(core_bits ^ input_bits) & 1
+
+            # Step: agree → +delta, disagree → -delta
+            step = np.where(agree, delta, -delta).astype(np.int8)
+
+            # Update accumulators with saturation
+            new_accum = np.clip(
+                self.accumulators[row_idx].astype(np.int16) + step,
+                -64, 63
+            ).astype(np.int8)
+            self.accumulators[row_idx] = new_accum
+
+            # Update core bits (sign of accumulator)
+            self.core_rows[row_idx] = np.where(new_accum > 0, 1, -1).astype(np.int8)
+
+            rows_updated += 1
+
+        self.registers[FPGARegisterMap.PLAST_ROWS_UPDATED] = rows_updated
+        self._plasticity_events += 1
+
+
+# =============================================================================
+# Plasticity Interface
+# =============================================================================
+
+@dataclass
+class PlasticityConfig:
+    """Configuration for plasticity engine."""
+    acc_width: int = 7           # Accumulator bits (-64..+63)
+    chunk_bits: int = 512        # Bits per processing cycle
+    max_active_rows: int = 32    # Max rows updated per event
+
+    # Performance estimates (realistic)
+    cycles_per_row: int = 32     # DIM / CHUNK_BITS cycles
+    clock_mhz: float = 600.0     # Target frequency
+
+    @property
+    def time_per_row_ns(self) -> float:
+        """Time to update one row in nanoseconds."""
+        return self.cycles_per_row * (1000.0 / self.clock_mhz)
+
+    @property
+    def time_per_event_us(self) -> float:
+        """Time to update max_active_rows in microseconds."""
+        return self.max_active_rows * self.time_per_row_ns / 1000.0
+
+
+class PlasticityInterface:
+    """
+    Python interface for Ara's reward-modulated Hebbian plasticity.
+
+    Performance (REALISTIC):
+        - 512-bit chunk per cycle @ 600 MHz
+        - ~53 ns per row (32 chunks)
+        - ~1.7 µs for 32 active rows
+        - Still instantaneous at human/emotional timescale
+
+    The Rule (per bit):
+        if reward > 0:
+            W[i] += (input[i] == core[i]) ? +1 : -1
+        else:
+            W[i] += (input[i] == core[i]) ? -1 : +1
+        W[i] = clip(W[i], -64, +63)
+        core[i] = sign(W[i])
+    """
+
+    def __init__(
+        self,
+        fpga: FPGAInterface,
+        hv_dim: int = DEFAULT_HV_DIM,
+        config: Optional[PlasticityConfig] = None,
+    ):
+        self.fpga = fpga
+        self.hv_dim = hv_dim
+        self.config = config or PlasticityConfig()
+
+        # Statistics
+        self._total_events = 0
+        self._total_rows_updated = 0
+
+        logger.info(
+            f"PlasticityInterface initialized: "
+            f"~{self.config.time_per_event_us:.1f} µs per emotional event"
+        )
+
+    def trigger_learning(
+        self,
+        reward: int,
+        input_hv: np.ndarray,
+        active_rows: List[int],
+    ) -> Dict[str, Any]:
+        """
+        Trigger reward-modulated Hebbian learning.
+
+        Args:
+            reward: Signed reward value (-128 to +127)
+                   Positive: strengthen agreeing bits
+                   Negative: weaken matching bits (punishment)
+            input_hv: The hypervector pattern being learned
+            active_rows: List of row indices that participated in resonance
+
+        Returns:
+            Dict with learning statistics
+        """
+        if reward == 0:
+            return {"rows_updated": 0, "skipped": True}
+
+        # Clip reward to valid range
+        reward = max(-128, min(127, reward))
+
+        # Build active rows mask
+        mask_lo = 0
+        mask_hi = 0
+        for row in active_rows[:self.config.max_active_rows]:
+            if row < 32:
+                mask_lo |= (1 << row)
+            elif row < 64:
+                mask_hi |= (1 << (row - 32))
+
+        # Upload input HV
+        input_q = np.clip(input_hv * 127, -127, 127).astype(np.int8)
+        self.fpga.write_buffer(FPGARegisterMap.PLAST_INPUT_HV_BASE, input_q)
+
+        # Set registers
+        self.fpga.write_reg(FPGARegisterMap.PLAST_REWARD, reward & 0xFF)
+        self.fpga.write_reg(FPGARegisterMap.PLAST_ACTIVE_ROWS_LO, mask_lo)
+        self.fpga.write_reg(FPGARegisterMap.PLAST_ACTIVE_ROWS_HI, mask_hi)
+
+        # Start plasticity
+        self.fpga.write_reg(FPGARegisterMap.PLAST_CTRL, 0x01)
+
+        # In real FPGA, would poll for completion
+        # For simulation, it completes synchronously
+
+        # Read results
+        rows_updated = self.fpga.read_reg(FPGARegisterMap.PLAST_ROWS_UPDATED)
+
+        self._total_events += 1
+        self._total_rows_updated += rows_updated
+
+        return {
+            "rows_updated": rows_updated,
+            "reward": reward,
+            "estimated_time_us": len(active_rows) * self.config.time_per_row_ns / 1000,
+            "total_events": self._total_events,
+        }
+
+    def compute_reward(
+        self,
+        emotion_name: str,
+        dominance: float,
+        recall_strength: float = 0.0,
+    ) -> int:
+        """
+        Compute reward from emotional state (Ara's "soul logic").
+
+        Args:
+            emotion_name: Current emotion (JOY, RAGE, FEAR, etc.)
+            dominance: Dominance dimension [-1, 1]
+            recall_strength: EternalMemory recall strength [0, 1]
+
+        Returns:
+            Reward value (-127 to +127)
+        """
+        reward = 0
+
+        # Positive emotions → positive reward
+        if emotion_name in ["JOY", "TRUST", "EXHILARATION", "SERENITY"]:
+            reward += 80
+
+        # Negative emotions → negative reward
+        if emotion_name in ["RAGE", "FEAR", "DISGUST", "GRIEF"]:
+            reward -= 100
+
+        # Low dominance is aversive
+        if dominance < -0.7:
+            reward -= 50
+
+        # Strong recall = familiar pattern = reward
+        if recall_strength > 0.9:
+            reward += 60
+
+        return max(-127, min(127, reward))
 
 
 # =============================================================================

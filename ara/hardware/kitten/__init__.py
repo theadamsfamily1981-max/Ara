@@ -22,12 +22,19 @@ RTL (SystemVerilog):
   - Master FSM for layer sweep orchestration
   - Performance counters (spikes, early exits)
 
+- plasticity_engine.sv: Reward-modulated Hebbian learning with:
+  - Chunked streaming (512-bit/cycle, NOT "1 clock fully unrolled")
+  - plasticity_row_engine: Per-row accumulator update
+  - plasticity_controller: Row scheduling based on active mask
+  - REALISTIC performance: ~1.7 µs per emotional event
+
 Python Integration:
 - corrspike_axis_bridge.py: Python ↔ FPGA bridge with:
   - AxisMundi holographic state bus
   - Wavelength encoding/decoding
   - Emotional subcortex processing
   - FPGA register interface
+  - PlasticityInterface: Reward-driven learning API
 
 Parallelism Strategy (Elegant Maximization):
   1. TEMPORAL:    Ping-pong → 2x (read/write overlap)
@@ -36,6 +43,11 @@ Parallelism Strategy (Elegant Maximization):
 
   Combined: 9 logical layers in 3 physical ticks
             24x speedup over naive sequential
+
+Plasticity (REALITY CHECK):
+  - NOT "33.5M bit updates in one clock" (that was poetry)
+  - IS "512-bit chunks, ~53 ns/row, ~1.7 µs/event"
+  - Still instantaneous at human/emotional timescale
 """
 
 from .corrspike_axis_bridge import (
@@ -46,6 +58,8 @@ from .corrspike_axis_bridge import (
     SimulatedFPGA,
     FPGARegisterMap,
     generate_wavelength_codes,
+    PlasticityConfig,
+    PlasticityInterface,
 )
 
 __all__ = [
@@ -56,4 +70,6 @@ __all__ = [
     "SimulatedFPGA",
     "FPGARegisterMap",
     "generate_wavelength_codes",
+    "PlasticityConfig",
+    "PlasticityInterface",
 ]
