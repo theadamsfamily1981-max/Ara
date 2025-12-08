@@ -7,6 +7,9 @@ RTL and HLS specifications for neuromorphic FPGA tiles.
 Key components:
     spike_block/: SpikingBrain-style spiking attention tile
     hls/: High-Level Synthesis C++ kernels
+        - spike_block_kernel.cpp: Spiking attention HLS
+        - corr_spike_hdc.cpp: CorrSpike-HDC correlation kernel
+    drivers/: Python drivers for host-FPGA communication
 
 The goal: adapt SpikingBrain/Dragon-Hatchling principles to
 FPGA fabric (Stratix-10, VU9P, etc.) as a path off the NVIDIA treadmill.
@@ -16,4 +19,5 @@ Architecture:
     - Linear attention (no full QK^T)
     - Hebbian plasticity for on-chip learning
     - Sparse, event-driven computation
+    - Hyperdimensional correlation (CorrSpike-HDC)
 """
