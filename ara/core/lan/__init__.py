@@ -30,6 +30,17 @@ from .reflex_api import (
     compute_reflex_priority,
 )
 
+from .reflex_search import (
+    ReflexAction,
+    FlowSignature,
+    ReflexRule,
+    FlowLookupResult,
+    ReflexLookupResult,
+    ReflexSearch,
+    get_reflex_search,
+    add_pain_rule,
+)
+
 __all__ = [
     # Protocol
     'SoulMeshMessage',
@@ -44,4 +55,13 @@ __all__ = [
     'ReflexPolicy',
     'encode_reflex_event',
     'compute_reflex_priority',
+    # Reflex Search
+    'ReflexAction',
+    'FlowSignature',
+    'ReflexRule',
+    'FlowLookupResult',
+    'ReflexLookupResult',
+    'ReflexSearch',
+    'get_reflex_search',
+    'add_pain_rule',
 ]
