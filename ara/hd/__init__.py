@@ -104,6 +104,15 @@ from .shards import (
     get_shard_registry,
 )
 
+from .fpga_search import (
+    SearchResult,
+    FPGADevice,
+    SimDevice,
+    HTCSearchFPGA,
+    get_fpga_search,
+    query_resonance,
+)
+
 __all__ = [
     # Constants
     'DIM',
@@ -154,4 +163,11 @@ __all__ = [
     'SoftwareHTCShard',
     'ShardRegistry',
     'get_shard_registry',
+    # FPGA Search (Soul CAM)
+    'SearchResult',
+    'FPGADevice',
+    'SimDevice',
+    'HTCSearchFPGA',
+    'get_fpga_search',
+    'query_resonance',
 ]
