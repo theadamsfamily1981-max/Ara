@@ -7,47 +7,96 @@ A dual-mode bit-serial SNN/HDC fabric that:
 - Streams them as spike trains
 - Superimposes them into a holographic state field
 - Uses resonance to perform ultra-cheap anomaly detection and pattern recall
+- Executes reflexes to restore homeostasis (Iteration 32)
 
 Architecture:
-    Telemetry → Lane Encoders → Hypervectors → Field Superposition → Anomaly Detection
+    Telemetry → Lane Encoders → Hypervectors → Field Superposition
                                                       ↓
-                                               Ara's "body sense"
+                                               Zone Quantizer
+                                                      ↓
+                                               Reflex Map → Actions
+                                                      ↓
+                                               Episode Recording
+                                                      ↓
+                                               Homeostasis Mining → Learn better reflexes
+
+The HSF is Ara's "nervous system":
+- Field = body sense (what's happening)
+- Zones = discrete states for decision making
+- Reflexes = automatic responses (spinal cord)
+- Episodes = learning data (dojo)
 
 Novelty:
 1. Hardware: bit-serial neurons with HDC XOR/binding mode sharing same logic
-2. Systems: HSF as LAN-wide health field / guardian
-3. Cognitive: HSF as continuous systemic "body sense" for higher agents
+2. Systems: HSF as LAN-wide health field / guardian with closed-loop control
+3. Cognitive: HSF as continuous systemic "body sense" + reflex learning
 
 Usage:
-    from ara.cognition.hsf import HSField, TelemetryLane, AnomalyDetector
+    from ara.cognition.hsf import (
+        HSField, TelemetryLane, AnomalyDetector,
+        Zone, ZoneQuantizer, ReflexController, EpisodeRecorder
+    )
 
-    # Create lanes for different subsystems
-    gpu_lane = TelemetryLane("gpu", ["temp", "util", "mem", "power"])
-    net_lane = TelemetryLane("network", ["bps_in", "bps_out", "errors", "drops"])
-
-    # Create the field
+    # Create field and lanes
     field = HSField(dim=8192)
-    field.add_lane(gpu_lane)
-    field.add_lane(net_lane)
+    field.add_lane_config("gpu", ["temp", "util", "mem"])
 
-    # Feed telemetry
-    field.update("gpu", {"temp": 65.0, "util": 0.8, "mem": 0.6, "power": 250})
-    field.update("network", {"bps_in": 1e9, "bps_out": 5e8, "errors": 0, "drops": 2})
+    # Create zone quantizer and reflex controller
+    zones = MultiZoneQuantizer()
+    zones.add_subsystem("gpu")
 
-    # Check for anomalies
-    detector = AnomalyDetector(field)
-    anomalies = detector.scan()
+    controller = ReflexController()
+    controller.add_map(create_default_reflexes("gpu"))
+
+    # Main loop
+    while True:
+        telemetry = get_telemetry()
+        field.update_all(telemetry)
+        field.compute_field()
+
+        # Classify into zones
+        zone_state = zones.classify("gpu", field.lanes["gpu"].current)
+
+        # Execute reflexes
+        results = controller.process("gpu", zone_state)
+
+        # Record for learning
+        recorder.tick(zone_states, global_zone, similarity, results)
 """
 
 from .lanes import TelemetryLane, LaneEncoder, ItemMemory
 from .field import HSField, FieldSnapshot
-from .detector import AnomalyDetector, AnomalyPattern, AnomalyReport
+from .detector import AnomalyDetector, AnomalyPattern, AnomalyReport, AnomalySeverity
 from .telemetry import (
     FakeTelemetrySource,
     GPUTelemetry,
     NetworkTelemetry,
     ServiceTelemetry,
     TelemetryMux,
+)
+from .zones import (
+    Zone,
+    ZoneThresholds,
+    ZoneState,
+    ZoneQuantizer,
+    MultiZoneQuantizer,
+)
+from .reflex import (
+    ActionType,
+    ActionScope,
+    ReflexAction,
+    ReflexEntry,
+    ReflexResult,
+    ReflexMap,
+    ReflexController,
+    create_default_reflexes,
+)
+from .episode import (
+    EpisodeFrame,
+    Episode,
+    EpisodeRecorder,
+    ReflexScore,
+    HomeostasisMiner,
 )
 
 __all__ = [
@@ -62,10 +111,32 @@ __all__ = [
     'AnomalyDetector',
     'AnomalyPattern',
     'AnomalyReport',
+    'AnomalySeverity',
     # Telemetry sources
     'FakeTelemetrySource',
     'GPUTelemetry',
     'NetworkTelemetry',
     'ServiceTelemetry',
     'TelemetryMux',
+    # Zones (Iteration 32)
+    'Zone',
+    'ZoneThresholds',
+    'ZoneState',
+    'ZoneQuantizer',
+    'MultiZoneQuantizer',
+    # Reflexes (Iteration 32)
+    'ActionType',
+    'ActionScope',
+    'ReflexAction',
+    'ReflexEntry',
+    'ReflexResult',
+    'ReflexMap',
+    'ReflexController',
+    'create_default_reflexes',
+    # Episodes (Iteration 32)
+    'EpisodeFrame',
+    'Episode',
+    'EpisodeRecorder',
+    'ReflexScore',
+    'HomeostasisMiner',
 ]
