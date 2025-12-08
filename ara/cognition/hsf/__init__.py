@@ -115,6 +115,40 @@ from .dreamforge import (
     FieldSimulator,
     ScenarioMarket,
 )
+from .phase import (
+    Phase,
+    PhaseConfig,
+    MacroFrame,
+    ChannelStream,
+    PhaseMultiplexer,
+    PhaseCounter,
+    LaneTopology,
+    create_default_phase_config,
+)
+from .cathedral import (
+    NeuronState,
+    PhaseGatedCluster,
+    CathedralState,
+    Cathedral,
+    CathedralEncoder,
+    create_cathedral,
+)
+from .field_computer import (
+    Plane,
+    JobType,
+    TelemetryEvent,
+    FrictionEvent,
+    IdeaCandidate,
+    ReflexDecision,
+    PlaneA_Reflex,
+    PlaneB_Context,
+    PlaneC_Policy,
+    Job_LANSentinel,
+    Job_FrictionMiner,
+    Job_IdeaRouter,
+    FieldComputer,
+    create_field_computer,
+)
 
 __all__ = [
     # Lane encoding
@@ -171,4 +205,35 @@ __all__ = [
     'TopologySketcher',
     'FieldSimulator',
     'ScenarioMarket',
+    # Phase-Gated Cathedral (Iteration 34)
+    'Phase',
+    'PhaseConfig',
+    'MacroFrame',
+    'ChannelStream',
+    'PhaseMultiplexer',
+    'PhaseCounter',
+    'LaneTopology',
+    'create_default_phase_config',
+    # Cathedral Brain
+    'NeuronState',
+    'PhaseGatedCluster',
+    'CathedralState',
+    'Cathedral',
+    'CathedralEncoder',
+    'create_cathedral',
+    # Field Computer
+    'Plane',
+    'JobType',
+    'TelemetryEvent',
+    'FrictionEvent',
+    'IdeaCandidate',
+    'ReflexDecision',
+    'PlaneA_Reflex',
+    'PlaneB_Context',
+    'PlaneC_Policy',
+    'Job_LANSentinel',
+    'Job_FrictionMiner',
+    'Job_IdeaRouter',
+    'FieldComputer',
+    'create_field_computer',
 ]
