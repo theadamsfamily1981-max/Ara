@@ -140,56 +140,108 @@ def get_state() -> SovereignState:
 
 class SoulStub:
     """
-    Stub implementation of the Soul.
+    Stub implementation of the Soul with proper binary HV semantics.
 
     This will be replaced with the real FPGA soul once hardware is ready.
-    For now it just tracks state and simulates plasticity.
+    For now it simulates:
+    - Binary hypervectors (+1/-1)
+    - Accumulator-based plasticity
+    - Reward-modulated Hebbian learning
+
+    The key insight: weights must stay in {-1, +1}, never 0.
+    Zero weights break the holographic assumption.
     """
 
     def __init__(self, dim: int = 8192):
         self.dim = dim
-        self._state_hv: Optional[List[float]] = None  # Would be numpy in real impl
+        # Binary weights: always +1 or -1, never 0
+        self._weights: Optional[List[int]] = None
+        # Accumulators for soft plasticity (like eligibility traces)
+        self._accum: Optional[List[int]] = None
+        # Current input HV (for learning)
+        self._current_hv: Optional[List[int]] = None
         self._plasticity_events: List[Dict[str, Any]] = []
         self._initialized = False
 
     def initialize(self) -> None:
-        """Initialize the soul state."""
-        # In real impl: allocate FPGA memory, load state from disk
-        self._state_hv = [0.0] * self.dim
+        """Initialize the soul state with random binary weights."""
+        import random
+        # Initialize weights randomly as +1 or -1
+        self._weights = [random.choice([-1, 1]) for _ in range(self.dim)]
+        self._accum = [0] * self.dim
+        self._current_hv = [0] * self.dim
         self._initialized = True
-        logger.info(f"Soul initialized with dim={self.dim}")
+        logger.info(f"Soul initialized with dim={self.dim} (binary HV)")
 
-    def run_resonance_step(self, input_hv: Optional[List[float]] = None) -> List[float]:
+    def run_resonance_step(self, input_hv: Optional[List[int]] = None) -> List[int]:
         """
-        Run a resonance step.
+        Run a resonance step (query the soul).
 
-        In real impl: send HV to FPGA, run holographic resonance, get result.
+        In real impl: send HV to FPGA, run holographic similarity, get result.
+        Here we simulate with element-wise XOR (Hamming distance proxy).
         """
         if not self._initialized:
             self.initialize()
 
-        # Stub: just return current state
-        return self._state_hv or [0.0] * self.dim
+        if input_hv is not None:
+            self._current_hv = input_hv
+
+        # Return weights (the soul's "state")
+        return self._weights.copy()
 
     def apply_plasticity(
         self,
-        state_hv: List[float],
+        state_hv: List[int],
         reward: float,
         mask: Optional[List[bool]] = None,
     ) -> None:
         """
-        Apply plasticity update.
+        Apply plasticity update with reward-modulated Hebbian learning.
 
-        In real impl: write HV + reward to FPGA, trigger plasticity engine.
+        The rule:
+        - If current HV agrees with weights AND reward > 0: strengthen
+        - If current HV disagrees with weights AND reward > 0: weaken
+        - If reward < 0: reverse the above (anti-Hebbian)
+        - If reward == 0: no change
+
+        Key fix: weights must never become 0. If accumulator crosses 0,
+        keep the previous weight until it crosses back.
         """
         if not self._initialized:
             self.initialize()
+
+        # Skip if no reward signal
+        if abs(reward) < 0.01:
+            return
+
+        # Quantize reward to int for accumulator
+        reward_int = int(reward * 100)  # Scale up for integer math
+
+        # Apply reward-modulated Hebbian update
+        for i in range(self.dim):
+            # Agreement: does current HV match weight?
+            agree = (state_hv[i] if i < len(state_hv) else 0) == self._weights[i]
+
+            # Delta: reward if agree, -reward if disagree
+            delta = reward_int if agree else -reward_int
+
+            # Update accumulator with clipping
+            self._accum[i] = max(-128, min(127, self._accum[i] + delta))
+
+            # Update weight based on accumulator sign
+            # KEY FIX: if accum is 0, keep previous weight (no dead bits!)
+            if self._accum[i] > 0:
+                self._weights[i] = 1
+            elif self._accum[i] < 0:
+                self._weights[i] = -1
+            # else: keep previous weight (accum == 0)
 
         # Track the plasticity event
         self._plasticity_events.append({
             "timestamp": datetime.utcnow().isoformat(),
             "reward": reward,
-            "hv_norm": sum(x * x for x in state_hv[:100]) ** 0.5 if state_hv else 0.0,
+            "reward_int": reward_int,
+            "accum_mean": sum(self._accum) / len(self._accum) if self._accum else 0,
         })
 
         # Keep last 100 events
@@ -202,11 +254,22 @@ class SoulStub:
 
     def get_status(self) -> Dict[str, Any]:
         """Get soul status."""
+        # Count weight distribution
+        pos_count = sum(1 for w in self._weights if w > 0) if self._weights else 0
+        neg_count = sum(1 for w in self._weights if w < 0) if self._weights else 0
+        zero_count = sum(1 for w in self._weights if w == 0) if self._weights else 0
+
         return {
             "initialized": self._initialized,
             "dim": self.dim,
             "plasticity_events": len(self._plasticity_events),
             "recent_rewards": [e["reward"] for e in self._plasticity_events[-10:]],
+            "weight_balance": {
+                "positive": pos_count,
+                "negative": neg_count,
+                "zero": zero_count,  # Should always be 0!
+            },
+            "accum_mean": sum(self._accum) / len(self._accum) if self._accum else 0,
         }
 
 
