@@ -149,6 +149,24 @@ from .field_computer import (
     FieldComputer,
     create_field_computer,
 )
+from .bridge import (
+    CardToLLMType,
+    LLMToCardType,
+    StateSummary,
+    AnomalyReport,
+    ContextQuery,
+    PolicyRequest,
+    NewPolicy,
+    ThresholdUpdate,
+    PatternDefine,
+    ReflexInstall,
+    ContextBind,
+    StateCompressor,
+    PolicyEncoder,
+    InvocationDecision,
+    SymbiosisLoop,
+    create_symbiosis_loop,
+)
 
 __all__ = [
     # Lane encoding
@@ -236,4 +254,21 @@ __all__ = [
     'Job_IdeaRouter',
     'FieldComputer',
     'create_field_computer',
+    # Card ↔ LLM Bridge
+    'CardToLLMType',
+    'LLMToCardType',
+    'StateSummary',
+    'AnomalyReport',
+    'ContextQuery',
+    'PolicyRequest',
+    'NewPolicy',
+    'ThresholdUpdate',
+    'PatternDefine',
+    'ReflexInstall',
+    'ContextBind',
+    'StateCompressor',
+    'PolicyEncoder',
+    'InvocationDecision',
+    'SymbiosisLoop',
+    'create_symbiosis_loop',
 ]
