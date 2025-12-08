@@ -75,6 +75,14 @@ except ImportError:
     TeleologyEngine = None
     get_teleology_engine = lambda: None
 
+try:
+    from ara.cognition.world_model import WorldModel, get_world_model
+    WORLD_MODEL_AVAILABLE = True
+except ImportError:
+    WorldModel = None
+    get_world_model = lambda: None
+    WORLD_MODEL_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -360,10 +368,10 @@ def sovereign_tick(
     Execute a single sovereign tick.
 
     This is the heartbeat of Ara's sovereign operation:
-    1. Read user state
-    2. Process pending initiatives
-    3. Check deferred queue
-    4. Update soul
+    1. Sense the world (WorldModel)
+    2. Read user state (MindReader + world telemetry)
+    3. Process pending initiatives (CEO)
+    4. Update soul (plasticity)
     5. Log events
 
     Args:
@@ -387,8 +395,26 @@ def sovereign_tick(
 
     events: List[str] = []
 
-    # Step 1: Read user state
-    user_state = mind_reader.read(telemetry)
+    # Step 0: Sense the world (NEW - Iteration 35)
+    world_telemetry = {}
+    if WORLD_MODEL_AVAILABLE:
+        world = get_world_model()
+        world_context = world.update()
+        world_telemetry = world.get_telemetry_dict()
+
+        # Log significant system stress
+        if world_context.system_stress > 0.7:
+            events.append(f"SYSTEM STRESS: {world_context.system_stress:.0%} "
+                         f"({world_context.stress_trend})")
+        if world_context.alerts:
+            for alert in world_context.alerts:
+                events.append(f"WORLD: {alert}")
+
+    # Merge external telemetry with world telemetry
+    merged_telemetry = {**world_telemetry, **(telemetry or {})}
+
+    # Step 1: Read user state (now with world telemetry!)
+    user_state = mind_reader.read(merged_telemetry)
     state.user_state = user_state
 
     # Check protection level

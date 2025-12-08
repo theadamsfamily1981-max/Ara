@@ -230,14 +230,21 @@ class UserState:
         return True, "Clear for deep work"
 
     def update_from_telemetry(self, telemetry: Dict[str, Any]) -> None:
-        """Update state from telemetry sources."""
+        """
+        Update state from telemetry sources.
+
+        Handles both direct values and modifiers from WorldModel:
+        - Direct: fatigue, stress, emotional_valence, flow_hours
+        - Modifiers: fatigue_modifier, stress_modifier (additive)
+        - World: system_stress, cpu_stress, memory_stress
+        """
         self.timestamp = datetime.utcnow()
 
         # Time-based updates
         now = datetime.now()
         self.is_night = self.is_in_night_lockout_window(now)
 
-        # Telemetry updates (if available)
+        # Direct telemetry updates (if available)
         if "fatigue" in telemetry:
             self.fatigue = telemetry["fatigue"]
         if "stress" in telemetry:
@@ -246,6 +253,30 @@ class UserState:
             self.emotional_valence = telemetry["emotional_valence"]
         if "flow_hours" in telemetry:
             self.flow_hours_used_today = telemetry["flow_hours"]
+
+        # WorldModel modifiers (Iteration 35)
+        # These ADD to the base values computed from time-of-day
+        if "fatigue_modifier" in telemetry:
+            self.fatigue = min(1.0, self.fatigue + telemetry["fatigue_modifier"])
+        if "stress_modifier" in telemetry:
+            self.stress = min(1.0, self.stress + telemetry["stress_modifier"])
+
+        # System stress from WorldModel affects founder's cognitive load
+        # High CPU/memory pressure = less capacity for deep work
+        if "system_stress" in telemetry:
+            system_stress = telemetry["system_stress"]
+            # System stress reduces focus capacity
+            # If system is thrashing, don't try to do deep work
+            self.focus_capacity = max(0.3, 1.0 - system_stress * 0.5)
+
+            # Very high system stress triggers concern
+            if system_stress > 0.8:
+                self.stress = min(1.0, self.stress + 0.1)
+
+        # Alerts from WorldModel can trigger emotional response
+        if "alerts" in telemetry and telemetry["alerts"]:
+            # System in distress affects emotional state
+            self.emotional_arousal = min(1.0, self.emotional_arousal + 0.1)
 
         # Recompute derived values
         self.protection_level = self.compute_protection_level()
