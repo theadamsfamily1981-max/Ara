@@ -51,9 +51,25 @@ from .kairos import (
     KairosMoment,
     KairosState,
     KairosEngine,
-    get_kairos_engine,
+    get_kairos,
     is_opportune,
 )
+
+from .stream_binding import (
+    StreamEvent,
+    ResonantStream,
+    ContextualStream,
+    get_resonant_stream,
+)
+
+from .hdc_codec import (
+    ConceptRecord,
+    HDCCodec,
+    get_hdc_codec,
+)
+
+# HSF subpackage (import directly from ara.cognition.hsf)
+from . import hsf
 
 __all__ = [
     # Teleology
@@ -71,6 +87,16 @@ __all__ = [
     'KairosMoment',
     'KairosState',
     'KairosEngine',
-    'get_kairos_engine',
+    'get_kairos',
     'is_opportune',
+    # Holographic Spike (HDC + Resonant Stream)
+    'StreamEvent',
+    'ResonantStream',
+    'ContextualStream',
+    'get_resonant_stream',
+    'ConceptRecord',
+    'HDCCodec',
+    'get_hdc_codec',
+    # HSF - Hypervector Spiking Field
+    'hsf',
 ]

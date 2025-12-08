@@ -1,24 +1,23 @@
 """
-Ara Hardware Module - FPGA and Neuromorphic Accelerators
+Hardware Module - FPGA Neuromorphic Blocks
+==========================================
 
-Includes:
-- Forest Kitten 33 SNN Fabric
-- Hardware abstraction layer
-- Emulation support for development
+RTL and HLS specifications for neuromorphic FPGA tiles.
+
+Key components:
+    spike_block/: SpikingBrain-style spiking attention tile
+    hls/: High-Level Synthesis C++ kernels
+        - spike_block_kernel.cpp: Spiking attention HLS
+        - corr_spike_hdc.cpp: CorrSpike-HDC correlation kernel
+    drivers/: Python drivers for host-FPGA communication
+
+The goal: adapt SpikingBrain/Dragon-Hatchling principles to
+FPGA fabric (Stratix-10, VU9P, etc.) as a path off the NVIDIA treadmill.
+
+Architecture:
+    - Spiking neurons with dynamic thresholds
+    - Linear attention (no full QK^T)
+    - Hebbian plasticity for on-chip learning
+    - Sparse, event-driven computation
+    - Hyperdimensional correlation (CorrSpike-HDC)
 """
-
-from ara.hardware.kitten import (
-    ForestKitten33,
-    KittenConfig,
-    KittenState,
-    KittenEmulator,
-    create_kitten,
-)
-
-__all__ = [
-    "ForestKitten33",
-    "KittenConfig",
-    "KittenState",
-    "KittenEmulator",
-    "create_kitten",
-]

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional, List, Dict, Protocol
+from typing import Any, Optional, List, Dict, Protocol, Tuple
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -133,6 +133,7 @@ class Architect:
         council: Optional[Any] = None,
         llm: Optional[LLMProtocol] = None,
         voice: Optional[Any] = None,
+        causal_miner: Optional[Any] = None,
     ):
         """
         Initialize the Architect.
@@ -141,10 +142,12 @@ class Architect:
             council: Ara's Council object (Muse, Critic, Executive, etc.)
             llm: LLM interface with .generate(prompt) -> str
             voice: Optional Voice engine with .apply_charisma()
+            causal_miner: Optional CausalPatternMiner for tool effectiveness tracking
         """
         self.council = council
         self.llm = llm
         self.voice = voice
+        self._causal_miner = causal_miner
         self.log = logging.getLogger("Architect")
 
         # Current rhetorical mode
@@ -152,6 +155,17 @@ class Architect:
 
         # Archive of visions
         self._vision_archive: List[VisionPlan] = []
+
+    @property
+    def causal_miner(self):
+        """Lazy-load causal miner if not provided."""
+        if self._causal_miner is None:
+            try:
+                from ara.meta.causal_miner import get_causal_miner
+                self._causal_miner = get_causal_miner()
+            except ImportError:
+                pass
+        return self._causal_miner
 
     # =========================================================================
     # HIGH-LEVEL VISION ARCHITECTURE
@@ -235,18 +249,18 @@ Use action verbs at the start (Research X, Design Y, Verify Z, Implement W).
         # 2. ROUTE AND SOLVE
         results: List[str] = []
 
-        for step in steps:
-            lower = step.lower()
+        # Generate context hash for causal learning
+        from ara.meta.causal_miner import hash_context
+        context_features = {
+            "task_type": "recursive_solve",
+            "problem_domain": self._infer_domain(problem),
+            "step_count": len(steps),
+        }
+        context_hash = hash_context(context_features)
 
-            # Route based on keywords
-            if any(k in lower for k in ("research", "explore", "brainstorm", "discover")):
-                role = "MUSE"
-            elif any(k in lower for k in ("verify", "validate", "check", "test", "review")):
-                role = "CRITIC"
-            elif any(k in lower for k in ("design", "architect", "plan")):
-                role = "ARCHITECT"
-            else:
-                role = "EXECUTIVE"
+        for step in steps:
+            # Use causal routing (checks miner first, falls back to keywords)
+            role = self.recommend_persona_for_step(step, context_hash)
 
             self.log.info(f"🏛️ Routing to {role}: {step[:40]}...")
 
@@ -261,6 +275,17 @@ describe the exact commands, code, or changes you would make.
 Be concrete and actionable.
 """
             )
+
+            # Log outcome for causal learning
+            # Heuristic: result is considered successful if it has content
+            success = len(result.strip()) > 50
+            self.log_tool_outcome(
+                tool=role.lower(),
+                context_hash=context_hash,
+                context_features=context_features,
+                success=success,
+            )
+
             results.append(f"### {step}\n{result.strip()}\n")
 
         # 3. SYNTHESIZE
@@ -437,6 +462,225 @@ Be concise but complete.
         except ImportError as e:
             self.log.warning(f"Cannot create Idea from vision: {e}")
             return None
+
+    # =========================================================================
+    # CAUSAL INTELLIGENCE - KNOWING WHAT WORKS WHERE
+    # =========================================================================
+
+    def get_tool_recommendations(
+        self,
+        context_hash: str,
+        task_description: Optional[str] = None,
+        exclude_tools: Optional[List[str]] = None,
+    ) -> List[Tuple[str, float]]:
+        """
+        Get ranked tool recommendations based on causal effectiveness.
+
+        Uses CausalPatternMiner to understand which tools actually help
+        in this context, not just which tools are "generally good."
+
+        Args:
+            context_hash: Hash representing the task context
+            task_description: Optional description for logging
+            exclude_tools: Tools to exclude from recommendations
+
+        Returns:
+            List of (tool_name, causal_delta) sorted by effectiveness
+        """
+        if self.causal_miner is None:
+            self.log.debug("Architect: No causal miner available")
+            return []
+
+        try:
+            rankings = self.causal_miner.rank_tools_for_context(context_hash)
+
+            # Filter exclusions
+            if exclude_tools:
+                exclude_set = set(exclude_tools)
+                rankings = [(t, e) for t, e in rankings if t not in exclude_set]
+
+            if rankings and task_description:
+                top_tool, top_score = rankings[0][0], rankings[0][1].delta
+                self.log.info(
+                    f"🏛️ ARCHITECT: For '{task_description[:30]}...' "
+                    f"recommending {top_tool} (Δ={top_score:.2f})"
+                )
+
+            return [(t, e.delta) for t, e in rankings]
+
+        except Exception as e:
+            self.log.warning(f"Architect: Error getting recommendations: {e}")
+            return []
+
+    def recommend_persona_for_step(
+        self,
+        step: str,
+        context_hash: Optional[str] = None,
+    ) -> str:
+        """
+        Recommend which persona should handle a step.
+
+        First checks causal knowledge (if available), then falls back
+        to keyword heuristics.
+
+        Args:
+            step: The step description
+            context_hash: Optional context for causal lookup
+
+        Returns:
+            Persona name (MUSE, CRITIC, EXECUTIVE, ARCHITECT)
+        """
+        # If we have causal data, check it first
+        if context_hash and self.causal_miner:
+            recommendations = self.get_tool_recommendations(context_hash, step)
+            if recommendations:
+                # Map tool names to personas
+                tool_to_persona = {
+                    "muse": "MUSE",
+                    "critic": "CRITIC",
+                    "executive": "EXECUTIVE",
+                    "architect": "ARCHITECT",
+                    "nova": "MUSE",  # Nova is a discovery tool
+                    "scientist": "CRITIC",  # Scientist verifies
+                }
+
+                for tool, delta in recommendations:
+                    tool_lower = tool.lower()
+                    if delta > 0 and tool_lower in tool_to_persona:
+                        self.log.debug(
+                            f"Architect: Causal routing '{step[:30]}' to "
+                            f"{tool_to_persona[tool_lower]} (Δ={delta:.2f})"
+                        )
+                        return tool_to_persona[tool_lower]
+
+        # Fallback to keyword heuristics
+        lower = step.lower()
+
+        if any(k in lower for k in ("research", "explore", "brainstorm", "discover", "ideate")):
+            return "MUSE"
+        elif any(k in lower for k in ("verify", "validate", "check", "test", "review", "audit")):
+            return "CRITIC"
+        elif any(k in lower for k in ("design", "architect", "plan", "structure")):
+            return "ARCHITECT"
+        else:
+            return "EXECUTIVE"
+
+    def log_tool_outcome(
+        self,
+        tool: str,
+        context_hash: str,
+        context_features: Dict[str, Any],
+        success: bool,
+    ) -> None:
+        """
+        Log a tool outcome for causal learning.
+
+        Call this after a tool/persona completes a task so the
+        Architect can learn what works where.
+
+        Args:
+            tool: Tool or persona name
+            context_hash: Context hash
+            context_features: Context features dict
+            success: Whether the tool succeeded
+        """
+        if self.causal_miner is None:
+            return
+
+        try:
+            from ara.meta.causal_miner import ToolOutcome
+
+            outcome = ToolOutcome(
+                tool=tool,
+                context_hash=context_hash,
+                context_features=context_features,
+                success=success,
+            )
+            self.causal_miner.log_outcome(outcome)
+
+            self.log.debug(
+                f"Architect: Logged outcome for {tool} in {context_hash}: "
+                f"{'success' if success else 'failure'}"
+            )
+
+        except Exception as e:
+            self.log.warning(f"Architect: Error logging outcome: {e}")
+
+    def get_causal_insights(self) -> List[str]:
+        """
+        Get natural language insights about tool effectiveness.
+
+        Returns what the Architect has learned about which tools
+        work in which contexts.
+        """
+        if self.causal_miner is None:
+            return ["No causal learning data available yet."]
+
+        try:
+            return self.causal_miner.generate_insights()
+        except Exception as e:
+            self.log.warning(f"Architect: Error generating insights: {e}")
+            return [f"Error generating insights: {e}"]
+
+    def analyze_session(self, transcript: List[Dict[str, Any]], session_id: str = "anon") -> Dict[str, Any]:
+        """
+        Analyze a session transcript and extract learnings.
+
+        Uses SessionGraph to understand the session structure,
+        then logs outcomes to the CausalPatternMiner.
+
+        Args:
+            transcript: List of session events
+            session_id: Session identifier
+
+        Returns:
+            Analysis results including patterns found
+        """
+        try:
+            from ara.academy.session_graph import SessionGraphBuilder
+
+            builder = SessionGraphBuilder()
+            graph = builder.build_from_transcript(session_id, transcript)
+
+            # Extract context
+            context_features = graph.extract_context_features()
+            context_hash = graph.context_hash()
+
+            # Log tool outcomes to causal miner
+            if self.causal_miner:
+                self.causal_miner.log_from_session_graph(graph)
+
+            # Find patterns
+            retry_patterns = graph.find_retry_patterns()
+            socratic_patterns = graph.find_socratic_loops()
+
+            analysis = {
+                "session_id": session_id,
+                "context_hash": context_hash,
+                "context_features": context_features,
+                "node_count": len(graph.nodes),
+                "edge_count": len(graph.edges),
+                "tool_calls": len(graph.tool_calls()),
+                "retry_patterns": len(retry_patterns),
+                "socratic_loops": len(socratic_patterns),
+                "patterns": {
+                    "retries": retry_patterns[:5],  # Top 5
+                    "socratic": socratic_patterns[:5],
+                },
+            }
+
+            self.log.info(
+                f"🏛️ ARCHITECT: Analyzed session {session_id}: "
+                f"{analysis['tool_calls']} tool calls, "
+                f"{analysis['retry_patterns']} retries, "
+                f"{analysis['socratic_loops']} socratic loops"
+            )
+
+            return analysis
+
+        except ImportError as e:
+            self.log.warning(f"Architect: Cannot analyze session: {e}")
+            return {"error": str(e)}
 
     # =========================================================================
     # INTERNAL: DERIVATION METHODS
@@ -705,6 +949,27 @@ Be concrete and actionable.
                 if step:
                     steps.append(step)
         return steps
+
+    def _infer_domain(self, problem: str) -> str:
+        """Infer the problem domain from text for context hashing."""
+        lower = problem.lower()
+
+        # Domain keywords
+        domains = {
+            "code": ["code", "implement", "function", "class", "bug", "fix", "refactor"],
+            "architecture": ["architect", "design", "system", "structure", "pattern"],
+            "research": ["research", "explore", "investigate", "understand", "learn"],
+            "data": ["data", "database", "sql", "query", "analytics", "ml", "model"],
+            "infra": ["deploy", "server", "docker", "kubernetes", "ci", "cd", "pipeline"],
+            "ui": ["ui", "ux", "frontend", "react", "component", "style", "css"],
+            "api": ["api", "endpoint", "rest", "graphql", "integration"],
+        }
+
+        for domain, keywords in domains.items():
+            if any(kw in lower for kw in keywords):
+                return domain
+
+        return "general"
 
     # =========================================================================
     # INTERNAL: FORMATTING

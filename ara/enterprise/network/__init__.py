@@ -62,7 +62,15 @@ from .monitor import (
     get_network_monitor,
 )
 
+from .aura_monitor import (
+    FleetSnapshot,
+    AnomalyPattern,
+    AuraMonitor,
+    get_aura_monitor,
+)
+
 __all__ = [
+    # Core monitor
     'DeviceStatus',
     'AlertSeverity',
     'NetworkAlert',
@@ -74,4 +82,9 @@ __all__ = [
     'MockDeviceClient',
     'NetworkMonitor',
     'get_network_monitor',
+    # Holographic aura (Iteration 31)
+    'FleetSnapshot',
+    'AnomalyPattern',
+    'AuraMonitor',
+    'get_aura_monitor',
 ]

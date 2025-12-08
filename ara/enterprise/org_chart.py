@@ -138,10 +138,30 @@ class OrgChart:
                 id="worker-gpu",
                 hostname="192.168.1.200",  # your 3090 / cathedral muscle
                 role=EmployeeRole.WORKER,
-                capabilities=["gpu:3090", "cuda", "python"],
+                capabilities=["gpu:3090", "cuda", "python", "binary_correlator", "binary_frontend"],
                 allow_sudo=False,
                 allow_internet=False,      # optional; keep prod constrained
                 labels={"tier": "prod"},
+            )
+        )
+
+        # Binary/neuromorphic co-processor (FPGA or dedicated box)
+        # This is the cheap, massive 1-bit neuron farm
+        self.hire(
+            Employee(
+                id="worker-bnn",
+                hostname="192.168.1.201",  # neuromorphic co-processor / FPGA host
+                role=EmployeeRole.WORKER,
+                capabilities=[
+                    "binary_correlator",    # XNOR + popcount
+                    "binary_frontend",      # Full encoder
+                    "binary_memory",        # Associative memory
+                    "binary_fpga",          # FPGA-accelerated
+                    "python",
+                ],
+                allow_sudo=False,
+                allow_internet=False,
+                labels={"tier": "prod", "subsystem": "neuromorphic"},
             )
         )
 

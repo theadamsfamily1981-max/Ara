@@ -568,7 +568,7 @@ class Factory:
         if target_stage == PipelineStage.PROTOTYPE:
             # Research → Prototype: Must have spent some time
             checks["has_research_time"] = project.days_in_stage() >= 0.1  # At least 2.4 hours
-            checks["has_notes"] = len(project.transitions) > 0 or True  # Be lenient
+            checks["has_notes"] = True  # Lenient for now - first transition has no history
 
         elif target_stage == PipelineStage.PRODUCTION:
             # Prototype → Production: Must have a working prototype

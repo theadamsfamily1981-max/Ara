@@ -99,6 +99,13 @@ from .dispatcher import (
     get_dispatcher,
 )
 
+from .jobs import (
+    binary_encode_job,
+    binary_query_job,
+    binary_memory_store_job,
+    BINARY_CAPABILITIES,
+)
+
 
 __all__ = [
     # Treasury (CFO)
@@ -142,4 +149,9 @@ __all__ = [
     "get_org_chart",
     "Dispatcher",
     "get_dispatcher",
+    # Jobs
+    "binary_encode_job",
+    "binary_query_job",
+    "binary_memory_store_job",
+    "BINARY_CAPABILITIES",
 ]

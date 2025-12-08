@@ -87,6 +87,8 @@ class InterfaceStats:
     admin_status: str          # "up", "down"
     in_octets: int = 0
     out_octets: int = 0
+    in_packets: int = 0        # Packet counts for proper error rate
+    out_packets: int = 0
     in_errors: int = 0
     out_errors: int = 0
     in_discards: int = 0
@@ -254,6 +256,8 @@ class MockDeviceClient:
                 "admin_status": "up",
                 "in_octets": 1_000_000_000,
                 "out_octets": 500_000_000,
+                "in_packets": 1_000_000,
+                "out_packets": 500_000,
                 "in_errors": 0,
                 "out_errors": 0,
                 "speed_mbps": 1000,
@@ -264,6 +268,8 @@ class MockDeviceClient:
                 "admin_status": "up",
                 "in_octets": 2_000_000_000,
                 "out_octets": 1_500_000_000,
+                "in_packets": 2_000_000,
+                "out_packets": 1_500_000,
                 "in_errors": 5,
                 "out_errors": 0,
                 "speed_mbps": 1000,
@@ -274,6 +280,8 @@ class MockDeviceClient:
                 "admin_status": "up",
                 "in_octets": 0,
                 "out_octets": 0,
+                "in_packets": 0,
+                "out_packets": 0,
                 "in_errors": 0,
                 "out_errors": 0,
                 "speed_mbps": 1000,
@@ -591,6 +599,8 @@ class NetworkMonitor:
                 admin_status=iface_raw.get("admin_status", "unknown"),
                 in_octets=iface_raw.get("in_octets", 0),
                 out_octets=iface_raw.get("out_octets", 0),
+                in_packets=iface_raw.get("in_packets", 0),
+                out_packets=iface_raw.get("out_packets", 0),
                 in_errors=iface_raw.get("in_errors", 0),
                 out_errors=iface_raw.get("out_errors", 0),
                 in_discards=iface_raw.get("in_discards", 0),
@@ -611,21 +621,32 @@ class NetworkMonitor:
                     detail=f"{iface.name} is admin-up but oper-down",
                 ))
 
-            # Error rate check
-            total_octets = iface.in_octets + iface.out_octets
+            # Error rate check - use packet counts for meaningful percentage
+            total_packets = iface.in_packets + iface.out_packets
             total_errors = iface.in_errors + iface.out_errors
-            if total_octets > 0:
-                error_rate = total_errors / total_octets
+            if total_packets > 0:
+                # Error rate as percentage of packets (not bytes!)
+                error_rate = total_errors / total_packets
                 if error_rate > self.THRESHOLDS["interface_error_rate"]:
                     alerts.append(NetworkAlert(
                         severity=AlertSeverity.WARNING,
                         device_id=device_id,
                         category="interface",
                         title=f"Interface Errors: {iface.name}",
-                        detail=f"{iface.name} has {total_errors} errors ({error_rate:.2%})",
+                        detail=f"{iface.name} has {total_errors} errors ({error_rate:.2%} of packets)",
                         metric_value=error_rate,
                         threshold=self.THRESHOLDS["interface_error_rate"],
                     ))
+            elif total_errors > 0:
+                # No packet count but errors exist - alert on raw count
+                alerts.append(NetworkAlert(
+                    severity=AlertSeverity.WARNING,
+                    device_id=device_id,
+                    category="interface",
+                    title=f"Interface Errors: {iface.name}",
+                    detail=f"{iface.name} has {total_errors} errors (packet count unavailable)",
+                    metric_value=float(total_errors),
+                ))
 
         # Process BGP neighbors
         bgp_neighbors = []

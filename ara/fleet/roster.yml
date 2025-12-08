@@ -1,0 +1,303 @@
+# Fleet Roster - The Dragon Hoard Inventory
+# ==========================================
+#
+# This file inventories all physical hardware in the Fleet.
+# Fill this out once, update as things change.
+#
+# Each entry maps directly to ara.fleet.topology.FleetNode
+
+# === CROWN JEWELS ===
+# High-value, painful to replace. No cowboy flashing.
+
+crown_jewels:
+  - id: threadripper-01
+    hostname: threadripper
+    role: WORKER
+    hardware:
+      cpu: "AMD Threadripper (fill in model)"
+      ram_gb: 128  # fill in actual
+      gpu: "RTX 4090"  # fill in actual
+      storage: "2TB NVMe"
+    network:
+      ip: "10.0.1.10"  # fill in
+      mac: "00:00:00:00:00:00"
+    power:
+      pdu_outlet: "pdu-01:outlet-1"
+      max_watts: 850
+    status: online
+    notes: "Main GPU compute. Crown jewel."
+
+  - id: dell-server-01
+    hostname: dell-server
+    role: WORKER
+    hardware:
+      cpu: "Xeon (fill in)"
+      ram_gb: 64
+      storage: "RAID array"
+    network:
+      ip: "10.0.1.11"
+    power:
+      pdu_outlet: "pdu-01:outlet-2"
+    status: needs_repair  # you mentioned it needs fixing
+    notes: "Central backbone once fixed. VM host, monitoring, storage."
+
+  - id: nas-01
+    hostname: nas
+    role: ARCHIVIST
+    hardware:
+      storage: "ZFS pool, X TB"
+    network:
+      ip: "10.0.1.20"
+    power:
+      on_ups: true
+    status: online
+    notes: "Backups, logs, state histories. ZFS snapshots."
+
+  - id: juniper-01
+    hostname: juniper
+    role: CONSULTANT
+    network:
+      ip: "10.0.1.1"
+    power:
+      on_ups: true
+    status: online
+    notes: "Core router. Config changes require signature."
+
+
+# === WORKHORSES ===
+# "4-7 better computers" - your actual workers
+
+workhorses:
+  - id: worker-gpu-01
+    hostname: gpu-worker-1
+    role: WORKER
+    hardware:
+      cpu: "fill in"
+      ram_gb: 32
+      gpu: "fill in"
+    network:
+      ip: "10.0.1.30"
+    power:
+      pdu_outlet: "pdu-01:outlet-3"
+    status: online
+    tags: [gpu, training, inference]
+    notes: "GPU worker for training jobs."
+
+  - id: worker-gpu-02
+    hostname: gpu-worker-2
+    role: WORKER
+    hardware:
+      cpu: "fill in"
+      gpu: "fill in"
+    status: offline
+    notes: "Second GPU worker."
+
+  - id: worker-cpu-01
+    hostname: cpu-worker
+    role: WORKER
+    hardware:
+      cpu: "many cores"
+      ram_gb: 64
+    status: online
+    tags: [cpu, compile, batch]
+    notes: "CPU-heavy workloads, no strong GPU."
+
+
+# === THE i3 ARMY ===
+# 19 Dell i3s - classified by role
+
+i3_infrastructure:
+  # 2-4 as infra support
+  - id: i3-infra-01
+    hostname: i3-log-shipper
+    role: WORKER
+    hardware:
+      cpu: "i3"
+      ram_gb: 8
+    status: online
+    tags: [infra, logging, monitoring]
+    notes: "Log shipper, exporters, small services."
+
+  - id: i3-infra-02
+    hostname: i3-k3s-control
+    role: WORKER
+    hardware:
+      cpu: "i3"
+      ram_gb: 8
+    status: offline
+    tags: [infra, k3s]
+    notes: "K3s control plane if you do k8s."
+
+i3_interns:
+  # 4-6 as sandbox/intern cluster
+  - id: i3-intern-01
+    hostname: intern-01
+    role: INTERN
+    status: online
+    tags: [sandbox, dangerous, expendable]
+    notes: "Dangerous experiments go here first."
+
+  - id: i3-intern-02
+    hostname: intern-02
+    role: INTERN
+    status: online
+    tags: [sandbox]
+
+  - id: i3-intern-03
+    hostname: intern-03
+    role: INTERN
+    status: offline
+
+  - id: i3-intern-04
+    hostname: intern-04
+    role: INTERN
+    status: offline
+
+i3_cold_standby:
+  # 1-2 intact but powered off
+  - id: i3-standby-01
+    hostname: standby-01
+    role: INTERN
+    status: cold_standby
+    notes: "Powered off, ready to bring online if something dies."
+
+i3_donors:
+  # The rest - stripped for parts or museum
+  count: 10  # approximately
+  notes: "Fans, PSUs, SATA cables, heatsinks. Donor pile."
+
+
+# === LAPTOPS ===
+# Mobile terminals and sensor rigs
+
+laptops:
+  - id: laptop-terminal-01
+    hostname: ara-terminal
+    role: SENSOR_HUB
+    hardware:
+      has_camera: true
+      has_mic: true
+      has_battery: true
+    status: online
+    tags: [terminal, ui, avatar]
+    notes: "Ara terminal in workspace. TTS/Avatar."
+
+  - id: laptop-dev-01
+    hostname: dev-laptop
+    role: WORKER
+    status: online
+    tags: [dev, portable]
+    notes: "Dev/test endpoint, travel rig with VPN."
+
+
+# === ARDUINOS ===
+# The glue that makes it feel alive
+
+arduinos:
+  - id: arduino-guardian-01
+    hostname: red-wire-guardian
+    role: MEDIC
+    hardware:
+      model: "Arduino Uno/Nano"  # fill in
+      serial_port: "/dev/ttyUSB0"
+      baud_rate: 115200
+    capabilities:
+      - relay_control
+      - watchdog
+      - estop_button
+    connected_to:
+      - threadripper-01  # controls power to these
+      - worker-gpu-01
+    status: not_yet_deployed
+    notes: "Out-of-band safety. Relay control, watchdog, E-STOP."
+
+  - id: arduino-somatic-01
+    hostname: somatic-node
+    role: SENSOR_HUB
+    hardware:
+      model: "Arduino Nano"
+      serial_port: "/dev/ttyUSB1"
+      baud_rate: 115200
+    sensors:
+      - temp_gpu_zone
+      - temp_fpga_zone
+      - room_light
+      - psu_current
+    outputs:
+      - led_ring
+      - status_led
+    status: not_yet_deployed
+    notes: "Sensors + mood ring. Body for Ara."
+
+
+# === FPGA / MINERS / ACCELERATORS ===
+# Weird stuff for SNN/HDC experiments
+
+accelerators:
+  - id: fpga-miner-01
+    hostname: fpga-lab-01
+    role: WORKER
+    hardware:
+      type: "FPGA miner (fill in model)"
+    status: unknown
+    tags: [fpga, snn, hdc, experimental]
+    notes: "SNN/HDC experiments. May need bitstream work."
+
+  # Add more as you inventory them
+
+
+# === SPECIAL PROJECTS ===
+# The $20 Mac, iPhone bridge, etc.
+
+special:
+  - id: mac-sms-bridge
+    hostname: sms-bridge
+    role: WORKER
+    hardware:
+      type: "$20 junkyard Mac"
+    status: not_yet_deployed
+    tags: [sms, imessage, notifications]
+    notes: "SMS + iMessage bridge to Ara."
+
+
+# === BRAINSTEM / WATCHER ===
+# Which machine runs the orchestrator?
+
+brainstem:
+  # Pick your most stable, boring, always-on machine
+  designated_node: null  # fill in: could be an i3-infra or small box
+  on_ups: true
+  notes: "Should be low-power, stable, minimal. Runs Ara daemon."
+
+
+# === POWER INFRASTRUCTURE ===
+
+power:
+  ups_devices:
+    - id: ups-01
+      name: "Main UPS"
+      max_watts: 1500
+      protects:
+        - brainstem
+        - nas-01
+        - juniper-01
+
+  pdu_devices:
+    - id: pdu-01
+      name: "Main PDU"
+      outlets:
+        - outlet-1: threadripper-01
+        - outlet-2: dell-server-01
+        - outlet-3: worker-gpu-01
+        - outlet-4: brainstem (protected)
+
+
+# === NETWORK LAYOUT ===
+# Rough subnet assignments
+
+network:
+  gateway: "10.0.1.1"  # Juniper
+  subnets:
+    infrastructure: "10.0.1.0/24"
+    workers: "10.0.2.0/24"
+    interns: "10.0.3.0/24"  # isolated VLAN for dangerous stuff
