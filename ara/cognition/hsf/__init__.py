@@ -98,6 +98,23 @@ from .episode import (
     ReflexScore,
     HomeostasisMiner,
 )
+from .counterfactual import (
+    ChangeType,
+    ConfigDelta,
+    ConfigScenario,
+    ConfigEncoder,
+    LoadTrace,
+    FieldDynamics,
+    GhostReplay,
+    ReplayResult,
+)
+from .dreamforge import (
+    ScenarioArchetype,
+    DreamOutcome,
+    TopologySketcher,
+    FieldSimulator,
+    ScenarioMarket,
+)
 
 __all__ = [
     # Lane encoding
@@ -139,4 +156,19 @@ __all__ = [
     'EpisodeRecorder',
     'ReflexScore',
     'HomeostasisMiner',
+    # Counterfactual (Iteration 33)
+    'ChangeType',
+    'ConfigDelta',
+    'ConfigScenario',
+    'ConfigEncoder',
+    'LoadTrace',
+    'FieldDynamics',
+    'GhostReplay',
+    'ReplayResult',
+    # Dreamforge (Iteration 33)
+    'ScenarioArchetype',
+    'DreamOutcome',
+    'TopologySketcher',
+    'FieldSimulator',
+    'ScenarioMarket',
 ]
