@@ -1,0 +1,34 @@
+# =============================================================================
+# Ara VPN POP Ansible Inventory
+# =============================================================================
+# Copy to hosts.ini and fill in with actual POP IPs from Terraform outputs.
+#
+# Usage:
+#   cp hosts.ini.example hosts.ini
+#   # Edit hosts.ini with actual IPs
+#   ansible-playbook -i hosts.ini vpn_pop.yml
+# =============================================================================
+
+[ara_vpn_pops]
+# Format: <name> ansible_host=<ip> ansible_user=ubuntu
+# pop-us-east ansible_host=1.2.3.4 ansible_user=ubuntu
+# pop-eu-west ansible_host=5.6.7.8 ansible_user=ubuntu
+# pop-ap-tokyo ansible_host=9.10.11.12 ansible_user=ubuntu
+
+[ara_vpn_pops:vars]
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+# WireGuard configuration
+wg_interface=wg0
+wg_port=51820
+wg_network=10.42.0.0/24
+
+# OpenVPN (optional, disabled by default)
+enable_openvpn=false
+ovpn_network=10.43.0.0/24
+
+# Monitoring
+enable_prometheus=true
+node_exporter_port=9100
+wg_exporter_port=9586

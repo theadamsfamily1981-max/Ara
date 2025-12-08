@@ -1,0 +1,82 @@
+{
+  "name": "sb852_stratix10_fpga",
+  "vendor_id": "0x8086",
+  "device_id": "0xbcf1",
+  "subsystem_vendor_id": "0x8086",
+  "subsystem_device_id": "0x0000",
+  "class_code": "0x120000",
+  "revision": "0x01",
+  "bars": [
+    {
+      "index": 0,
+      "size": 65536,
+      "type": "mmio",
+      "role": "control",
+      "prefetchable": false
+    },
+    {
+      "index": 2,
+      "size": 268435456,
+      "type": "mmio",
+      "role": "dma_window",
+      "prefetchable": true
+    }
+  ],
+  "msix": {
+    "vectors": 8,
+    "q_pairs": 4,
+    "table_bar": 0,
+    "pba_bar": 0
+  },
+  "capabilities": {
+    "pcie_cap": true,
+    "aer": true,
+    "sriov": false,
+    "resizable_bar": true,
+    "ltr": true,
+    "ptm": false
+  },
+  "features": [
+    {
+      "name": "dma0",
+      "type": "axi_dma",
+      "bar": 2,
+      "offset": 0,
+      "length": 65536,
+      "version": "1.0"
+    },
+    {
+      "name": "htc0",
+      "type": "xnor_cam",
+      "bar": 0,
+      "offset": 4096,
+      "length": 8192,
+      "version": "1.0",
+      "params": {
+        "dim": 173,
+        "rows": 2048
+      }
+    },
+    {
+      "name": "ctrl0",
+      "type": "control",
+      "bar": 0,
+      "offset": 0,
+      "length": 4096,
+      "version": "1.0"
+    }
+  ],
+  "power": {
+    "d0_supported": true,
+    "d3hot_supported": true,
+    "d3cold_supported": false,
+    "aspm_l0s": false,
+    "aspm_l1": false
+  },
+  "link": {
+    "max_speed": "gen4",
+    "max_width": 16,
+    "target_speed": "gen4",
+    "target_width": 16
+  }
+}
