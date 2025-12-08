@@ -774,9 +774,43 @@ class AraCognitiveBackend(AIBackend):
         self._running = False
 
         if self.volition_loop is not None:
-            await self.volition_loop.stop()
+            try:
+                # Use timeout to prevent indefinite blocking on stop
+                await asyncio.wait_for(
+                    self.volition_loop.stop(),
+                    timeout=5.0  # 5 second timeout for graceful stop
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Volition loop stop timed out, forcing shutdown")
+            except Exception as e:
+                logger.warning(f"Error stopping volition loop: {e}")
 
         logger.info("Background volition loop stopped")
+
+    async def cleanup(self):
+        """
+        Async cleanup of all resources.
+
+        Call this before destroying the backend to ensure proper shutdown.
+        """
+        # Stop volition loop
+        await self.stop_background_volition_loop()
+
+        # Cleanup memory systems
+        if self.memory is not None:
+            try:
+                # Persist any pending episodes
+                self.memory.flush()
+            except Exception as e:
+                logger.warning(f"Memory flush failed during cleanup: {e}")
+
+        if self.cxl is not None:
+            try:
+                self.cxl.flush()
+            except Exception as e:
+                logger.warning(f"CXL flush failed during cleanup: {e}")
+
+        logger.info("Ara Cognitive Backend cleanup complete")
 
     def _on_volition_intent(self, intent):
         """Callback when volition loop generates an intent."""

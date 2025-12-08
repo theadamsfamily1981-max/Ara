@@ -7,6 +7,23 @@ Not everything should be internalized. This module defines:
 
 The goal: Ara builds local skills for repetitive, low-risk tasks,
 and keeps using teachers for novel, complex, or safety-critical work.
+
+ITERATION 27 UPDATE (The Sovereign):
+=====================================
+Skills are now scored not just by frequency × success, but by:
+
+    Score = base_productivity × vision_factor
+
+Where:
+    base_productivity = normalized_frequency × success_rate
+    vision_factor = 1.0 + teleology_alignment
+
+This means:
+- "Thermal Recovery" (rare but critical) gets prioritized
+- "Clear Cache" (frequent but mundane) gets deprioritized
+- Cathedral/antifragility skills get hard floors even if seen once
+
+The TeleologyEngine is now wired into all internalization decisions.
 """
 
 from __future__ import annotations
@@ -17,6 +34,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
+
+# Import the TeleologyEngine for vision-aware scoring
+from ara.cognition.teleology_engine import TeleologyEngine, get_teleology_engine
 
 logger = logging.getLogger(__name__)
 
@@ -443,10 +463,222 @@ class CurriculumManager:
 
 
 # =============================================================================
+# Vision-Aware Internalization (Iteration 27: The Sovereign)
+# =============================================================================
+
+@dataclass
+class SkillCandidate:
+    """A candidate skill being evaluated for internalization."""
+
+    name: str
+    description: str
+
+    # Usage statistics
+    frequency_per_week: float = 0.0
+    total_examples: int = 0
+    success_rate: float = 0.0
+
+    # Classification
+    tags: Dict[str, float] = field(default_factory=dict)  # tag -> relevance
+    risk_level: str = "medium"
+    intent: str = ""
+    keywords: List[str] = field(default_factory=list)
+
+    # Teacher info
+    teachers_with_pattern: int = 0
+    primary_teacher: Optional[str] = None
+
+
+class VisionAwareInternalization:
+    """
+    Vision-aware internalization scoring.
+
+    This replaces the old frequency × success formula with:
+
+        Score = base_productivity × vision_factor × (1 + alignment_floor)
+
+    Where:
+        - base_productivity = min(1.0, freq/7) × success_rate
+        - vision_factor = 1.0 + strategic_priority
+        - alignment_floor = hard minimum for critical skills
+
+    The key insight: A skill that serves the Cathedral (even if rare)
+    should be prioritized over a skill that's just frequent.
+    """
+
+    def __init__(
+        self,
+        teleology: Optional[TeleologyEngine] = None,
+        curriculum: Optional[Curriculum] = None,
+        base_threshold: float = 0.5,
+    ):
+        """
+        Initialize vision-aware internalization.
+
+        Args:
+            teleology: TeleologyEngine for alignment scoring
+            curriculum: Traditional curriculum for avoidance rules
+            base_threshold: Minimum score to internalize
+        """
+        self.teleology = teleology or get_teleology_engine()
+        self.curriculum = curriculum
+        self.base_threshold = base_threshold
+
+    def compute_score(self, candidate: SkillCandidate) -> Dict[str, Any]:
+        """
+        Compute internalization score for a skill candidate.
+
+        Returns detailed breakdown including:
+        - final_score: The overall score
+        - should_internalize: Boolean decision
+        - classification: sovereign/strategic/operational/secretary
+        - breakdown: Component scores
+        """
+        # Normalize frequency (7+ times/week = saturated)
+        norm_freq = min(1.0, candidate.frequency_per_week / 7.0)
+
+        # Base productivity: how often × how well
+        base_productivity = norm_freq * candidate.success_rate
+
+        # Get alignment from teleology
+        alignment = self.teleology.alignment_score(candidate.tags)
+        strategic_priority = self.teleology.strategic_priority(candidate.tags)
+        classification = self.teleology.classify_skill(candidate.tags)
+
+        # Vision factor: boosts (or dampens) based on alignment
+        # Neutral (0.5) = no change, aligned (1.0) = 2× boost
+        vision_factor = 1.0 + strategic_priority
+
+        # Calculate raw score
+        raw_score = base_productivity * vision_factor
+
+        # Apply alignment floor for critical skills
+        # If a skill is highly aligned (sovereign/strategic) and has
+        # decent success rate, force it above threshold
+        alignment_floor = 0.0
+        if classification in ("sovereign", "strategic"):
+            if candidate.success_rate >= 0.6:
+                # Rare but critical = hard floor
+                alignment_floor = self.base_threshold * 1.1
+            elif candidate.success_rate >= 0.4:
+                alignment_floor = self.base_threshold * 0.8
+
+        # Final score (for threshold comparison)
+        final_score = max(raw_score, alignment_floor)
+
+        # Priority score (for sorting/ranking)
+        # Tier bonus ensures sovereign skills sort above secretary skills
+        tier_bonus = {
+            "sovereign": 10.0,    # Critical infrastructure always top priority
+            "strategic": 5.0,     # Research, hardware mastery
+            "operational": 2.0,   # Automation, organization
+            "secretary": 0.0,     # Admin, mundane - no bonus
+        }.get(classification, 0.0)
+        priority_score = final_score + tier_bonus
+
+        # Check avoidance rules if curriculum provided
+        avoidance_reason = None
+        if self.curriculum:
+            for rule in self.curriculum.avoid_rules:
+                if rule.matches(
+                    list(candidate.tags.keys()),
+                    candidate.intent,
+                    candidate.keywords
+                ):
+                    avoidance_reason = f"{rule.name}: {rule.reason}"
+                    break
+
+        # Decision
+        should_internalize = (
+            final_score >= self.base_threshold and
+            avoidance_reason is None
+        )
+
+        return {
+            "final_score": round(final_score, 3),
+            "priority_score": round(priority_score, 3),  # Use for sorting
+            "should_internalize": should_internalize,
+            "classification": classification,
+            "avoidance_reason": avoidance_reason,
+            "breakdown": {
+                "frequency_per_week": candidate.frequency_per_week,
+                "normalized_frequency": round(norm_freq, 3),
+                "success_rate": candidate.success_rate,
+                "base_productivity": round(base_productivity, 3),
+                "alignment": round(alignment, 3),
+                "strategic_priority": round(strategic_priority, 3),
+                "vision_factor": round(vision_factor, 3),
+                "alignment_floor": round(alignment_floor, 3),
+                "raw_score": round(raw_score, 3),
+                "tier_bonus": tier_bonus,
+            },
+        }
+
+    def should_internalize(self, candidate: SkillCandidate) -> tuple[bool, str]:
+        """
+        Simplified interface: should we internalize this skill?
+
+        Returns:
+            (should_internalize, reason)
+        """
+        result = self.compute_score(candidate)
+
+        if result["avoidance_reason"]:
+            return False, f"Avoided: {result['avoidance_reason']}"
+
+        if result["should_internalize"]:
+            return True, (
+                f"Score {result['final_score']:.2f} >= threshold "
+                f"({result['classification']}, priority={result['breakdown']['strategic_priority']:.2f})"
+            )
+        else:
+            return False, (
+                f"Score {result['final_score']:.2f} < threshold "
+                f"({result['classification']})"
+            )
+
+    def rank_candidates(
+        self,
+        candidates: List[SkillCandidate],
+    ) -> List[tuple[SkillCandidate, Dict[str, Any]]]:
+        """
+        Rank multiple candidates by internalization priority.
+
+        Returns list of (candidate, score_result) sorted by final_score descending.
+        """
+        scored = [(c, self.compute_score(c)) for c in candidates]
+        return sorted(scored, key=lambda x: x[1]["final_score"], reverse=True)
+
+    def compare_old_vs_new(self, candidate: SkillCandidate) -> Dict[str, Any]:
+        """
+        Compare old (frequency × success) vs new (vision-aware) scoring.
+
+        Useful for understanding how the new system changes priorities.
+        """
+        # Old scoring
+        old_score = candidate.frequency_per_week * candidate.success_rate / 7.0
+
+        # New scoring
+        new_result = self.compute_score(candidate)
+
+        return {
+            "candidate": candidate.name,
+            "old_score": round(old_score, 3),
+            "old_would_internalize": old_score >= self.base_threshold,
+            "new_score": new_result["final_score"],
+            "new_would_internalize": new_result["should_internalize"],
+            "classification": new_result["classification"],
+            "score_change": round(new_result["final_score"] - old_score, 3),
+            "priority_shift": "↑" if new_result["final_score"] > old_score else "↓" if new_result["final_score"] < old_score else "→",
+        }
+
+
+# =============================================================================
 # Convenience Functions
 # =============================================================================
 
 _default_manager: Optional[CurriculumManager] = None
+_default_vision_aware: Optional[VisionAwareInternalization] = None
 
 
 def get_curriculum_manager() -> CurriculumManager:
@@ -464,7 +696,7 @@ def should_internalize(
     tags: List[str],
     intent: str,
 ) -> tuple[bool, str]:
-    """Check if a skill should be internalized."""
+    """Check if a skill should be internalized (legacy interface)."""
     return get_curriculum_manager().should_internalize(
         frequency_per_week=frequency_per_week,
         total_examples=total_examples,
@@ -475,3 +707,115 @@ def should_internalize(
         keywords=[],
         teachers_with_pattern=1,
     )
+
+
+def get_vision_aware_internalization() -> VisionAwareInternalization:
+    """Get the default vision-aware internalization scorer."""
+    global _default_vision_aware
+    if _default_vision_aware is None:
+        manager = get_curriculum_manager()
+        _default_vision_aware = VisionAwareInternalization(
+            curriculum=manager.get_curriculum()
+        )
+    return _default_vision_aware
+
+
+def should_internalize_vision_aware(
+    name: str,
+    description: str,
+    frequency_per_week: float,
+    success_rate: float,
+    tags: Dict[str, float],
+    intent: str = "",
+) -> tuple[bool, str, Dict[str, Any]]:
+    """
+    Check if a skill should be internalized using vision-aware scoring.
+
+    This is the new preferred interface that uses teleology alignment.
+
+    Args:
+        name: Skill name
+        description: Skill description
+        frequency_per_week: How often this pattern occurs
+        success_rate: Success rate [0, 1]
+        tags: Dict of semantic tags with relevance scores
+        intent: User intent classification
+
+    Returns:
+        (should_internalize, reason, full_score_breakdown)
+    """
+    scorer = get_vision_aware_internalization()
+
+    candidate = SkillCandidate(
+        name=name,
+        description=description,
+        frequency_per_week=frequency_per_week,
+        success_rate=success_rate,
+        tags=tags,
+        intent=intent,
+    )
+
+    should, reason = scorer.should_internalize(candidate)
+    breakdown = scorer.compute_score(candidate)
+
+    return should, reason, breakdown
+
+
+def demo_scoring_comparison():
+    """
+    Demonstrate how the new vision-aware scoring differs from the old.
+
+    Shows why "Thermal Recovery" (rare but critical) gets prioritized
+    over "Clear Cache" (frequent but mundane).
+    """
+    scorer = get_vision_aware_internalization()
+
+    test_cases = [
+        SkillCandidate(
+            name="Thermal Recovery",
+            description="Recover system from thermal event",
+            frequency_per_week=0.5,  # Rare: once every 2 weeks
+            success_rate=0.8,
+            tags={"thermal": 1.0, "recovery": 0.9, "antifragility": 0.8},
+        ),
+        SkillCandidate(
+            name="Clear Cache",
+            description="Clear various caches",
+            frequency_per_week=35.0,  # Very frequent: 5x/day
+            success_rate=0.95,
+            tags={"clear_cache": 1.0, "admin": 0.7, "cleanup": 0.5},
+        ),
+        SkillCandidate(
+            name="SNN Kernel Optimization",
+            description="Optimize SNN kernels for FPGA",
+            frequency_per_week=2.0,  # Moderate
+            success_rate=0.7,
+            tags={"snn": 1.0, "optimization": 0.8, "fpga": 0.7, "neuromorphic": 0.6},
+        ),
+        SkillCandidate(
+            name="Rename Files",
+            description="Batch rename files",
+            frequency_per_week=14.0,  # Twice a day
+            success_rate=0.99,
+            tags={"rename": 1.0, "admin": 0.8, "mundane": 0.5},
+        ),
+    ]
+
+    print("=" * 70)
+    print("Vision-Aware Internalization: Old vs New Scoring")
+    print("=" * 70)
+
+    for candidate in test_cases:
+        comparison = scorer.compare_old_vs_new(candidate)
+
+        print(f"\n{candidate.name}:")
+        print(f"  Freq: {candidate.frequency_per_week}/week, Success: {candidate.success_rate:.0%}")
+        print(f"  Old Score: {comparison['old_score']:.3f} → Would internalize: {comparison['old_would_internalize']}")
+        print(f"  New Score: {comparison['new_score']:.3f} → Would internalize: {comparison['new_would_internalize']}")
+        print(f"  Classification: {comparison['classification']}")
+        print(f"  Priority Shift: {comparison['priority_shift']} ({comparison['score_change']:+.3f})")
+
+    print("\n" + "=" * 70)
+    print("KEY INSIGHT: Thermal Recovery (rare) now outranks Clear Cache (frequent)")
+    print("because it serves the Cathedral vision of antifragility.")
+    print("=" * 70)

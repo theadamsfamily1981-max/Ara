@@ -52,6 +52,20 @@ from .muse import (
     get_muse,
 )
 
+from .somatic_server import (
+    GPUClient,
+    DummyGPUClient,
+    SomaticServer,
+    get_somatic_server,
+)
+
+from .lan_reflex_bridge import (
+    ReflexEventType,
+    ReflexEvent,
+    LANReflexBridge,
+    get_lan_reflex_bridge,
+)
+
 __all__ = [
     # Morning Star
     'MorningReport',
@@ -70,4 +84,14 @@ __all__ = [
     'Gift',
     'Muse',
     'get_muse',
+    # Somatic Server (Visual Cortex)
+    'GPUClient',
+    'DummyGPUClient',
+    'SomaticServer',
+    'get_somatic_server',
+    # LAN Reflex Bridge (Spinal Cord)
+    'ReflexEventType',
+    'ReflexEvent',
+    'LANReflexBridge',
+    'get_lan_reflex_bridge',
 ]

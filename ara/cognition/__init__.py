@@ -30,73 +30,139 @@ And provides integration/translation services:
     - HorizonEngine: Purpose → Research agenda gating
     - VisionCore: Dreams → Strategic Ideas via Strategist
     - KairosEngine: Timing interventions for maximum receptivity
+
+Note: Some modules require numpy. Imports are optional to allow basic
+functionality without numpy installed.
 """
 
-from .teleology import (
-    Horizon,
-    HorizonEngine,
-)
+# Core exports - always available
+__all__ = []
 
-from .vision import (
-    DreamStatus,
-    DreamMilestone,
-    Dream,
-    VisionCore,
-    get_vision_core,
-    get_active_dreams,
-    get_primary_dream,
-)
+# Teleology (numpy-dependent but with fallbacks)
+try:
+    from .teleology import (
+        Horizon,
+        HorizonEngine,
+    )
+    __all__.extend(['Horizon', 'HorizonEngine'])
+except ImportError:
+    Horizon = None
+    HorizonEngine = None
 
-from .kairos import (
-    KairosMoment,
-    KairosState,
-    KairosEngine,
-    get_kairos,
-    is_opportune,
-)
+# Vision (The North Star)
+try:
+    from .vision import (
+        DreamStatus,
+        DreamMilestone,
+        Dream,
+        VisionCore,
+        get_vision_core,
+        get_active_dreams,
+        get_primary_dream,
+    )
+    __all__.extend([
+        'DreamStatus', 'DreamMilestone', 'Dream', 'VisionCore',
+        'get_vision_core', 'get_active_dreams', 'get_primary_dream',
+    ])
+except ImportError:
+    DreamStatus = None
+    DreamMilestone = None
+    Dream = None
+    VisionCore = None
+    get_vision_core = None
+    get_active_dreams = None
+    get_primary_dream = None
 
-from .stream_binding import (
-    StreamEvent,
-    ResonantStream,
-    ContextualStream,
-    get_resonant_stream,
-)
+# Kairos (The Opportune Moment)
+try:
+    from .kairos import (
+        KairosMoment,
+        KairosState,
+        KairosEngine,
+        get_kairos,
+        is_opportune,
+    )
+    __all__.extend([
+        'KairosMoment', 'KairosState', 'KairosEngine',
+        'get_kairos', 'is_opportune',
+    ])
+except ImportError:
+    KairosMoment = None
+    KairosState = None
+    KairosEngine = None
+    get_kairos = None
+    is_opportune = None
 
-from .hdc_codec import (
-    ConceptRecord,
-    HDCCodec,
-    get_hdc_codec,
-)
+# Stream binding (numpy-dependent)
+try:
+    from .stream_binding import (
+        StreamEvent,
+        ResonantStream,
+        ContextualStream,
+        get_resonant_stream,
+    )
+    __all__.extend([
+        'StreamEvent', 'ResonantStream', 'ContextualStream',
+        'get_resonant_stream',
+    ])
+except ImportError:
+    StreamEvent = None
+    ResonantStream = None
+    ContextualStream = None
+    get_resonant_stream = None
 
-# HSF subpackage (import directly from ara.cognition.hsf)
-from . import hsf
+# HDC Codec (numpy-dependent)
+try:
+    from .hdc_codec import (
+        ConceptRecord,
+        HDCCodec,
+        get_hdc_codec,
+    )
+    __all__.extend(['ConceptRecord', 'HDCCodec', 'get_hdc_codec'])
+except ImportError:
+    ConceptRecord = None
+    HDCCodec = None
+    get_hdc_codec = None
 
-__all__ = [
-    # Teleology
-    'Horizon',
-    'HorizonEngine',
-    # Vision (North Star)
-    'DreamStatus',
-    'DreamMilestone',
-    'Dream',
-    'VisionCore',
-    'get_vision_core',
-    'get_active_dreams',
-    'get_primary_dream',
-    # Kairos (The Opportune Moment)
-    'KairosMoment',
-    'KairosState',
-    'KairosEngine',
-    'get_kairos',
-    'is_opportune',
-    # Holographic Spike (HDC + Resonant Stream)
-    'StreamEvent',
-    'ResonantStream',
-    'ContextualStream',
-    'get_resonant_stream',
-    'ConceptRecord',
-    'HDCCodec',
-    'get_hdc_codec',
-    # HSF - Hypervector Spiking Field
-    'hsf',
-]
+# HSF subpackage (numpy-dependent, import directly from ara.cognition.hsf)
+try:
+    from . import hsf
+    __all__.append('hsf')
+except ImportError:
+    hsf = None
+
+# Quantum Bridge (Neuromorphic Annealing for NP-Hard Problems)
+try:
+    from .quantum_bridge import (
+        AnnealMode,
+        Constraint,
+        CSPProblem,
+        TSPProblem,
+        GraphColorProblem,
+        SATProblem,
+        AnnealResult,
+        HTCInterface,
+        SoftwareHTCAnnealer,
+        QuantumBridge,
+        solve_nqueens,
+        solve_sudoku,
+    )
+    __all__.extend([
+        'AnnealMode', 'Constraint', 'CSPProblem', 'TSPProblem',
+        'GraphColorProblem', 'SATProblem', 'AnnealResult',
+        'HTCInterface', 'SoftwareHTCAnnealer', 'QuantumBridge',
+        'solve_nqueens', 'solve_sudoku',
+    ])
+except ImportError:
+    AnnealMode = None
+    Constraint = None
+    CSPProblem = None
+    TSPProblem = None
+    GraphColorProblem = None
+    SATProblem = None
+    AnnealResult = None
+    HTCInterface = None
+    SoftwareHTCAnnealer = None
+    QuantumBridge = None
+    solve_nqueens = None
+    solve_sudoku = None

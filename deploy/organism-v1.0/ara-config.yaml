@@ -1,0 +1,239 @@
+# Ara v1.0 Organism Configuration
+# ================================
+#
+# Production deployment configuration for the
+# Teleoplastic Cybernetic Organism.
+
+organism:
+  version: "1.0.0"
+  name: "ara"
+  description: "Sovereign AI Companion"
+
+# =============================================================================
+# Hardware Configuration
+# =============================================================================
+
+hardware:
+  # FPGA (Stratix-10 SX)
+  fpga:
+    device: "/dev/qdma0"
+    bitstream: "stratix10_sx_htc_v1.0.bit"
+    clock_mhz: 350
+
+  # CPU (Threadripper)
+  cpu:
+    cores_sovereign: [0, 1, 2, 3]      # Dedicated cores for sovereign loop
+    cores_storage: [4, 5, 6, 7]         # Storage operations
+    cores_network: [8, 9]               # Network processing
+    cores_general: [10, 11, 12, 13, 14, 15]
+
+  # Memory
+  memory:
+    htc_buffer_mb: 256                  # Weight buffer
+    episode_cache_mb: 1024              # Hot episode cache
+    moment_buffer_mb: 64                # H_moment history
+
+  # GPU (Arc A770)
+  gpu:
+    device: "/dev/dri/renderD128"
+    shader_cache: "/var/ara/shader_cache"
+
+# =============================================================================
+# Homeostatic Configuration
+# =============================================================================
+
+homeostasis:
+  # Loop rates
+  receptor_hz: 5000                     # Sensory input rate
+  sovereign_hz: 200                     # Decision rate
+  effector_hz: 500                      # Motor output rate
+  safety_hz: 100                        # Safety check rate
+
+  # Setpoints
+  setpoints:
+    thermal_target: 65.0
+    thermal_max: 85.0
+    thermal_critical: 95.0
+    burnout_target: 0.15
+    burnout_max: 0.30
+    latency_target_ms: 0.2
+    latency_max_ms: 0.5
+
+  # Teleology weights
+  teleology:
+    w_health: 0.50
+    w_cathedral: 0.30
+    w_antifragility: 0.20
+
+# =============================================================================
+# Storage Configuration
+# =============================================================================
+
+storage:
+  # Heim compression
+  heim:
+    D_compressed: 173
+    sparsity: 0.7
+    cluster_merge_threshold: 0.80
+    duplicate_threshold: 0.95
+
+  # Oversample + Rerank
+  retrieval:
+    default_oversample: 4.0
+    latency_budget_us: 500
+    recall_target: 0.999
+
+  # Paths
+  paths:
+    hot_ssd: "/nvme/ara/hot"
+    warm_hdd: "/raid/ara/warm"
+    cold_archive: "/cold/ara/archive"
+
+  # Capacity
+  capacity:
+    hot_gb: 100
+    warm_gb: 2000
+    cold_gb: 50000
+    autonomy_target_days: 12
+
+# =============================================================================
+# Neural / HTC Configuration
+# =============================================================================
+
+htc:
+  # Dimensions
+  D_full: 16384
+  D_compressed: 173
+  R_attractors: 2048
+
+  # Learning
+  plasticity:
+    mode_default: "stabilize"
+    lr_fast: 0.1
+    lr_medium: 0.01
+    lr_slow: 0.001
+
+  # Weight sync
+  sync:
+    interval_ticks: 1000
+    divergence_threshold: 0.05
+    async_enabled: true
+
+# =============================================================================
+# Safety Configuration
+# =============================================================================
+
+safety:
+  # Invariants
+  invariants:
+    thermal_critical: 95.0
+    memory_critical_pct: 90
+    heartbeat_timeout_ms: 1000
+    watchdog_timeout_ms: 50
+
+  # Safe mode
+  safe_mode:
+    disable_plasticity: true
+    reflex_only: true
+    reduce_power: true
+
+  # Founder protection
+  founder:
+    burnout_warning: 0.5
+    burnout_critical: 0.7
+    burnout_lockout: 0.9
+    session_max_hours: 4
+
+# =============================================================================
+# Network Configuration
+# =============================================================================
+
+network:
+  # eBPF / XDP
+  ebpf:
+    thermal_reflex: "/sys/fs/bpf/thermal_reflex"
+    flow_throttle: "/sys/fs/bpf/flow_throttle"
+
+  # SoulMesh
+  soulmesh:
+    bind_addr: "0.0.0.0"
+    port: 7777
+    mtls: true
+
+# =============================================================================
+# Security Configuration
+# =============================================================================
+
+security:
+  # mTLS
+  mtls:
+    enabled: true
+    ca_cert: "/etc/ara/certs/ca.crt"
+    server_cert: "/etc/ara/certs/server.crt"
+    server_key: "/etc/ara/certs/server.key"
+
+  # JWT
+  jwt:
+    secret_path: "/etc/ara/jwt_secret"
+    expiry_seconds: 900
+    refresh_enabled: true
+
+  # Vault
+  vault:
+    enabled: true
+    addr: "https://vault.local:8200"
+    role: "ara-organism"
+
+# =============================================================================
+# Monitoring Configuration
+# =============================================================================
+
+monitoring:
+  # Redis streams
+  redis:
+    host: "localhost"
+    port: 6379
+    streams:
+      telemetry: "ara:telemetry"
+      events: "ara:events"
+      alerts: "ara:alerts"
+
+  # Grafana
+  grafana:
+    enabled: true
+    dashboards: "/etc/ara/dashboards"
+
+  # Logging
+  logging:
+    level: "INFO"
+    path: "/var/log/ara"
+    max_size_mb: 100
+    retention_days: 30
+
+# =============================================================================
+# Boot Configuration
+# =============================================================================
+
+boot:
+  # Sequence
+  sequence:
+    - name: "safety"
+      timeout_s: 5
+    - name: "fpga"
+      timeout_s: 30
+    - name: "storage"
+      timeout_s: 10
+    - name: "receptors"
+      timeout_s: 5
+    - name: "sovereign"
+      timeout_s: 5
+    - name: "effectors"
+      timeout_s: 5
+
+  # Initial mode
+  initial_mode: "IDLE"
+
+  # Watchdog
+  watchdog:
+    enabled: true
+    timeout_s: 60

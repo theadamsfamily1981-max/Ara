@@ -45,9 +45,48 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Callable
 
-import numpy as np
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    np = None
+    HAS_NUMPY = False
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Numpy fallbacks for environments without numpy
+# =============================================================================
+
+def _dot(a, b) -> float:
+    """Dot product - works with numpy arrays or lists."""
+    if HAS_NUMPY and isinstance(a, np.ndarray):
+        return float(np.dot(a, b))
+    return float(sum(x * y for x, y in zip(a, b)))
+
+
+def _norm(v) -> float:
+    """Vector norm - works with numpy arrays or lists."""
+    if HAS_NUMPY and isinstance(v, np.ndarray):
+        return float(np.linalg.norm(v))
+    return float(math.sqrt(sum(x * x for x in v)))
+
+
+def _clip(val: float, lo: float, hi: float) -> float:
+    """Clip value to range."""
+    return max(lo, min(hi, val))
+
+
+def _normalize(v):
+    """Normalize vector to unit length."""
+    if HAS_NUMPY:
+        v = np.asarray(v, dtype=np.float32)
+        n = float(np.linalg.norm(v) + 1e-9)
+        return v / n
+    else:
+        n = _norm(v) + 1e-9
+        return [x / n for x in v]
 
 
 @dataclass
@@ -62,7 +101,7 @@ class Horizon:
     id: str
     name: str
     statement: str              # "Ara and Croft are a single cognitive unit."
-    vector: np.ndarray          # Unit embedding of this vision
+    vector: Any                 # Unit embedding of this vision (np.ndarray or list)
     priority: float             # 0-1 importance
     horizon_days: float         # Time horizon from Telos
     role: str                   # "ara", "user", "shared"
@@ -118,7 +157,7 @@ class HorizonEngine:
 
     def __init__(
         self,
-        embedder: Callable[[str], np.ndarray],
+        embedder: Callable[[str], Any],  # Returns vector (np.ndarray or list)
         telos: Optional[Any] = None,  # TeleologicalEngine
     ):
         """
@@ -187,12 +226,10 @@ class HorizonEngine:
         """
         self._sync_from_telos()
 
-    def _embed(self, text: str) -> np.ndarray:
+    def _embed(self, text: str):
         """Embed text and normalize to unit vector."""
         v = self.embedder(text)
-        v = np.asarray(v, dtype=np.float32)
-        n = float(np.linalg.norm(v) + 1e-9)
-        return v / n
+        return _normalize(v)
 
     # =========================================================================
     # Alignment Metrics
@@ -212,8 +249,8 @@ class HorizonEngine:
         w_sum = 0.0
 
         for h in self.horizons:
-            sim = float(np.dot(vec, h.vector))  # cosine in [-1, 1]
-            sim = float(np.clip(sim, -1.0, 1.0))
+            sim = _dot(vec, h.vector)  # cosine in [-1, 1]
+            sim = _clip(sim, -1.0, 1.0)
             w = h.gravity
             total += sim * w
             w_sum += w
@@ -250,8 +287,8 @@ class HorizonEngine:
         result = {}
 
         for h in self.horizons:
-            sim = float(np.dot(vec, h.vector))
-            sim = float(np.clip(sim, -1.0, 1.0))
+            sim = _dot(vec, h.vector)
+            sim = _clip(sim, -1.0, 1.0)
             result[h.name] = 0.5 * (sim + 1.0)
 
         return result
@@ -367,8 +404,8 @@ class HorizonEngine:
 
         vec = self._embed(recent_summary)
         for h in self.horizons:
-            sim = float(np.dot(vec, h.vector))
-            sim = float(np.clip(sim, -1.0, 1.0))
+            sim = _dot(vec, h.vector)
+            sim = _clip(sim, -1.0, 1.0)
             align = 0.5 * (sim + 1.0)
             per_horizon[h.name] = 1.0 - align  # drift = 1 - alignment
 

@@ -1,0 +1,286 @@
+---
+# =============================================================================
+# Ara VPN POP Configuration Playbook
+# =============================================================================
+# Configures WireGuard + optional OpenVPN on POP nodes.
+#
+# Usage:
+#   ansible-playbook -i hosts.ini vpn_pop.yml
+#   ansible-playbook -i hosts.ini vpn_pop.yml --tags wireguard
+#   ansible-playbook -i hosts.ini vpn_pop.yml --extra-vars "wg_private_key=..."
+# =============================================================================
+
+- name: Configure Ara VPN POP node
+  hosts: ara_vpn_pops
+  become: true
+  gather_facts: true
+
+  vars:
+    # WireGuard defaults (override in inventory or extra-vars)
+    wg_interface: wg0
+    wg_port: 51820
+    wg_network: "10.42.0.0/24"
+    wg_address: "{{ wg_network | regex_replace('/[0-9]+', '.1') }}"
+    wg_private_key: "{{ lookup('env', 'WG_PRIVATE_KEY') | default('GENERATE_NEW', true) }}"
+    wg_peers: []
+
+    # OpenVPN defaults
+    enable_openvpn: false
+    ovpn_network: "10.43.0.0/24"
+    ovpn_port: 1194
+
+    # Monitoring
+    enable_prometheus: true
+    node_exporter_port: 9100
+    wg_exporter_port: 9586
+
+    # NAT interface (detected automatically)
+    nat_interface: "{{ ansible_default_ipv4.interface }}"
+
+  handlers:
+    - name: restart wireguard
+      systemd:
+        name: "wg-quick@{{ wg_interface }}"
+        state: restarted
+
+    - name: restart openvpn
+      systemd:
+        name: "openvpn@ara"
+        state: restarted
+      when: enable_openvpn | bool
+
+    - name: save iptables
+      command: netfilter-persistent save
+      changed_when: true
+
+  tasks:
+    # =========================================================================
+    # Base System Configuration
+    # =========================================================================
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      tags: [base]
+
+    - name: Install base packages
+      apt:
+        name:
+          - wireguard
+          - wireguard-tools
+          - iptables-persistent
+          - net-tools
+          - curl
+          - jq
+          - htop
+        state: present
+      tags: [base]
+
+    - name: Install OpenVPN if enabled
+      apt:
+        name: openvpn
+        state: present
+      when: enable_openvpn | bool
+      tags: [openvpn]
+
+    - name: Enable IP forwarding (IPv4)
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        state: present
+        reload: yes
+      tags: [base]
+
+    - name: Enable IP forwarding (IPv6)
+      sysctl:
+        name: net.ipv6.conf.all.forwarding
+        value: "1"
+        state: present
+        reload: yes
+      tags: [base]
+
+    # =========================================================================
+    # WireGuard Configuration
+    # =========================================================================
+
+    - name: Generate WireGuard private key if needed
+      shell: |
+        if [ ! -f /etc/wireguard/private.key ]; then
+          wg genkey > /etc/wireguard/private.key
+          chmod 600 /etc/wireguard/private.key
+        fi
+        cat /etc/wireguard/private.key
+      register: wg_generated_key
+      changed_when: false
+      tags: [wireguard]
+
+    - name: Set WireGuard private key
+      set_fact:
+        wg_actual_key: "{{ wg_private_key if wg_private_key != 'GENERATE_NEW' else wg_generated_key.stdout }}"
+      tags: [wireguard]
+
+    - name: Generate WireGuard public key
+      shell: echo "{{ wg_actual_key }}" | wg pubkey
+      register: wg_public_key
+      changed_when: false
+      tags: [wireguard]
+
+    - name: Create WireGuard configuration
+      template:
+        src: templates/wg0.conf.j2
+        dest: "/etc/wireguard/{{ wg_interface }}.conf"
+        owner: root
+        group: root
+        mode: "0600"
+      notify: restart wireguard
+      tags: [wireguard]
+
+    - name: Enable and start WireGuard
+      systemd:
+        name: "wg-quick@{{ wg_interface }}"
+        enabled: yes
+        state: started
+      tags: [wireguard]
+
+    # =========================================================================
+    # NAT / Firewall Configuration
+    # =========================================================================
+
+    - name: Configure NAT for WireGuard
+      iptables:
+        table: nat
+        chain: POSTROUTING
+        out_interface: "{{ nat_interface }}"
+        source: "{{ wg_network }}"
+        jump: MASQUERADE
+        comment: "Ara WireGuard NAT"
+      notify: save iptables
+      tags: [firewall]
+
+    - name: Configure NAT for OpenVPN
+      iptables:
+        table: nat
+        chain: POSTROUTING
+        out_interface: "{{ nat_interface }}"
+        source: "{{ ovpn_network }}"
+        jump: MASQUERADE
+        comment: "Ara OpenVPN NAT"
+      when: enable_openvpn | bool
+      notify: save iptables
+      tags: [firewall, openvpn]
+
+    - name: Allow WireGuard forwarding
+      iptables:
+        chain: FORWARD
+        in_interface: "{{ wg_interface }}"
+        jump: ACCEPT
+        comment: "Ara WireGuard forward"
+      notify: save iptables
+      tags: [firewall]
+
+    # =========================================================================
+    # OpenVPN Configuration (Optional)
+    # =========================================================================
+
+    - name: Create OpenVPN server configuration
+      template:
+        src: templates/openvpn-server.conf.j2
+        dest: /etc/openvpn/ara.conf
+        owner: root
+        group: root
+        mode: "0600"
+      when: enable_openvpn | bool
+      notify: restart openvpn
+      tags: [openvpn]
+
+    - name: Enable OpenVPN if configured
+      systemd:
+        name: "openvpn@ara"
+        enabled: "{{ enable_openvpn | bool }}"
+        state: "{{ 'started' if enable_openvpn else 'stopped' }}"
+      tags: [openvpn]
+
+    # =========================================================================
+    # Prometheus Monitoring
+    # =========================================================================
+
+    - name: Install Prometheus node exporter
+      apt:
+        name: prometheus-node-exporter
+        state: present
+      when: enable_prometheus | bool
+      tags: [monitoring]
+
+    - name: Configure node exporter
+      lineinfile:
+        path: /etc/default/prometheus-node-exporter
+        regexp: '^ARGS='
+        line: 'ARGS="--web.listen-address=:{{ node_exporter_port }}"'
+        create: yes
+      when: enable_prometheus | bool
+      notify: restart node-exporter
+      tags: [monitoring]
+
+    - name: Install WireGuard exporter
+      get_url:
+        url: "https://github.com/MindFlavor/prometheus_wireguard_exporter/releases/download/3.6.6/prometheus_wireguard_exporter-linux-amd64"
+        dest: /usr/local/bin/prometheus_wireguard_exporter
+        mode: "0755"
+      when: enable_prometheus | bool
+      tags: [monitoring]
+
+    - name: Create WireGuard exporter systemd unit
+      copy:
+        dest: /etc/systemd/system/prometheus-wireguard-exporter.service
+        content: |
+          [Unit]
+          Description=Prometheus WireGuard Exporter
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/prometheus_wireguard_exporter -p {{ wg_exporter_port }}
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: "0644"
+      when: enable_prometheus | bool
+      tags: [monitoring]
+
+    - name: Enable WireGuard exporter
+      systemd:
+        name: prometheus-wireguard-exporter
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      when: enable_prometheus | bool
+      tags: [monitoring]
+
+    # =========================================================================
+    # Status Output
+    # =========================================================================
+
+    - name: Display WireGuard status
+      command: wg show
+      register: wg_status
+      changed_when: false
+      tags: [status]
+
+    - name: Print WireGuard status
+      debug:
+        var: wg_status.stdout_lines
+      tags: [status]
+
+    - name: Print WireGuard public key
+      debug:
+        msg: "WireGuard Public Key: {{ wg_public_key.stdout }}"
+      tags: [status]
+
+  handlers:
+    - name: restart node-exporter
+      systemd:
+        name: prometheus-node-exporter
+        state: restarted
