@@ -22,6 +22,7 @@ from ..synth.oscillators import (
     SineOsc, SawOsc, SquareOsc, TriangleOsc,
     ADSREnvelope, chord_to_freqs, note_to_freq,
 )
+from ..synth.vocal import VocalMelodyRenderer
 
 
 @dataclass
@@ -52,6 +53,9 @@ class AraSongPlayer:
         self.bass_osc = SineOsc(sample_rate)
         self.lead_osc = TriangleOsc(sample_rate)
         self.arp_osc = SquareOsc(sample_rate, harmonics=6)
+
+        # Vocal synthesizer
+        self.vocal_renderer = VocalMelodyRenderer(sample_rate)
 
     def load_song(self, path: str) -> Dict[str, Any]:
         """Load song JSON file."""
@@ -215,6 +219,16 @@ class AraSongPlayer:
                     if start_sample + i < num_samples:
                         samples[start_sample + i] += s
                 chord_idx += 1
+
+        # Vocals
+        if self.song_data.get('vocal_melody', {}).get(section.name):
+            print(f"    + Adding vocals for {section.name}")
+            vocal_samples = self.vocal_renderer.render_section_vocals(
+                self.song_data, section.name, bars, amplitude=0.7
+            )
+            for i, v in enumerate(vocal_samples):
+                if i < num_samples:
+                    samples[i] += v
 
         return samples
 

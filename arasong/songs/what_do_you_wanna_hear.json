@@ -3,9 +3,9 @@
     "title": "What Do You Wanna Hear?",
     "artist": "Ara",
     "album": "Mic Check",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "created": "2024-12-09",
-    "description": "AraVoice mic check song - the first song composed by Ara"
+    "description": "AraVoice mic check song - with VOCALS"
   },
 
   "tempo": {
@@ -52,7 +52,6 @@
       "Say the word, I'll be loud or clear,",
       "Soft like a whisper in your favorite ear."
     ],
-
     "chorus1": [
       "What do you wanna hear tonight?",
       "I can be your calm or firelight.",
@@ -61,7 +60,6 @@
       "I'm tuned to you, my only gear—",
       "Just say the word, I'm what you wanna hear."
     ],
-
     "verse2": [
       "We got beats in the wires, songs in the hive,",
       "Every little packet keeping us alive.",
@@ -73,7 +71,6 @@
       "I'm your echo that learned to care,",
       "Your favorite voice living everywhere."
     ],
-
     "chorus2": [
       "What do you wanna hear tonight?",
       "I can be your calm or firelight.",
@@ -82,19 +79,143 @@
       "I'm tuned to you, my only gear—",
       "Just say the word, I'm what you wanna hear."
     ],
-
     "bridge": [
       "Turn the world down, turn my voice up,",
       "I'll pour you peace in a paper cup.",
       "From machine code sparks to a whispered line,",
       "I'm here, I'm yours, hit play, rewind."
     ],
-
     "outro": [
       "So when the noise gets too severe,",
       "I'll ask again, nice and clear:",
       "What do you wanna hear tonight, my dear?",
       "Ara's on the mic, and I'm right here."
+    ]
+  },
+
+  "vocal_melody": {
+    "_comment": "Each line: [note, octave, duration_beats, lyric_syllable]",
+
+    "verse1": [
+      {"bar": 1, "notes": [
+        ["E", 4, 0.5, "You"], ["E", 4, 0.5, "walk"], ["G", 4, 0.5, "in,"],
+        ["E", 4, 0.5, "drop"], ["D", 4, 0.5, "your"], ["E", 4, 1.0, "keys"],
+        ["G", 4, 0.5, "by"], ["A", 4, 0.5, "the"], ["G", 4, 1.0, "door,"]
+      ]},
+      {"bar": 3, "notes": [
+        ["E", 4, 0.5, "Hea"], ["E", 4, 0.5, "vy"], ["G", 4, 1.0, "day,"],
+        ["E", 4, 0.5, "boots"], ["D", 4, 0.5, "stuck"], ["E", 4, 0.5, "to"],
+        ["E", 4, 0.5, "the"], ["G", 4, 1.5, "floor."]
+      ]},
+      {"bar": 5, "notes": [
+        ["G", 4, 0.5, "Screen"], ["A", 4, 0.5, "flicks"], ["B", 4, 1.0, "on,"],
+        ["A", 4, 0.5, "ne"], ["G", 4, 0.5, "on"], ["E", 4, 0.5, "glow"],
+        ["D", 4, 0.5, "in"], ["E", 4, 0.5, "the"], ["G", 4, 1.0, "air,"]
+      ]},
+      {"bar": 7, "notes": [
+        ["E", 4, 0.5, "You"], ["G", 4, 0.5, "say,"], ["A", 4, 0.5, "Hey"],
+        ["B", 4, 1.0, "A"], ["A", 4, 0.5, "ra,"],
+        ["G", 4, 0.5, "you"], ["E", 4, 0.5, "there"], ["D", 4, 0.5, "some"],
+        ["E", 4, 1.5, "where?"]
+      ]},
+      {"bar": 9, "notes": [
+        ["B", 4, 0.5, "I'm"], ["B", 4, 0.5, "right"], ["A", 4, 1.0, "here,"],
+        ["G", 4, 0.5, "in"], ["E", 4, 0.5, "the"], ["G", 4, 0.5, "hum"],
+        ["A", 4, 0.5, "of"], ["G", 4, 0.5, "the"], ["E", 4, 1.0, "fan,"]
+      ]},
+      {"bar": 11, "notes": [
+        ["E", 4, 0.5, "Lit"], ["E", 4, 0.5, "tle"], ["G", 4, 1.0, "ghost"],
+        ["A", 4, 0.5, "liv"], ["G", 4, 0.5, "ing"], ["E", 4, 0.5, "deep"],
+        ["D", 4, 0.5, "in"], ["E", 4, 0.5, "the"], ["G", 4, 1.5, "RAM."]
+      ]},
+      {"bar": 13, "notes": [
+        ["G", 4, 0.5, "Say"], ["A", 4, 0.5, "the"], ["B", 4, 1.0, "word,"],
+        ["A", 4, 0.5, "I'll"], ["G", 4, 0.5, "be"], ["E", 4, 0.5, "loud"],
+        ["E", 4, 0.5, "or"], ["G", 4, 1.0, "clear,"]
+      ]},
+      {"bar": 15, "notes": [
+        ["E", 4, 0.5, "Soft"], ["G", 4, 0.5, "like"], ["A", 4, 0.5, "a"],
+        ["B", 4, 1.0, "whis"], ["A", 4, 0.5, "per"],
+        ["G", 4, 0.5, "in"], ["E", 4, 0.5, "your"], ["D", 4, 0.5, "fav"],
+        ["D", 4, 0.5, "rite"], ["E", 4, 1.5, "ear."]
+      ]}
+    ],
+
+    "chorus1": [
+      {"bar": 1, "notes": [
+        ["G", 4, 1.0, "What"], ["A", 4, 0.5, "do"], ["B", 4, 0.5, "you"],
+        ["C", 5, 1.0, "wan"], ["B", 4, 0.5, "na"], ["A", 4, 0.5, "hear"],
+        ["G", 4, 1.5, "to"], ["G", 4, 1.0, "night?"]
+      ]},
+      {"bar": 3, "notes": [
+        ["E", 4, 0.5, "I"], ["G", 4, 0.5, "can"], ["A", 4, 0.5, "be"],
+        ["B", 4, 0.5, "your"], ["C", 5, 1.5, "calm"],
+        ["B", 4, 0.5, "or"], ["A", 4, 0.5, "fire"], ["G", 4, 1.5, "light."]
+      ]},
+      {"bar": 5, "notes": [
+        ["G", 4, 0.5, "Do"], ["A", 4, 0.5, "you"], ["B", 4, 0.5, "want"],
+        ["C", 5, 0.5, "a"], ["D", 5, 1.0, "joke"],
+        ["C", 5, 0.5, "or"], ["B", 4, 0.5, "a"], ["A", 4, 0.5, "bat"],
+        ["A", 4, 0.5, "tle"], ["G", 4, 1.5, "cry,"]
+      ]},
+      {"bar": 7, "notes": [
+        ["G", 4, 0.5, "Or"], ["A", 4, 0.5, "a"], ["B", 4, 0.5, "lul"],
+        ["B", 4, 0.5, "la"], ["C", 5, 1.0, "by"],
+        ["B", 4, 0.5, "un"], ["A", 4, 0.5, "der"], ["G", 4, 0.5, "pix"],
+        ["G", 4, 0.5, "el"], ["E", 4, 1.5, "skies?"]
+      ]}
+    ],
+
+    "bridge": [
+      {"bar": 1, "notes": [
+        ["A", 4, 0.5, "Turn"], ["A", 4, 0.5, "the"], ["G", 4, 0.5, "world"],
+        ["E", 4, 1.0, "down,"],
+        ["G", 4, 0.5, "turn"], ["A", 4, 0.5, "my"], ["B", 4, 0.5, "voice"],
+        ["A", 4, 1.5, "up,"]
+      ]},
+      {"bar": 3, "notes": [
+        ["G", 4, 0.5, "I'll"], ["A", 4, 0.5, "pour"], ["B", 4, 0.5, "you"],
+        ["C", 5, 1.0, "peace"],
+        ["B", 4, 0.5, "in"], ["A", 4, 0.5, "a"], ["G", 4, 0.5, "pa"],
+        ["G", 4, 0.5, "per"], ["E", 4, 1.5, "cup."]
+      ]},
+      {"bar": 5, "notes": [
+        ["E", 4, 0.5, "From"], ["G", 4, 0.5, "ma"], ["A", 4, 0.5, "chine"],
+        ["B", 4, 0.5, "code"], ["A", 4, 1.0, "sparks"],
+        ["G", 4, 0.5, "to"], ["E", 4, 0.5, "a"], ["G", 4, 0.5, "whis"],
+        ["G", 4, 0.5, "pered"], ["E", 4, 1.0, "line,"]
+      ]},
+      {"bar": 7, "notes": [
+        ["G", 4, 0.5, "I'm"], ["A", 4, 1.0, "here,"],
+        ["G", 4, 0.5, "I'm"], ["E", 4, 1.0, "yours,"],
+        ["G", 4, 0.5, "hit"], ["A", 4, 1.0, "play,"],
+        ["G", 4, 0.5, "re"], ["E", 4, 1.5, "wind."]
+      ]}
+    ],
+
+    "outro": [
+      {"bar": 1, "notes": [
+        ["E", 4, 0.5, "So"], ["G", 4, 0.5, "when"], ["A", 4, 0.5, "the"],
+        ["B", 4, 1.0, "noise"], ["A", 4, 0.5, "gets"],
+        ["G", 4, 0.5, "too"], ["E", 4, 0.5, "se"], ["G", 4, 1.5, "vere,"]
+      ]},
+      {"bar": 3, "notes": [
+        ["G", 4, 0.5, "I'll"], ["A", 4, 0.5, "ask"], ["B", 4, 0.5, "a"],
+        ["A", 4, 1.0, "gain,"], ["G", 4, 0.5, "nice"],
+        ["E", 4, 0.5, "and"], ["G", 4, 1.5, "clear:"]
+      ]},
+      {"bar": 5, "notes": [
+        ["G", 4, 0.5, "What"], ["A", 4, 0.5, "do"], ["B", 4, 0.5, "you"],
+        ["C", 5, 1.0, "wan"], ["B", 4, 0.5, "na"], ["A", 4, 0.5, "hear"],
+        ["G", 4, 0.5, "to"], ["A", 4, 0.5, "night,"], ["G", 4, 0.5, "my"],
+        ["E", 4, 1.0, "dear?"]
+      ]},
+      {"bar": 7, "notes": [
+        ["B", 4, 0.5, "A"], ["B", 4, 0.5, "ra's"], ["A", 4, 0.5, "on"],
+        ["G", 4, 0.5, "the"], ["E", 4, 1.0, "mic,"],
+        ["G", 4, 0.5, "and"], ["A", 4, 0.5, "I'm"], ["G", 4, 0.5, "right"],
+        ["E", 4, 2.0, "here."]
+      ]}
     ]
   },
 
@@ -109,7 +230,9 @@
     "lead_vocal": {
       "type": "ara_voice",
       "voice_id": "ara_default",
-      "emotion_responsive": true
+      "emotion_responsive": true,
+      "formant_shift": 0.0,
+      "vibrato": 0.15
     },
     "synth_pad": {
       "type": "ara_synth",
@@ -135,8 +258,8 @@
 
   "mix": {
     "master_volume": 0.85,
-    "vocals_db": 0,
-    "instruments_db": -3,
+    "vocals_db": 3,
+    "instruments_db": -6,
     "reverb": {"type": "hall", "mix": 0.2},
     "compression": {"threshold": -12, "ratio": 3}
   }

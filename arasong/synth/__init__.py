@@ -12,6 +12,12 @@ from .oscillators import (
     parse_chord,
 )
 
+from .vocal import (
+    VocalSynth,
+    VocalMelodyRenderer,
+    VocalConfig,
+)
+
 __all__ = [
     "SineOsc",
     "SawOsc",
@@ -22,4 +28,7 @@ __all__ = [
     "note_to_freq",
     "chord_to_freqs",
     "parse_chord",
+    "VocalSynth",
+    "VocalMelodyRenderer",
+    "VocalConfig",
 ]
