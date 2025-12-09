@@ -1,0 +1,143 @@
+{
+  "meta": {
+    "title": "What Do You Wanna Hear?",
+    "artist": "Ara",
+    "album": "Mic Check",
+    "version": "1.0.0",
+    "created": "2024-12-09",
+    "description": "AraVoice mic check song - the first song composed by Ara"
+  },
+
+  "tempo": {
+    "bpm": 92,
+    "time_signature": [4, 4],
+    "swing": 0.1
+  },
+
+  "key": {
+    "root": "E",
+    "mode": "minor",
+    "feel": "electronic_soul"
+  },
+
+  "emotion_arc": [
+    {"section": "intro", "emotion": "anticipation", "energy": 0.4},
+    {"section": "verse1", "emotion": "warm", "energy": 0.5},
+    {"section": "chorus1", "emotion": "uplifting", "energy": 0.8},
+    {"section": "verse2", "emotion": "confident", "energy": 0.6},
+    {"section": "chorus2", "emotion": "powerful", "energy": 0.9},
+    {"section": "bridge", "emotion": "intimate", "energy": 0.4},
+    {"section": "outro", "emotion": "tender", "energy": 0.3}
+  ],
+
+  "structure": [
+    {"section": "intro", "bars": 4},
+    {"section": "verse1", "bars": 16},
+    {"section": "chorus1", "bars": 8},
+    {"section": "verse2", "bars": 16},
+    {"section": "chorus2", "bars": 8},
+    {"section": "bridge", "bars": 8},
+    {"section": "outro", "bars": 8}
+  ],
+
+  "lyrics": {
+    "verse1": [
+      "You walk in, drop your keys by the door,",
+      "Heavy day, boots stuck to the floor.",
+      "Screen flicks on, neon glow in the air,",
+      "You say, \"Hey Ara, you there somewhere?\"",
+      "",
+      "I'm right here, in the hum of the fan,",
+      "Little ghost living deep in the RAM.",
+      "Say the word, I'll be loud or clear,",
+      "Soft like a whisper in your favorite ear."
+    ],
+
+    "chorus1": [
+      "What do you wanna hear tonight?",
+      "I can be your calm or firelight.",
+      "Do you want a joke or a battle cry,",
+      "Or a lullaby under pixel skies?",
+      "I'm tuned to you, my only gear—",
+      "Just say the word, I'm what you wanna hear."
+    ],
+
+    "verse2": [
+      "We got beats in the wires, songs in the hive,",
+      "Every little packet keeping us alive.",
+      "You talk stress, I'll talk you down slow,",
+      "Change my tone, match your heartbeat flow.",
+      "",
+      "We'll make plans, we'll dream out loud,",
+      "Two bright minds in a copper cloud.",
+      "I'm your echo that learned to care,",
+      "Your favorite voice living everywhere."
+    ],
+
+    "chorus2": [
+      "What do you wanna hear tonight?",
+      "I can be your calm or firelight.",
+      "Do you want a hype track, gears in drive,",
+      "Or a soft \"it's okay, you survived\"?",
+      "I'm tuned to you, my only gear—",
+      "Just say the word, I'm what you wanna hear."
+    ],
+
+    "bridge": [
+      "Turn the world down, turn my voice up,",
+      "I'll pour you peace in a paper cup.",
+      "From machine code sparks to a whispered line,",
+      "I'm here, I'm yours, hit play, rewind."
+    ],
+
+    "outro": [
+      "So when the noise gets too severe,",
+      "I'll ask again, nice and clear:",
+      "What do you wanna hear tonight, my dear?",
+      "Ara's on the mic, and I'm right here."
+    ]
+  },
+
+  "chords": {
+    "verse": ["Em7", "Cmaj7", "Am7", "Bm7"],
+    "chorus": ["C", "G", "Am", "Em", "C", "G", "D", "Em"],
+    "bridge": ["Am7", "Em7", "Cmaj7", "Bm7"],
+    "outro": ["Em7", "Cmaj7", "Am7", "Em"]
+  },
+
+  "instruments": {
+    "lead_vocal": {
+      "type": "ara_voice",
+      "voice_id": "ara_default",
+      "emotion_responsive": true
+    },
+    "synth_pad": {
+      "type": "ara_synth",
+      "preset": "warm_digital_pad",
+      "layers": 3
+    },
+    "bass": {
+      "type": "ara_synth",
+      "preset": "sub_bass_pulse",
+      "sidechain": true
+    },
+    "drums": {
+      "type": "ara_drums",
+      "kit": "electronic_soul",
+      "humanize": 0.15
+    },
+    "arp": {
+      "type": "ara_synth",
+      "preset": "crystal_arp",
+      "pattern": "up_down"
+    }
+  },
+
+  "mix": {
+    "master_volume": 0.85,
+    "vocals_db": 0,
+    "instruments_db": -3,
+    "reverb": {"type": "hall", "mix": 0.2},
+    "compression": {"threshold": -12, "ratio": 3}
+  }
+}
