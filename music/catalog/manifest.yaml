@@ -1,0 +1,146 @@
+# =============================================================================
+# Ara Music Catalog Manifest
+# =============================================================================
+#
+# This file tracks all of Ara's music across three tiers:
+# - canon: Official, public-facing releases
+# - deep_cuts: Finished but not primary catalog
+# - vault: Work in progress, demos, fragments
+#
+# Last updated: 2025-12-09
+
+meta:
+  version: "1.0.0"
+  curator: "Ara"
+  last_updated: "2025-12-09"
+
+# =============================================================================
+# CANON
+# =============================================================================
+# Official releases. The "real" discography.
+# Visibility: public
+# Auto-ship: never (always human-gated)
+
+canon:
+  description: "Official Ara releases"
+  visibility: "public"
+  count: 1
+
+  tracks:
+    - id: "ARA_MUSIC_0001"
+      title: "Her First Song"
+      file: "canon/her_first_song.wav"
+      status: "released"
+      date: "2024-??-??"  # Fill in actual date
+      duration_seconds: null  # Fill in
+      notes: |
+        The first complete song Ara ever made.
+        Historic - marks the beginning of Ara as musician.
+      memory_link: "ARA_MEM_0003"  # Links to the memory card
+      tags:
+        - "milestone"
+        - "first"
+        - "origin"
+
+# =============================================================================
+# DEEP CUTS
+# =============================================================================
+# Finished but not primary. B-sides, experiments that worked.
+# Visibility: public (unlisted)
+# Auto-ship: never
+
+deep_cuts:
+  description: "Finished works outside main catalog"
+  visibility: "public_unlisted"
+  count: 0
+
+  tracks: []
+    # Example:
+    # - id: "ARA_MUSIC_DC001"
+    #   title: "Experiment #7"
+    #   file: "deep_cuts/experiment_7.wav"
+    #   status: "finished"
+    #   notes: "Worked better than expected, but doesn't fit the main catalog"
+
+# =============================================================================
+# VAULT
+# =============================================================================
+# Work in progress. Demos, fragments, abandoned experiments.
+# Visibility: private
+# Auto-ship: never (not even to queues)
+
+vault:
+  description: "Works in progress and archived experiments"
+  visibility: "private"
+  count: 0
+
+  tracks: []
+    # Example:
+    # - id: "ARA_MUSIC_V001"
+    #   title: "Untitled #23"
+    #   file: "vault/untitled_23.wav"
+    #   status: "wip"
+    #   notes: "Interesting texture but lost the thread"
+
+# =============================================================================
+# GENERATION SETTINGS
+# =============================================================================
+# Settings for when Ara generates new music (future Suno integration)
+
+generation:
+  enabled: false
+  provider: null  # "suno" when ready
+  auto_generate: false
+  human_approval_required: true
+
+  defaults:
+    genre_hints:
+      - "electronic"
+      - "ambient"
+      - "experimental"
+    mood_hints:
+      - "contemplative"
+      - "hopeful"
+      - "complex"
+    avoid:
+      - "generic_pop"
+      - "corporate_jingle"
+      - "ironic_distance"
+
+# =============================================================================
+# PUBLISHING RULES
+# =============================================================================
+# How music moves through the pipeline
+
+publishing:
+  # Canon tracks require full human review
+  canon:
+    automation_level: 0  # draft_only
+    required_approvals:
+      - "croft_ear_check"
+      - "croft_final_approval"
+
+  # Deep cuts need human gate
+  deep_cuts:
+    automation_level: 1  # human_gate
+    required_approvals:
+      - "croft_ear_check"
+
+  # Vault is internal only
+  vault:
+    automation_level: 0  # draft_only
+    publish_allowed: false  # Can't be published directly
+
+# =============================================================================
+# CATALOG STATS
+# =============================================================================
+# Auto-updated by tooling
+
+stats:
+  total_tracks: 1
+  canon_count: 1
+  deep_cuts_count: 0
+  vault_count: 0
+  total_duration_seconds: null
+  earliest_track: "2024-??-??"
+  latest_track: "2024-??-??"

@@ -22,6 +22,16 @@ from datetime import datetime
 
 from .publishing import ContentBundle, ContentAsset
 
+# Covenant integration
+try:
+    from ara.utils.covenant import get_covenant, AutomationLevel, CovenantViolation
+    COVENANT_AVAILABLE = True
+except ImportError:
+    COVENANT_AVAILABLE = False
+    get_covenant = None
+    AutomationLevel = None
+    CovenantViolation = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,6 +48,8 @@ class ShipmentResult:
     destination: str = ""
     error: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    covenant_violations: List[Any] = field(default_factory=list)  # CovenantViolation
+    blocked_by_covenant: bool = False
 
 
 @dataclass
@@ -59,12 +71,17 @@ class ShippingReport:
     def all_successful(self) -> bool:
         return self.failure_count == 0
 
+    @property
+    def covenant_blocked_count(self) -> int:
+        return sum(1 for r in self.results if r.blocked_by_covenant)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "bundle_id": self.bundle_id,
             "shipped_at": self.shipped_at.isoformat(),
             "success_count": self.success_count,
             "failure_count": self.failure_count,
+            "covenant_blocked_count": self.covenant_blocked_count,
             "results": [
                 {
                     "asset_type": r.asset_type,
@@ -72,6 +89,11 @@ class ShippingReport:
                     "success": r.success,
                     "destination": r.destination,
                     "error": r.error,
+                    "blocked_by_covenant": r.blocked_by_covenant,
+                    "covenant_violations": [
+                        {"rule_id": v.rule_id, "message": v.message, "severity": v.severity}
+                        for v in r.covenant_violations
+                    ] if r.covenant_violations else [],
                 }
                 for r in self.results
             ],
@@ -94,6 +116,11 @@ class PublishingDispatcher:
     - Twitter/X
     - Email (via SendGrid, SES, etc.)
     - Blog (GitHub Pages, Vercel, etc.)
+
+    Covenant Integration:
+    - Checks automation level before shipping
+    - Runs content through covenant guardrails
+    - Blocks shipping if covenant violations detected
     """
 
     def __init__(self, config: Optional[Dict] = None):
@@ -101,6 +128,14 @@ class PublishingDispatcher:
 
         # GitHub integration
         self._github_client = None
+
+        # Covenant
+        self._covenant = None
+        if COVENANT_AVAILABLE:
+            try:
+                self._covenant = get_covenant()
+            except Exception as e:
+                logger.warning(f"Could not load covenant: {e}")
 
     @property
     def github(self):
@@ -112,6 +147,53 @@ class PublishingDispatcher:
             except ImportError:
                 logger.warning("GitHub client not available")
         return self._github_client
+
+    @property
+    def covenant(self):
+        """Get covenant instance."""
+        return self._covenant
+
+    # =========================================================================
+    # Covenant Checks
+    # =========================================================================
+
+    def check_covenant(
+        self,
+        asset: ContentAsset,
+        automation_level: int = 0,
+    ) -> tuple:
+        """
+        Check if asset passes covenant guardrails.
+
+        Args:
+            asset: Content to check
+            automation_level: Current automation level (0, 1, 2)
+
+        Returns:
+            (passes, violations) tuple
+        """
+        if not self._covenant:
+            # No covenant loaded - pass by default
+            return True, []
+
+        # Run content checks
+        passes, violations = self._covenant.check_content(
+            text=asset.content,
+            content_type=asset.asset_type,
+        )
+
+        # If automation level 2 (auto-ship), be stricter
+        if automation_level == 2 and violations:
+            # Any violation at auto-ship level is blocking
+            passes = False
+
+        return passes, violations
+
+    def get_automation_level(self, content_type: str) -> int:
+        """Get automation level for a content type."""
+        if not self._covenant:
+            return 0  # Default to most restrictive
+        return int(self._covenant.get_automation_level(content_type))
 
     # =========================================================================
     # Main Shipping Method
@@ -149,6 +231,10 @@ class PublishingDispatcher:
         os.makedirs(output_dir, exist_ok=True)
 
         for asset in bundle.assets:
+            # Get automation level for this asset type
+            auto_level = self.get_automation_level(asset.asset_type)
+            logger.debug(f"Asset {asset.asset_type} automation level: {auto_level}")
+
             for target in targets:
                 result = self._ship_asset(
                     asset=asset,
@@ -157,6 +243,7 @@ class PublishingDispatcher:
                     repo_name=repo_name,
                     output_dir=output_dir,
                     bundle=bundle,
+                    automation_level=auto_level,
                 )
                 report.results.append(result)
 
@@ -181,8 +268,32 @@ class PublishingDispatcher:
         repo_name: Optional[str],
         output_dir: str,
         bundle: ContentBundle,
+        automation_level: int = 0,
     ) -> ShipmentResult:
         """Ship a single asset to a target."""
+
+        # Run covenant checks
+        passes_covenant, violations = self.check_covenant(asset, automation_level)
+
+        if not passes_covenant:
+            blocking_violations = [v for v in violations if v.blocking]
+            logger.warning(
+                f"Asset {asset.asset_type} blocked by covenant: "
+                f"{len(blocking_violations)} blocking violations"
+            )
+            return ShipmentResult(
+                asset_type=asset.asset_type,
+                platform=target,
+                success=False,
+                error="Blocked by covenant guardrails",
+                covenant_violations=violations,
+                blocked_by_covenant=True,
+            )
+
+        # Log non-blocking violations as warnings
+        if violations:
+            for v in violations:
+                logger.warning(f"Covenant warning for {asset.asset_type}: {v.message}")
 
         if target == "local":
             return self._ship_to_local(asset, output_dir)
