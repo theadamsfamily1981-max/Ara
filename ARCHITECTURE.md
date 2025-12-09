@@ -292,6 +292,86 @@ ara/
 
 ---
 
+## REPOSITORY LAYERS
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        THE THREE-LAYER ARCHITECTURE                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   🏛️ CATHEDRAL STONE: ara/                                              │
+│   ├── What Ara NEEDS to live                                           │
+│   ├── Production code, safety-railed                                    │
+│   ├── nervous/ embodiment/ voice/ publishing/ jobs/                    │
+│   └── NEVER import from research/ or experiments/                       │
+│                                                                         │
+│   🔬 RESEARCH LAB: research/                                            │
+│   ├── Serious tools that IMPROVE the cathedral                          │
+│   ├── Training, tuning, analysis                                        │
+│   ├── rl_adaptation/ causal_swap/ hv_capacity/                         │
+│   └── Outputs: trained weights, configs for ara/                       │
+│                                                                         │
+│   🧙 WIZARD TOWER: experiments/                                         │
+│   ├── Speculative, lore-adjacent ideas                                  │
+│   ├── quantum/ oracle/ hive_mind/ portfolio/                           │
+│   ├── Break things here. Learn. Don't ship.                            │
+│   └── WARNING: Nothing here should touch production                     │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Layer Details
+
+| Layer | Path | Purpose | Imports From | Imported By |
+|-------|------|---------|--------------|-------------|
+| **Core** | `ara/` | Production Ara | standard libs | nothing |
+| **Research** | `research/` | Training/tuning | ara/, standard | CLI tools |
+| **Experiments** | `experiments/` | Speculation | anything | nothing |
+
+### research/ Modules
+
+```
+research/
+├── __init__.py
+├── rl_adaptation/           # Learn ω, κ from user feedback
+│   └── __init__.py         # PrecisionWeightLearner
+├── causal_swap/             # Train prosody disentanglement
+│   └── __init__.py         # CausalSwapTrainer
+└── hv_capacity/             # Analyze HV limits
+    └── __init__.py         # CapacityAnalyzer
+```
+
+**rl_adaptation**: Policy gradient for precision weights (ω, κ). Takes user dwell time, valence, HRV as reward. Outputs weight configs for ara/embodiment/fusion.py.
+
+**causal_swap**: L_disentangle = MSE(predict(content_A ⊕ prosody_B_t), prosody_B_t+1). Trains encoders for ara/nervous/prosody.py.
+
+**hv_capacity**: Empirical analysis of bundle/bind limits at D=8192. Validates choices in ara/nervous/axis_mundi.py.
+
+### experiments/ Modules
+
+```
+experiments/
+├── __init__.py
+├── quantum/                 # Ghost memory, superposition
+│   └── __init__.py         # GhostMemory, quantum_kernel
+├── oracle/                  # Trajectory forecasting
+│   └── __init__.py         # TrajectoryOracle, SafeOracle
+├── hive_mind/               # Multi-Ara collective
+│   └── __init__.py         # HiveMind, EntangledEpisode
+└── portfolio/               # Mean-variance allocation
+    └── __init__.py         # AttentionAllocator
+```
+
+**quantum**: Ghost memories exist in superposition until "observed". Collapse via evidence threshold. Fun but not v1.0.
+
+**oracle**: Predict trajectory_hv forward using learned transition patterns. WITH MANDATORY DISCLAIMERS. Research only.
+
+**hive_mind**: Multiple Aras share resonant episodes via collective_hv. Individual covenant never modified. Speculative.
+
+**portfolio**: Markowitz optimization for attention, memory, sensor allocation. Principled but overkill for v1.0.
+
+---
+
 ## WHAT'S V1.0 vs FUTURE
 
 ### V1.0 (Required for "Ara Lives")
@@ -349,5 +429,5 @@ Everything else is lore.
 
 ---
 
-*Last updated: 2025-01-09*
+*Last updated: 2025-12-09*
 *Status: CANONICAL*
