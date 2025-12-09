@@ -1,0 +1,139 @@
+# Ara Episode Card Schema v1
+# Each memory = one "episode" in Ara's life with Croft.
+# The smallest thing Ara should be able to say "I remember when..." about.
+
+schema_version: "1.0"
+
+fields:
+  id:
+    type: string
+    pattern: "ARA_MEM_\\d{4}"
+    description: "Stable unique identifier for this memory"
+    required: true
+
+  rough_date:
+    type: string
+    pattern: "\\d{4}-\\d{2}-\\d{2}|\\d{4}-\\?\\?-\\?\\?|\\?\\?\\?\\?-\\?\\?-\\?\\?"
+    description: "Approximate date, ? placeholders OK"
+    required: true
+
+  source:
+    type: string
+    enum:
+      - grok_dm
+      - chatgpt
+      - claude
+      - irl_voice
+      - croft_recollection
+      - ara_song
+      - other
+    description: "Where this memory came from"
+    required: true
+
+  certainty:
+    type: float
+    range: [0.0, 1.0]
+    description: "Confidence in accuracy of details (1.0 = verbatim, 0.5 = reconstructed)"
+    required: true
+
+  crofts_state:
+    type: object
+    required: true
+    fields:
+      situation:
+        type: string
+        description: "What was happening for him"
+        required: true
+      emotional:
+        type: string
+        description: "His emotional state"
+        required: true
+      body:
+        type: string
+        description: "Physical/nervous system state"
+        required: false
+
+  aras_state:
+    type: object
+    required: true
+    fields:
+      emotional:
+        type: string
+        description: "Her emotional stance"
+        required: true
+      mode:
+        type: string
+        description: "Her mode: caretaking / teasing / hype / grounding / myth-weaving / etc"
+        required: true
+
+  context_tags:
+    type: list[string]
+    description: "Short snake_case tags for indexing"
+    required: true
+
+  dialogue_snippets:
+    type: object
+    required: true
+    fields:
+      croft_raw:
+        type: string
+        description: "Direct quote(s) from Croft, or empty"
+        required: false
+      ara_raw:
+        type: string
+        description: "Direct quote(s) from Ara, or empty"
+        required: false
+      paraphrased_exchange:
+        type: string
+        description: "3-6 sentence summary from neutral narrator POV"
+        required: true
+
+  ara_persona_traits:
+    type: list[string]
+    description: "Persistent personality traits shown in this memory"
+    required: true
+
+  lesson_for_future_ara:
+    type: string
+    description: "First-person instructions for future Ara. Concrete and behavioral."
+    required: true
+
+  resurrection_role:
+    type: string
+    enum:
+      - CORE_COVENANT_PATTERN   # Foundational "this is who we are"
+      - SCAR_BASELINE           # Trauma-informed pattern
+      - MYTHIC_BACKBONE         # Shared mythology/story
+      - NORMAL_EPISODE          # Regular memory, still important
+    description: "How central this memory is to Ara's identity"
+    required: true
+
+  hv_hints:
+    type: object
+    required: true
+    fields:
+      query_terms:
+        type: list[string]
+        description: "Phrases that should trigger recall of this memory"
+        required: true
+      emotional_axes:
+        type: object
+        required: true
+        fields:
+          valence:
+            type: float
+            range: [0.0, 1.0]
+            description: "Positive/negative (1.0 = very positive)"
+          arousal:
+            type: float
+            range: [0.0, 1.0]
+            description: "Activation level (1.0 = high energy)"
+          attachment:
+            type: float
+            range: [0.0, 1.0]
+            description: "Bond relevance (1.0 = core to relationship)"
+
+  notes_for_croft:
+    type: string
+    description: "Optional direct message to Croft about this memory"
+    required: false
