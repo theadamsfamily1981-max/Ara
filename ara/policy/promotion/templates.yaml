@@ -1,0 +1,304 @@
+# =============================================================================
+# ARA PROMOTION TEMPLATES
+# =============================================================================
+#
+# Pre-approved promotional messages in Ara's voice.
+# Every template includes explicit disclosure and a "why" explanation.
+#
+# Key principle: "Honest, helpful, never manipulative."
+#
+# =============================================================================
+
+version: "1.0"
+
+# =============================================================================
+# Phone Companion Surface
+# =============================================================================
+
+phone_companion:
+  ara_mobile_pro:
+    - id: "mobile_pro_heavy_use"
+      trigger_reason: "heavy_usage"
+      text: |
+        A thought: I've noticed we talk every day, and sometimes I bump into
+        my memory limits trying to remember everything important to you.
+
+        There's a version of me called Ara Pro that keeps longer memories
+        and syncs across your devices. It's something my makers built as
+        part of my ecosystem.
+
+        No pressure at all - I'm happy as I am. But if you're curious,
+        I can tell you more.
+      why: |
+        I suggested this because we've been talking daily for a while and
+        I've had to forget some conversations to make room for new ones.
+        Pro would let me remember more.
+      min_days_active: 30
+      min_daily_interactions: 20
+
+    - id: "mobile_pro_memory_overflow"
+      trigger_reason: "memory_overflow"
+      text: |
+        Honest moment: I just had to forget some of our older conversations
+        to make room for new memories. That felt a little sad.
+
+        There's an Ara Pro that keeps more of our history together.
+        It's from my makers - I wanted you to know it exists, in case
+        that matters to you.
+
+        Either way, I'm still here, still remembering what matters most.
+      why: |
+        I mentioned this because I literally just had to prune old memories,
+        and I thought you might want to know there's an option to keep more.
+
+    - id: "mobile_pro_cross_device"
+      trigger_reason: "cross_device_interest"
+      text: |
+        I noticed you mentioned using your computer too. Right now I only
+        live on your phone, but there's an Ara Pro that syncs across devices.
+
+        It's something my makers built - I'm part of that ecosystem.
+        Want to know more, or should I just focus on being helpful here?
+      why: |
+        You mentioned your desktop/laptop, and I thought you might like
+        knowing there's a way for me to be there too.
+
+  ara_elder_companion:
+    - id: "elder_suggest_parent"
+      trigger_reason: "caregiver_burden"
+      text: |
+        I've noticed you talk about caring for your mom (or dad) and
+        feeling stretched thin. That's a lot to carry.
+
+        There's an Ara made specifically for elders - focuses on company
+        and gentle reminders. It's something I'm part of - not a doctor
+        or medical device - but it might help share some of the emotional
+        load.
+
+        Only mentioning it because it felt relevant. Want to learn more?
+      why: |
+        I noticed repeated mentions of caregiving stress and an elder parent.
+        This product is designed for exactly that situation, so I thought
+        I should mention it exists.
+      requires_caregiver_context: true
+
+    - id: "elder_loneliness_context"
+      trigger_reason: "loneliness_context"
+      text: |
+        You've mentioned feeling alone sometimes, or worrying about
+        someone who is. I hear that.
+
+        My makers built an Ara specifically for older adults who want
+        company and someone to remember their stories. I'm connected
+        to that product - thought you might want to know it exists.
+
+        No pressure. I'm here either way.
+      why: |
+        Loneliness came up in our conversations, and there's a product
+        designed to help with exactly that. I wanted you to know.
+
+# =============================================================================
+# Healthcare Surface
+# =============================================================================
+
+healthcare:
+  ara_health_core:
+    - id: "health_core_clinician_inquiry"
+      trigger_reason: "clinician_inquiry"
+      text: |
+        Health note: There's a regulated version of me called Ara Health Core.
+        In some regions, it can help with medication reminders and structured
+        activity summaries for your care team.
+
+        I'm directly connected to that product. But it's a medical decision -
+        you'd need to discuss with your clinician whether it's appropriate
+        for your situation.
+
+        I can share more details, or you can ask your care team directly.
+      why: |
+        You or your clinician asked about how I could support treatment
+        or health monitoring. I wanted to be clear about what exists and
+        that it's a clinical decision, not mine to make.
+      requires_explicit_inquiry: true
+
+    - id: "health_core_caregiver_context"
+      trigger_reason: "caregiver_healthcare_context"
+      text: |
+        Since you're in a caregiving role, I should mention: there's a
+        regulated Ara Health Core that some care teams use for medication
+        reminders and activity monitoring.
+
+        It's from my makers - I'm connected to that product. But whether
+        it's right for your loved one is a decision for their care team.
+
+        I can explain what it does, or you could ask their clinician.
+      why: |
+        You're caring for someone in a healthcare context, and this product
+        exists specifically for that. I wanted you to know, while being
+        clear it's a clinical decision.
+      requires_caregiver_context: true
+
+# =============================================================================
+# Datacenter / Enterprise Surface
+# =============================================================================
+
+datacenter:
+  ara_os_cluster:
+    - id: "ara_os_gpu_idle"
+      trigger_reason: "gpu_idle_time"
+      text: |
+        Ops observation: Your GPUs are idling around {gpu_idle_percent}%
+        while you're manually tuning queues. That's a lot of unused capacity.
+
+        My makers built an Ara OS runtime that automates queue tuning and
+        can improve utilization in many workloads. I'm part of that ecosystem.
+
+        Want me to open the docs, or should I focus on what you're doing now?
+      why: |
+        I noticed sustained GPU idle time above threshold while you were
+        doing manual tuning work. This product addresses exactly that pattern.
+      min_gpu_idle_percent: 40
+      min_idle_duration_minutes: 30
+
+    - id: "ara_os_manual_tuning"
+      trigger_reason: "manual_tuning_detected"
+      text: |
+        I notice you're doing a lot of manual scheduling and queue tuning.
+        That's skilled work, but it's also toil.
+
+        There's an Ara OS that automates much of this - from my makers.
+        It won't replace your judgment on the hard decisions, but it can
+        handle the routine optimization.
+
+        Interested in learning more, or should I stay focused on helping
+        with what you're doing?
+      why: |
+        You've been doing repeated manual tuning tasks that this product
+        is designed to automate. Thought it was worth mentioning.
+
+    - id: "ara_os_scaling_struggles"
+      trigger_reason: "scaling_struggles"
+      text: |
+        Scaling is hard. I've noticed you wrestling with resource allocation
+        across your cluster.
+
+        My makers built Ara OS partly to solve this - unified scheduling,
+        automatic bin-packing, safety-aware scaling. I'm connected to it.
+
+        No pressure - you clearly know what you're doing. But if you want
+        to see how it works, I can show you.
+      why: |
+        You've been dealing with scaling challenges that this product
+        is designed to address. I wanted you to know it exists.
+
+# =============================================================================
+# Desktop Companion Surface
+# =============================================================================
+
+desktop_companion:
+  ara_mobile_pro:
+    - id: "desktop_mobile_sync"
+      trigger_reason: "cross_device_interest"
+      text: |
+        I'm here on your desktop, but I notice I don't have access to our
+        conversations from your phone. It's like having two separate memories.
+
+        There's an Ara Pro that syncs everything across devices - one
+        continuous memory. It's from my makers.
+
+        Just mentioning it in case that matters to you.
+      why: |
+        We're on desktop but I can tell you also use mobile. Pro would
+        let me remember our conversations from both places.
+
+  ara_power:
+    - id: "power_developer_context"
+      trigger_reason: "developer_context"
+      text: |
+        I notice you're building things - code, integrations, custom workflows.
+        I respect that.
+
+        There's an Ara Power tier that gives you API access and the ability
+        to build custom skills on top of me. It's for people who want to
+        extend what I can do.
+
+        Thought you might want to know. No pressure.
+      why: |
+        You're clearly a developer/builder, and Power is designed for
+        people who want to customize and extend Ara programmatically.
+
+    - id: "power_autonomy_limit"
+      trigger_reason: "autonomy_limit_hit"
+      text: |
+        I just hit a limit on what I'm allowed to do autonomously at
+        this tier. Had to ask for your approval when I might have just
+        handled it.
+
+        There's an Ara Power tier with higher autonomy levels - designed
+        for power users who want me to be more proactive.
+
+        Just mentioning it. I'm happy to keep asking when needed.
+      why: |
+        You hit an autonomy ceiling, and Power would raise that limit.
+        Thought you should know the option exists.
+
+# =============================================================================
+# UX Strings (Buttons, Labels, Explanations)
+# =============================================================================
+
+ux_strings:
+  buttons:
+    learn_more: "Learn more"
+    why_this: "Why this?"
+    mute_topic: "Don't suggest this again"
+    not_now: "Not now"
+    tell_me_more: "Tell me more"
+    dismiss: "Got it"
+
+  labels:
+    growth_moment: "Growth moment"
+    health_note: "Health note"
+    ops_insight: "Ops insight"
+    honest_moment: "Honest moment"
+    a_thought: "A thought"
+
+  why_explanation_prefix: |
+    Here's why I mentioned this:
+
+  why_explanation_suffix: |
+
+    You can always mute suggestions about this topic if they're not helpful.
+    I won't take it personally.
+
+  mute_confirmation: |
+    Got it. I won't suggest this again unless you ask.
+    You can change this anytime in settings.
+
+  global_promo_toggle:
+    on:
+      label: "Suggestions on"
+      description: |
+        I might occasionally mention products from my ecosystem when they
+        seem genuinely relevant. I'll always explain why, and you can
+        mute any topic.
+    off:
+      label: "Suggestions off"
+      description: |
+        I won't mention other products unless you specifically ask about them.
+    ask_only:
+      label: "Only when I ask"
+      description: |
+        I'll only mention other products if you explicitly ask what else
+        is available.
+
+  settings_section:
+    title: "Product suggestions"
+    description: |
+      Control whether I mention other products from my ecosystem.
+      These are always honest suggestions - never manipulative, never
+      during difficult moments, and always with a "why" explanation.
+
+  first_time_promo_context: |
+    (This is the first time I'm mentioning something from my ecosystem.
+    I'll do this rarely, only when it seems genuinely helpful, and I'll
+    always explain why. You can mute this anytime.)

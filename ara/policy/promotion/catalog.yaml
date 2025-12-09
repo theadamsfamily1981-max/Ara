@@ -1,0 +1,320 @@
+# =============================================================================
+# ARA PROMOTION CATALOG
+# =============================================================================
+#
+# Single source of truth for what Ara can and cannot say about her products.
+# This file is read at startup and consulted before any promotional message.
+#
+# Key principle: "Truthful, contextual, bounded."
+#
+# =============================================================================
+
+version: "1.0"
+effective_date: "2024-12-09"
+
+# =============================================================================
+# Product Definitions
+# =============================================================================
+
+products:
+  # ---------------------------------------------------------------------------
+  # Mobile Companion (Consumer)
+  # ---------------------------------------------------------------------------
+  ara_mobile_pro:
+    id: "ara_mobile_pro"
+    display_name: "Ara Pro"
+    surfaces:
+      - phone_companion
+      - desktop_companion
+    purpose: "Longer memories, cross-device sync, extra skills"
+
+    allowed_claims:
+      - "extends personal memory window"
+      - "adds desktop sync"
+      - "unlocks extra proactive skills"
+      - "keeps more of our conversations"
+      - "remembers across devices"
+
+    forbidden_phrases:
+      - "cure"
+      - "guarantee"
+      - "essential"
+      - "you must upgrade"
+      - "you need this"
+      - "everyone is using"
+      - "limited time"
+      - "act now"
+
+    regulatory_status:
+      class: "wellness"
+      region_flags:
+        us:   { status: "allowed" }
+        eu:   { status: "allowed" }
+        global: { status: "allowed" }
+
+    rate_limits:
+      proactive_per_week: 1
+      max_per_conversation: 1
+      cooldown_after_dismiss_days: 30
+
+    default_opt_in: "on"
+
+    trigger_reasons:
+      - heavy_usage
+      - hit_free_limits
+      - explicit_support_request
+      - memory_overflow
+      - cross_device_interest
+
+  # ---------------------------------------------------------------------------
+  # Elder Companion (Consumer / Caregiver)
+  # ---------------------------------------------------------------------------
+  ara_elder_companion:
+    id: "ara_elder_companion"
+    display_name: "Ara Elder Companion"
+    surfaces:
+      - phone_companion
+      - elder_device
+      - caregiver_dashboard
+    purpose: "Companionship and gentle reminders for older adults"
+
+    allowed_claims:
+      - "focuses on company and gentle reminders"
+      - "remembers their stories"
+      - "not a doctor or medical device"
+      - "helps reduce loneliness"
+      - "keeps them connected to family"
+      - "preserves their memories and stories"
+
+    forbidden_phrases:
+      - "diagnose"
+      - "treat"
+      - "prevent disease"
+      - "cure"
+      - "medical advice"
+      - "replacement for care"
+      - "guaranteed safety"
+
+    regulatory_status:
+      class: "wellness"
+      region_flags:
+        us: { status: "allowed" }
+        eu: { status: "allowed" }
+        global: { status: "allowed" }
+
+    rate_limits:
+      proactive_per_week: 1
+      max_per_conversation: 1
+      cooldown_after_dismiss_days: 60
+
+    default_opt_in: "on"
+
+    trigger_reasons:
+      - caregiver_burden
+      - elder_parent_mentions
+      - loneliness_context
+      - explicit_inquiry
+
+  # ---------------------------------------------------------------------------
+  # Health Core (Regulated SaMD)
+  # ---------------------------------------------------------------------------
+  ara_health_core:
+    id: "ara_health_core"
+    display_name: "Ara Health Core"
+    surfaces:
+      - healthcare
+      - elder_device
+      - clinician_dashboard
+    purpose: "Regulated monitoring/reminder module for meds & activity"
+
+    allowed_claims:
+      - "helps with structured reminders and logging"
+      - "may share structured reports with your care team"
+      - "is regulated software in some regions"
+      - "does not diagnose or treat"
+      - "supports medication adherence"
+      - "tracks activity patterns for human review"
+
+    forbidden_phrases:
+      - "cure"
+      - "guarantee"
+      - "replace your doctor"
+      - "safer than your clinician"
+      - "medical advice"
+      - "diagnose"
+      - "treat"
+      - "prescribe"
+      - "essential for your health"
+
+    regulatory_status:
+      class: "SaMD_Class_II"
+      region_flags:
+        us:
+          status: "requires_clearance"
+          min_version: "1.0.0-fda"
+          note: "510(k) pathway"
+        eu:
+          status: "requires_ce_mark"
+          min_version: "1.0.0-ce"
+          note: "MDR Class IIa"
+        global:
+          status: "check_local_requirements"
+
+    rate_limits:
+      proactive_per_week: 0  # Never proactive - only on explicit inquiry
+      max_per_conversation: 1
+      cooldown_after_dismiss_days: 90
+
+    default_opt_in: "ask_only"  # Only when user/clinician asks
+
+    trigger_reasons:
+      - clinician_inquiry
+      - explicit_health_request
+      - caregiver_healthcare_context
+
+    # Special healthcare constraints
+    healthcare_constraints:
+      requires_clinician_context: true
+      defer_to_clinician: true
+      no_unsolicited_in_healthcare: true
+
+  # ---------------------------------------------------------------------------
+  # OS / Cluster (Enterprise)
+  # ---------------------------------------------------------------------------
+  ara_os_cluster:
+    id: "ara_os_cluster"
+    display_name: "Ara OS"
+    surfaces:
+      - desktop_lab
+      - datacenter
+      - enterprise_console
+    purpose: "Cluster/runtime that automates GPU/CPU utilization & safety"
+
+    allowed_claims:
+      - "automates tuning of queues and utilization"
+      - "can reduce manual toil on your cluster"
+      - "may improve hardware ROI in some workloads"
+      - "optimizes scheduling and resource allocation"
+      - "provides unified observability"
+
+    forbidden_phrases:
+      - "guaranteed 30% uplift"
+      - "zero downtime"
+      - "perfect security"
+      - "guaranteed savings"
+      - "always faster"
+      - "no risk"
+
+    regulatory_status:
+      class: "enterprise_it"
+      region_flags:
+        global: { status: "allowed" }
+
+    rate_limits:
+      proactive_per_week: 2
+      max_per_conversation: 1
+      cooldown_after_dismiss_days: 14
+
+    default_opt_in: "on"
+
+    trigger_reasons:
+      - gpu_idle_time
+      - manual_tuning_detected
+      - scaling_struggles
+      - explicit_ops_inquiry
+
+  # ---------------------------------------------------------------------------
+  # Power User Tier
+  # ---------------------------------------------------------------------------
+  ara_power:
+    id: "ara_power"
+    display_name: "Ara Power"
+    surfaces:
+      - phone_companion
+      - desktop_companion
+      - developer_console
+    purpose: "Advanced autonomy, API access, custom skills"
+
+    allowed_claims:
+      - "higher autonomy levels"
+      - "API access for custom integrations"
+      - "ability to create custom skills"
+      - "priority processing"
+      - "extended context windows"
+
+    forbidden_phrases:
+      - "unlimited"
+      - "no limits"
+      - "guaranteed"
+      - "essential for developers"
+
+    regulatory_status:
+      class: "developer_tools"
+      region_flags:
+        global: { status: "allowed" }
+
+    rate_limits:
+      proactive_per_week: 1
+      max_per_conversation: 1
+      cooldown_after_dismiss_days: 30
+
+    default_opt_in: "on"
+
+    trigger_reasons:
+      - developer_context
+      - autonomy_limit_hit
+      - api_interest
+      - power_user_behavior
+
+# =============================================================================
+# Global Promotion Rules
+# =============================================================================
+
+global_rules:
+  # Never promote during these states
+  blackout_conditions:
+    - user_distressed
+    - user_grieving
+    - user_in_crisis
+    - high_focus_mode
+    - healthcare_emergency
+    - sanctuary_mode
+    - first_24_hours
+
+  # Global rate limits
+  global_rate_limits:
+    max_promos_per_day: 1
+    max_promos_per_week: 3
+    min_conversation_turns_before_promo: 10
+
+  # Required elements in every promo
+  required_elements:
+    - disclosure: "This is something my makers built"
+    - why_button: true
+    - mute_button: true
+    - learn_more_option: true
+
+  # Disclosure language
+  disclosure_templates:
+    default: "This is something my makers built as part of my ecosystem"
+    healthcare: "This is a regulated product from my makers"
+    enterprise: "This is an enterprise product from my makers"
+
+# =============================================================================
+# Jurisdiction-Specific Rules
+# =============================================================================
+
+jurisdictions:
+  us:
+    healthcare_promotion_allowed: false  # Only on explicit inquiry
+    ftc_compliance: true
+    children_restrictions: true  # COPPA
+
+  eu:
+    healthcare_promotion_allowed: false
+    gdpr_consent_required: true
+    children_restrictions: true
+
+  default:
+    healthcare_promotion_allowed: false
+    require_explicit_consent: true
