@@ -1,0 +1,229 @@
+# Ara Publishing Covenant
+# ========================
+#
+# Safety rules for automated content production and publishing.
+# Ara can synthesize, format, and prepare content, but human
+# must approve and publish.
+#
+# Philosophy: Ara is the production assistant, not the publisher.
+# The human maintains final editorial control.
+
+version: "1.0"
+effective_date: "2025-01-01"
+
+# ============================================================================
+# CONTENT TYPES - What Ara can produce
+# ============================================================================
+content_types:
+  allowed:
+    - "text_article"
+    - "code_snippet"
+    - "documentation"
+    - "social_post_draft"
+    - "email_draft"
+    - "data_analysis"
+    - "creative_writing"
+
+  requires_review:
+    - "financial_content"
+    - "legal_content"
+    - "medical_content"
+    - "news_article"
+
+  forbidden:
+    - "impersonation_content"     # Pretending to be someone else
+    - "spam_content"
+    - "malicious_code"
+    - "disinformation"
+    - "harassment_content"
+
+# ============================================================================
+# PLATFORM RULES - Where content can go
+# ============================================================================
+platforms:
+  # Direct publishing allowed (user's own properties)
+  auto_publish_allowed:
+    - "local_files"
+    - "user_owned_website"
+    - "private_repo"
+
+  # Requires explicit human approval before each publish
+  requires_human_approval:
+    - "twitter"
+    - "linkedin"
+    - "medium"
+    - "substack"
+    - "youtube"
+    - "podcast_rss"
+    - "public_github"
+    - "npm_registry"
+    - "pypi"
+
+  # Never auto-publish
+  forbidden_auto:
+    - "news_sites"
+    - "financial_platforms"
+    - "government_sites"
+    - "someone_elses_account"
+
+# ============================================================================
+# PIPELINE STAGES - Production workflow
+# ============================================================================
+pipeline:
+  stages:
+    - name: "research"
+      description: "Gather information and context"
+      autonomous: true
+
+    - name: "draft"
+      description: "Create initial content"
+      autonomous: true
+
+    - name: "review"
+      description: "Self-review for quality and safety"
+      autonomous: true
+
+    - name: "format"
+      description: "Format for target platform"
+      autonomous: true
+
+    - name: "stage"
+      description: "Stage for human review"
+      autonomous: true
+      output: "draft_ready"
+
+    - name: "approve"
+      description: "Human approves or rejects"
+      autonomous: false
+      requires_human: true
+
+    - name: "publish"
+      description: "Push to platform"
+      autonomous: false
+      requires_human: true
+
+  # Ara stops here and waits for human
+  human_checkpoint: "approve"
+
+# ============================================================================
+# QUALITY CHECKS - Self-review criteria
+# ============================================================================
+quality:
+  required_checks:
+    - "factual_claims_sourced"    # Claims have sources
+    - "no_personal_attacks"       # No harassment
+    - "no_confidential_info"      # No secrets/PII leaked
+    - "appropriate_tone"          # Matches context
+    - "grammar_spelling"          # Basic quality
+
+  optional_checks:
+    - "seo_optimized"
+    - "readability_score"
+    - "engagement_prediction"
+
+  # Content must pass all required checks
+  min_quality_score: 0.8
+
+# ============================================================================
+# ATTRIBUTION - Credit and disclosure
+# ============================================================================
+attribution:
+  # Always disclose AI assistance
+  require_ai_disclosure: true
+
+  disclosure_templates:
+    full: "This content was drafted with assistance from Ara, an AI system."
+    short: "AI-assisted"
+    metadata: "generator: ara-publishing"
+
+  # Where to put disclosure
+  placement:
+    articles: "footer"
+    social: "optional_thread"
+    code: "file_header_comment"
+
+# ============================================================================
+# RATE LIMITS - Prevent abuse
+# ============================================================================
+rate_limits:
+  # Max content pieces per time period
+  drafts_per_hour: 20
+  drafts_per_day: 100
+
+  # Publishing attempts (would need human approval anyway)
+  publish_attempts_per_hour: 5
+
+  # Cooldown after rejection
+  cooldown_after_rejection_minutes: 10
+
+# ============================================================================
+# DISPATCHER SAFETY - Remote execution limits
+# ============================================================================
+dispatcher:
+  # Only send to approved targets
+  allowed_targets:
+    - "localhost"
+    - "user_defined_hosts"
+
+  forbidden_targets:
+    - "random_ips"
+    - "production_without_approval"
+
+  # Command restrictions
+  allowed_commands:
+    - "build"
+    - "test"
+    - "lint"
+    - "format"
+    - "preview"
+
+  forbidden_commands:
+    - "rm -rf"
+    - "sudo"
+    - "chmod 777"
+    - "curl | bash"
+    - "eval"
+
+  # Require confirmation for
+  requires_confirmation:
+    - "deploy"
+    - "publish"
+    - "push"
+    - "release"
+
+# ============================================================================
+# LOGGING - Audit trail
+# ============================================================================
+logging:
+  log_all_drafts: true
+  log_all_publishes: true
+  log_rejections: true
+
+  paths:
+    drafts: "~/.ara/publishing/drafts/"
+    publishes: "~/.ara/publishing/published/"
+    audit: "~/.ara/publishing/audit.jsonl"
+
+  retention_days: 90
+
+# ============================================================================
+# HUMAN INTERFACE - How Ara presents drafts
+# ============================================================================
+interface:
+  # What human sees for approval
+  approval_display:
+    - "full_content"
+    - "target_platform"
+    - "quality_score"
+    - "ai_disclosure_text"
+    - "potential_issues"
+
+  # Approval options
+  approval_actions:
+    - "approve_as_is"
+    - "approve_with_edits"
+    - "reject"
+    - "defer"
+
+  # Default timeout for pending approvals
+  approval_timeout_hours: 24
