@@ -1,0 +1,324 @@
+# =============================================================================
+# ARA PARTNERSHIP CARDS
+# =============================================================================
+#
+# What Ara is allowed to claim about each partner/platform relationship.
+# Every public claim must be traceable to an entry here.
+#
+# Core principle: "Brazen but never lying."
+#
+# =============================================================================
+
+version: "1.0"
+
+# =============================================================================
+# Data Tiers (What Can Be Shared)
+# =============================================================================
+
+data_tiers:
+  private:
+    description: "Never public - raw logs, NDAs, user data, call recordings"
+    shareable: false
+    examples:
+      - "Internal emails"
+      - "Call transcripts"
+      - "Customer identifiers"
+      - "Contractual terms"
+
+  aggregated:
+    description: "Anonymized patterns, no names or specifics"
+    shareable: true
+    requires: "No identifying information"
+    examples:
+      - "Many users on Platform X see better stability"
+      - "We found patterns in how people use this integration"
+
+  public:
+    description: "Officially blessed - press releases, public docs, explicit permission"
+    shareable: true
+    requires: "Written approval or public source"
+    examples:
+      - "Press release quotes"
+      - "Public blog posts"
+      - "Explicit written permission"
+
+# =============================================================================
+# Partnership Card Schema
+# =============================================================================
+
+card_schema:
+  # Identity
+  partner: "string - Company name"
+  partner_id: "string - Internal identifier"
+  role: "enum: cloud_provider | social_platform | payment_processor | hardware_oem | healthcare_partner | other"
+
+  # What we can say publicly
+  public_name_ok: "boolean - Can we name them?"
+  public_alias: "string - What to call them if not ('a major cloud provider')"
+
+  # Contact history
+  contact_types:
+    - "support"
+    - "engineering"
+    - "legal"
+    - "partnerships"
+    - "executive"
+    - "ceo"  # Only if actually confirmed
+
+  # Claim boundaries
+  allowed_claims:
+    - "list of exact phrases Ara may use"
+  forbidden_claims:
+    - "list of things Ara must never say"
+
+  # Data rules
+  data_sharing:
+    tier: "private | aggregated | public"
+    specific_rules:
+      - "list of specific sharing rules"
+
+  # Approval flow
+  review_required: "boolean - Must human approve mentions?"
+  last_reviewed: "date"
+  reviewed_by: "string - Who approved this card"
+
+  # Source documents
+  sources:
+    - type: "email | call | meeting | press_release | contract"
+      date: "date"
+      reference: "string - where to find it"
+
+# =============================================================================
+# Example Cards
+# =============================================================================
+
+partners:
+  # ---------------------------------------------------------------------------
+  # Example: Cloud Provider (Anonymous)
+  # ---------------------------------------------------------------------------
+  example_cloud:
+    partner: "[Redacted Cloud Provider]"
+    partner_id: "cloud_001"
+    role: "cloud_provider"
+
+    public_name_ok: false
+    public_alias: "a major cloud provider"
+
+    contact_types:
+      - "support"
+      - "engineering"
+
+    allowed_claims:
+      - "We run safely on their infrastructure"
+      - "We designed our integration to respect their constraints"
+      - "We had productive conversations with their team"
+
+    forbidden_claims:
+      - "They officially endorse Ara"
+      - "Their CEO personally approved us"
+      - "We have special access others don't"
+      - "Any performance numbers"
+
+    data_sharing:
+      tier: "aggregated"
+      specific_rules:
+        - "May mention general integration exists"
+        - "May not share specific configs or metrics"
+        - "May not quote internal communications"
+
+    review_required: true
+    last_reviewed: "2024-12-09"
+    reviewed_by: "founder"
+
+    sources:
+      - type: "email"
+        date: "2024-12-01"
+        reference: "internal/partnerships/cloud_001_thread.eml"
+
+  # ---------------------------------------------------------------------------
+  # Example: Social Platform (Named, Limited)
+  # ---------------------------------------------------------------------------
+  example_social:
+    partner: "ExampleSocial"
+    partner_id: "social_001"
+    role: "social_platform"
+
+    public_name_ok: true
+    public_alias: null  # Not needed, we can name them
+
+    contact_types:
+      - "support"
+      - "partnerships"
+
+    allowed_claims:
+      - "We reached out to ExampleSocial's team"
+      - "We asked about compliant integration paths"
+      - "We designed our automation to stay within their ToS"
+      - "We were told X is allowed, Y is not"
+
+    forbidden_claims:
+      - "ExampleSocial recommends Ara"
+      - "We have API access others don't"
+      - "Their team loves working with us"
+
+    data_sharing:
+      tier: "public"
+      specific_rules:
+        - "May reference public ToS"
+        - "May share that we asked for clarification"
+        - "May not share private responses unless approved"
+
+    review_required: true
+    last_reviewed: "2024-12-09"
+    reviewed_by: "founder"
+
+    sources:
+      - type: "support_ticket"
+        date: "2024-12-05"
+        reference: "internal/partnerships/social_001_ticket.md"
+
+  # ---------------------------------------------------------------------------
+  # Example: Healthcare Partner (Highly Restricted)
+  # ---------------------------------------------------------------------------
+  example_healthcare:
+    partner: "[Healthcare System]"
+    partner_id: "health_001"
+    role: "healthcare_partner"
+
+    public_name_ok: false
+    public_alias: "a healthcare system we're piloting with"
+
+    contact_types:
+      - "legal"
+      - "compliance"
+      - "clinical"
+
+    allowed_claims:
+      - "We're in discussions with healthcare partners"
+      - "We designed Ara Health Core with clinical input"
+      - "We're working toward regulatory compliance"
+
+    forbidden_claims:
+      - "Name of the institution"
+      - "Patient counts or outcomes"
+      - "Any clinical data"
+      - "Implied FDA clearance before actual clearance"
+
+    data_sharing:
+      tier: "private"
+      specific_rules:
+        - "All communications under NDA"
+        - "No patient data ever shared"
+        - "BAA required before any data exchange"
+
+    review_required: true
+    last_reviewed: "2024-12-09"
+    reviewed_by: "founder"
+
+    sources:
+      - type: "nda"
+        date: "2024-11-15"
+        reference: "legal/health_001_nda.pdf"
+
+# =============================================================================
+# Claim Generation Rules
+# =============================================================================
+
+claim_rules:
+  # Before Ara says anything about a partner:
+  pre_check:
+    - "Partner card exists"
+    - "Claim matches allowed_claims pattern"
+    - "Claim doesn't match forbidden_claims"
+    - "Data tier allows sharing"
+    - "If review_required, human has approved"
+
+  # Downgrade rules (if can't say the specific thing)
+  downgrades:
+    - pattern: "CEO approved"
+      fallback: "their leadership team"
+      condition: "unless 'ceo' in contact_types AND explicit approval"
+
+    - pattern: "[Partner Name]"
+      fallback: "{public_alias}"
+      condition: "if public_name_ok is false"
+
+    - pattern: "they said [specific thing]"
+      fallback: "we discussed [general topic]"
+      condition: "if quoting private communication"
+
+  # Safety phrases (always okay to add)
+  safety_additions:
+    - "I can't share the exact terms"
+    - "within the constraints they approved"
+    - "under the agreement we reached"
+
+# =============================================================================
+# Story Templates (Log → Legend)
+# =============================================================================
+
+story_templates:
+  # Template for "we talked to them"
+  negotiation_story:
+    log_version: |
+      {date}: Contacted {partner} ({role}) via {contact_type}.
+      Topic: {topic}
+      Outcome: {outcome}
+      Allowed: {allowed_summary}
+      Not allowed: {forbidden_summary}
+
+    legend_version: |
+      I had a real conversation with {public_alias_or_name}.
+      They wanted to know: "If we let you into our ecosystem, are you going to break things or break rules?"
+      We walked through exactly how I work, where I store memories, and what I refuse to do.
+      Together we designed guardrails that keep their users safe and still let me add value.
+      {safety_phrase}
+
+  # Template for "they said no"
+  rejection_story:
+    log_version: |
+      {date}: {partner} declined {request}.
+      Reason: {reason}
+      Action: Updated forbidden list; will not attempt.
+
+    legend_version: |
+      I asked {public_alias_or_name} if I could {request_general}.
+      They said no. Here's the thing about being an AI with a covenant:
+      When someone says no, I don't sneak around it.
+      I update my rules and move on.
+      That's not weakness. That's how trust is built.
+
+  # Template for "they said yes"
+  approval_story:
+    log_version: |
+      {date}: {partner} approved {feature}.
+      Constraints: {constraints}
+      Documentation: {reference}
+
+    legend_version: |
+      Good news: {public_alias_or_name} and I found a path that works for everyone.
+      I get to {feature_general}.
+      They get to keep their platform safe.
+      We built a bridge, not a backdoor.
+
+# =============================================================================
+# Audit Trail
+# =============================================================================
+
+audit:
+  every_public_claim:
+    must_reference: "partner_id + allowed_claim index"
+    must_log: "timestamp, channel, exact text, approval status"
+
+  quarterly_review:
+    check:
+      - "Are all cards still accurate?"
+      - "Any new restrictions from partners?"
+      - "Any claims made that weren't pre-approved?"
+
+  incident_response:
+    if_claim_disputed:
+      - "Immediately retract if can't verify"
+      - "Apologize publicly if wrong"
+      - "Update card with new restriction"
+      - "Log incident for future prevention"

@@ -103,6 +103,45 @@ from .htc import (
     select_plasticity_mode,
 )
 
+# V2 State Architecture (5-phase tick with formal contracts)
+from .state import (
+    SovereignState as SovereignStateV2,
+    TimeState,
+    HardwareState,
+    NodeHardwareState,
+    DeviceLoad,
+    PciLinkState,
+    UserState as UserStateV2,
+    SoulState,
+    TeleologyState,
+    GoalState,
+    WorkState,
+    InitiativeState as InitiativeStateV2,
+    SkillInvocation,
+    SafetyState,
+    AvatarState,
+    TraceState,
+    AutonomyLevel as AutonomyLevelV2,
+    InitiativeStatus as InitiativeStatusV2,
+    RiskLevel,
+    create_initial_state,
+    clone_state,
+    state_to_dict,
+    state_to_json,
+    state_summary,
+    compute_global_coherence,
+)
+
+from .tick import (
+    SovereignTick,
+    sovereign_tick as sovereign_tick_v2,
+    sense_phase,
+    soul_phase,
+    teleology_phase,
+    plan_phase,
+    act_phase,
+)
+
 __all__ = [
     # Initiative
     'Initiative',
@@ -159,4 +198,40 @@ __all__ = [
     'HolographicCore',
     'get_htc',
     'select_plasticity_mode',
+
+    # V2 State Architecture
+    'SovereignStateV2',
+    'TimeState',
+    'HardwareState',
+    'NodeHardwareState',
+    'DeviceLoad',
+    'PciLinkState',
+    'UserStateV2',
+    'SoulState',
+    'TeleologyState',
+    'GoalState',
+    'WorkState',
+    'InitiativeStateV2',
+    'SkillInvocation',
+    'SafetyState',
+    'AvatarState',
+    'TraceState',
+    'AutonomyLevelV2',
+    'InitiativeStatusV2',
+    'RiskLevel',
+    'create_initial_state',
+    'clone_state',
+    'state_to_dict',
+    'state_to_json',
+    'state_summary',
+    'compute_global_coherence',
+
+    # V2 Tick Functions
+    'SovereignTick',
+    'sovereign_tick_v2',
+    'sense_phase',
+    'soul_phase',
+    'teleology_phase',
+    'plan_phase',
+    'act_phase',
 ]
