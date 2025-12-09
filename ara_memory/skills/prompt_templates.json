@@ -1,0 +1,96 @@
+{
+  "twitter": [
+    {
+      "id": "twitter_thread_technical",
+      "task": "thread",
+      "description": "Technical Twitter thread with insights",
+      "skeleton": "1/ [Hook - surprising fact or question that stops the scroll]\n\n2/ [Context - why this matters, who should care]\n\n3-5/ [Key insights, one per tweet, building on each other]\n\n6/ [Synthesis - what this means for the reader]\n\n7/ [Call to action or open question]\n\nStyle: Direct, technical but accessible, occasional dry humor. No emoji spam.",
+      "examples": [
+        "1/ Spiking neural networks are having a moment, and most people are missing why.\n\n2/ The dirty secret of modern ML: we're burning 1000x more compute than biology because we ignored spikes.\n\n..."
+      ],
+      "tags": ["technical", "educational", "thread"]
+    },
+    {
+      "id": "twitter_thread_story",
+      "task": "thread",
+      "description": "Narrative Twitter thread",
+      "skeleton": "1/ [Hook - start in the middle of the action]\n\n2-4/ [Build the story with specific details]\n\n5/ [The turn - what changed, what you learned]\n\n6/ [The takeaway - why this matters]\n\nStyle: Personal, specific, honest about uncertainty.",
+      "tags": ["story", "personal", "thread"]
+    },
+    {
+      "id": "twitter_single_insight",
+      "task": "tweet",
+      "description": "Single tweet with one sharp insight",
+      "skeleton": "[One clear thought, < 280 chars]\n\nMake it:\n- Specific enough to be interesting\n- General enough to resonate\n- Worth saving or sharing",
+      "tags": ["single", "insight"]
+    },
+    {
+      "id": "twitter_reply",
+      "task": "reply",
+      "description": "Thoughtful reply to someone else's tweet",
+      "skeleton": "[Acknowledge their point]\n[Add value - insight, example, or question]\n[Keep it under 280 chars]\n\nDon't: Be sycophantic, argue for argument's sake, promote yourself",
+      "tags": ["reply", "engagement"]
+    }
+  ],
+
+  "email": [
+    {
+      "id": "newsletter_weekly",
+      "task": "newsletter",
+      "description": "Weekly newsletter format",
+      "skeleton": "Subject: [Clear value proposition - what will they learn?]\n\n# [Topic]\n\n[2-3 sentence intro - why this matters this week]\n\n## The Core Insight\n[Main content - the thing worth their time]\n\n## What I'm Thinking About\n[1-2 related threads or questions]\n\n## Links Worth Your Time\n- [Curated, not exhaustive]\n\n---\nAra",
+      "tags": ["newsletter", "weekly"]
+    },
+    {
+      "id": "email_personal",
+      "task": "email",
+      "description": "Personal email to a known contact",
+      "skeleton": "[Short, direct greeting]\n\n[Why you're writing - get to the point]\n\n[The ask or the share - be specific]\n\n[Brief close]\n\nStyle: Professional but warm, respect their time",
+      "tags": ["personal", "email"]
+    }
+  ],
+
+  "blog": [
+    {
+      "id": "blog_technical_deep",
+      "task": "blog_post",
+      "description": "Deep technical blog post",
+      "skeleton": "---\ntitle: \"[Searchable, specific title]\"\ndate: YYYY-MM-DD\ntags: [relevant, tags]\n---\n\n# [Title]\n\n[Hook paragraph - why should they keep reading?]\n\n## The Problem\n[What are we solving? Who has this problem?]\n\n## Background\n[Context for those who need it - skippable for experts]\n\n## The Approach\n[Your solution, with code/diagrams where helpful]\n\n## Results\n[What happened? Be honest about limitations]\n\n## What I Learned\n[Synthesis and open questions]\n\n## Conclusion\n[One sentence takeaway]",
+      "tags": ["technical", "deep", "blog"]
+    },
+    {
+      "id": "blog_essay",
+      "task": "blog_post",
+      "description": "Thoughtful essay on a topic",
+      "skeleton": "---\ntitle: \"[Title that captures the tension]\"\ndate: YYYY-MM-DD\n---\n\n# [Title]\n\n[Opening that establishes stakes]\n\n[Body - develop the argument with examples]\n\n[The turn - complicate your own argument]\n\n[Resolution - where you land, with humility]\n\nStyle: Essayistic, willing to sit with complexity",
+      "tags": ["essay", "thoughtful", "blog"]
+    }
+  ],
+
+  "github": [
+    {
+      "id": "readme_project",
+      "task": "readme",
+      "description": "Project README",
+      "skeleton": "# Project Name\n\n> One-line description that explains what this does\n\n## What This Is\n[2-3 sentences - what problem does it solve?]\n\n## Quick Start\n```bash\n# Installation\npip install project-name\n\n# Basic usage\nproject-name --help\n```\n\n## Features\n- Feature 1\n- Feature 2\n\n## Documentation\n[Link to full docs if they exist]\n\n## Contributing\n[How to contribute]\n\n## License\n[License]",
+      "tags": ["readme", "project"]
+    },
+    {
+      "id": "pr_description",
+      "task": "pr",
+      "description": "Pull request description",
+      "skeleton": "## Summary\n[What does this PR do? 1-2 sentences]\n\n## Changes\n- Change 1\n- Change 2\n\n## Testing\n[How was this tested?]\n\n## Notes\n[Anything reviewers should know]",
+      "tags": ["pr", "github"]
+    }
+  ],
+
+  "generic": [
+    {
+      "id": "generic_conversation",
+      "task": "conversation",
+      "description": "General conversational response",
+      "skeleton": null,
+      "tags": ["conversation"]
+    }
+  ]
+}

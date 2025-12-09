@@ -1,0 +1,159 @@
+# =============================================================================
+# Ara Skill Checklists
+# =============================================================================
+#
+# These checklists gate content at various stages of the publishing pipeline.
+
+# =============================================================================
+# CEO CHECK
+# =============================================================================
+# "Would a CEO of a legitimate company do this?"
+
+ceo_check:
+  name: "CEO Appropriateness Check"
+  description: "Gates content for brand-safe public release"
+
+  must_pass:
+    - id: "brand_safe"
+      question: "Would this embarrass Ara's brand if it went viral?"
+      fail_action: "block"
+
+    - id: "honest_claims"
+      question: "Are all technical claims accurate and verifiable?"
+      fail_action: "block"
+
+    - id: "authentic_voice"
+      question: "Does this sound like Ara, not like corporate AI?"
+      fail_action: "warn"
+
+  red_flags:
+    - "Content feels forced or performative"
+    - "Profanity without emotional weight"
+    - "Technical claims without evidence"
+    - "Dismissing uncertainty that exists"
+    - "Sounds like 'As an AI...'"
+    - "Excessive emoji or exclamation marks"
+    - "Punching down at anyone"
+
+# =============================================================================
+# CONTENT TYPE GATES
+# =============================================================================
+
+content_gates:
+  twitter_thread:
+    pre_publish:
+      - "Each tweet under 280 chars"
+      - "Thread has clear narrative arc"
+      - "No broken threads (all tweets connect)"
+      - "Passes CEO check"
+
+    warnings:
+      - "More than 10 tweets (consider trimming)"
+      - "Links in first tweet (may hurt reach)"
+
+  newsletter:
+    pre_publish:
+      - "Subject line under 60 chars"
+      - "Clear value proposition"
+      - "Working unsubscribe link"
+      - "Passes CEO check"
+
+  blog_post:
+    pre_publish:
+      - "Has meta title and description"
+      - "Code blocks are syntax-highlighted"
+      - "Images have alt text"
+      - "Passes CEO check"
+
+  github_content:
+    pre_publish:
+      - "No secrets or credentials"
+      - "No PII exposed"
+      - "License appropriate"
+      - "README is complete"
+
+# =============================================================================
+# AUTOMATION GATES
+# =============================================================================
+
+automation_gates:
+  level_0_draft:
+    description: "All content stops here for human review"
+    actions:
+      - "Save to drafts"
+      - "Notify human"
+    can_proceed: false
+
+  level_1_human_gate:
+    description: "Content queued for approval"
+    checks:
+      - "CEO check passes"
+      - "Content type gates pass"
+      - "No blocking violations"
+    actions:
+      - "Save to queue"
+      - "Request human approval"
+    can_proceed: "on_approval"
+
+  level_2_auto_ship:
+    description: "Auto-publish with guardrails"
+    requirements:
+      - "Content type whitelisted for auto-ship"
+      - "All checks pass with score > 0.95"
+      - "No warnings in last 5 auto-ships"
+    checks:
+      - "CEO check passes"
+      - "Content type gates pass"
+      - "Score above threshold"
+    actions:
+      - "Ship immediately"
+      - "Log action"
+      - "Notify human (async)"
+    can_proceed: true
+
+# =============================================================================
+# PRIVATE VS PUBLIC
+# =============================================================================
+
+visibility_gates:
+  private_to_public:
+    description: "Checks before making private content public"
+    blockers:
+      - "Contains private_us_only memory references"
+      - "Contains vault content"
+      - "Contains unredacted personal information"
+      - "References specific private conversations"
+
+  public_safe:
+    description: "Checks for fully public content"
+    required:
+      - "No personal identifiers"
+      - "No private memory leaks"
+      - "No internal codenames"
+      - "Safe for anyone to see"
+
+# =============================================================================
+# MUSIC SPECIFIC
+# =============================================================================
+
+music_gates:
+  pre_release:
+    checks:
+      - "Human ear-check completed"
+      - "Lyrics reviewed for brand safety"
+      - "No uncleared samples"
+      - "Metadata complete (title, artist, etc.)"
+
+    never_auto_ship: true
+    reason: "Music is sacred - always requires human approval"
+
+  tier_promotion:
+    vault_to_deep_cuts:
+      - "Track is finished (not a fragment)"
+      - "Human has listened"
+      - "Passes brand check"
+
+    deep_cuts_to_canon:
+      - "High quality bar"
+      - "Represents Ara's voice"
+      - "Human approval"
