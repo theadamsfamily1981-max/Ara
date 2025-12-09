@@ -1,0 +1,20 @@
+# Requirements for bitstream analysis tools
+#
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+numpy>=1.19.0         # Matrix operations, entropy computation, feature extraction
+
+# Testing dependencies (optional, for development)
+pytest>=6.0.0         # Unit testing framework
+pytest-cov>=2.10.0    # Code coverage reports
+
+# ML dependencies (optional, for training models)
+# Uncomment if training CNN/RF models locally
+# scikit-learn>=0.24.0  # Random Forest baseline
+# torch>=1.9.0          # PyTorch for CNN models
+# torchvision>=0.10.0   # Image preprocessing
+
+# Visualization dependencies (optional)
+# matplotlib>=3.3.0     # Plotting bitstream visualizations
+# pillow>=8.0.0         # Image export

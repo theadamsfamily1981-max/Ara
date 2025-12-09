@@ -1,0 +1,29 @@
+# AI-Powered FPGA Salvage - Python Dependencies
+# Install: pip install -r requirements.txt
+
+# Core dependencies
+opencv-python>=4.8.0           # Computer vision
+numpy>=1.24.0                  # Array operations
+pillow>=10.0.0                 # Image processing
+
+# OCR engines
+easyocr>=1.7.0                 # Multi-language OCR (supports Chinese)
+pytesseract>=0.3.10            # Alternative OCR engine
+
+# LLM APIs (choose one or both)
+anthropic>=0.18.0              # Claude API (recommended)
+openai>=1.0.0                  # GPT-4 API (alternative)
+
+# Utilities
+requests>=2.31.0               # HTTP requests
+python-dotenv>=1.0.0           # Environment variable management
+
+# Optional: Advanced features
+# torch>=2.0.0                 # For YOLOv8 (future enhancement)
+# ultralytics>=8.0.0           # YOLOv8 object detection
+# onnxruntime>=1.15.0          # Optimized inference
+
+# Development dependencies (optional)
+# pytest>=7.4.0                # Testing
+# black>=23.0.0                # Code formatting
+# mypy>=1.5.0                  # Type checking

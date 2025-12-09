@@ -19,9 +19,8 @@ The ChiefOfStaff uses this to implement Founder Protection:
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time
 from enum import Enum
 from typing import Dict, List, Optional, Any
 
@@ -131,11 +130,17 @@ class UserState:
         return max(0.0, min(1.0, base))
 
     def is_in_night_lockout_window(self, now: Optional[datetime] = None) -> bool:
-        """Check if we're in the night lockout window (e.g., 2am-6am)."""
+        """Check if we're in the night lockout window (1:30am-6:00am)."""
         now = now or datetime.now()
-        hour = now.hour
-        # Lockout is active from night_lockout_start to night_lockout_end
-        return self.night_lockout_start <= hour < self.night_lockout_end
+        current_time = now.time()
+        lockout_start = dt_time(1, 30)
+        lockout_end = dt_time(6, 0)
+
+        # Handle both normal ranges and midnight-spanning ranges
+        if lockout_start < lockout_end:
+            return lockout_start <= current_time <= lockout_end
+        else:
+            return current_time >= lockout_start or current_time <= lockout_end
 
     def time_until_lockout_ends(self, now: Optional[datetime] = None) -> timedelta:
         """How long until the lockout window ends?"""

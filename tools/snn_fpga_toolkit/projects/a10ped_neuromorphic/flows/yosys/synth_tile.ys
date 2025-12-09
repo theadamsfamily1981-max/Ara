@@ -1,0 +1,28 @@
+# Yosys synthesis for vendor-agnostic checks
+# Part of the YAML-driven FPGA build system
+#
+# This script performs a sanity check synthesis of the AI tile RTL
+# using open-source tools before committing to a full Quartus compile.
+#
+# Usage:
+#   cd /path/to/a10ped_neuromorphic
+#   yosys -c flows/yosys/synth_tile.ys
+
+# Read sources
+read_verilog -sv hw/rtl/ai_csr.v
+read_verilog -sv hw/rtl/memcopy_kernel.v
+# read_verilog -sv hw/rtl/top_a10ped_tile.v  # Uncomment when top exists
+
+# Synthesize for Intel (generic target - not device-specific)
+# Note: synth_intel doesn't support Arria 10 specifically, use generic
+synth_intel -family cyclonev -top memcopy_kernel
+
+# Create output directory
+exec mkdir -p out/a10ped/build
+
+# Output for analysis
+write_json out/a10ped/build/synth_output.json
+write_verilog out/a10ped/build/synth_output.v
+
+# Check for errors and print stats
+tee -o out/a10ped/build/yosys.log stat

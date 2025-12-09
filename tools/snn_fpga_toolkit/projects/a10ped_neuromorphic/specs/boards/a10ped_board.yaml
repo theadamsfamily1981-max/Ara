@@ -1,0 +1,50 @@
+# BittWare A10PED Board Configuration
+# Version: 1.0
+# FPGA: Intel Arria 10 GX1150 (10AX115N2F40E2LG)
+# Note: Pin assignments are representative - verify against actual board schematic
+
+board_name: "bittware_a10ped"
+vendor: "intel"
+fpga_part: "10AX115N2F40E2LG"
+revision: "rev2.0"
+
+pcie:
+  refclk_pin: "PIN_AR37"
+  refclk_freq_mhz: 100.0
+  reset_pin: "PIN_BB41"
+  lane_pins:
+    - { lane: 0, tx_p: "PIN_AV31", tx_n: "PIN_AV32", rx_p: "PIN_AU33", rx_n: "PIN_AU34" }
+    - { lane: 1, tx_p: "PIN_BA31", tx_n: "PIN_BA32", rx_p: "PIN_AY33", rx_n: "PIN_AY34" }
+    - { lane: 2, tx_p: "PIN_BC31", tx_n: "PIN_BC32", rx_p: "PIN_BB33", rx_n: "PIN_BB34" }
+    - { lane: 3, tx_p: "PIN_BF31", tx_n: "PIN_BF32", rx_p: "PIN_BE33", rx_n: "PIN_BE34" }
+    - { lane: 4, tx_p: "PIN_AW29", tx_n: "PIN_AW30", rx_p: "PIN_AV35", rx_n: "PIN_AV36" }
+    - { lane: 5, tx_p: "PIN_BA29", tx_n: "PIN_BA30", rx_p: "PIN_AY35", rx_n: "PIN_AY36" }
+    - { lane: 6, tx_p: "PIN_BC29", tx_n: "PIN_BC30", rx_p: "PIN_BB35", rx_n: "PIN_BB36" }
+    - { lane: 7, tx_p: "PIN_BF29", tx_n: "PIN_BF30", rx_p: "PIN_BE35", rx_n: "PIN_BE36" }
+
+memory:
+  ddr4:
+    controllers:
+      - name: "ddr4_ch0"
+        bank_group: "3A"
+        pins_file: "constraints/a10ped/ddr4_ch0_pins.csv"
+        interface_width: 72
+
+clocks:
+  - { name: "refclk_100mhz", pin: "PIN_AU33", freq_mhz: 100.0, is_diff: false, io_standard: "1.8 V" }
+  - { name: "sysclk_50mhz",  pin: "PIN_AV39", freq_mhz: 50.0,  is_diff: false, io_standard: "1.8 V" }
+
+misc_ios:
+  - { name: "status_led0", pin: "PIN_AV39", direction: "output", io_standard: "1.8 V", role: "status_led" }
+  - { name: "status_led1", pin: "PIN_AW39", direction: "output", io_standard: "1.8 V", role: "status_led" }
+  - { name: "status_led2", pin: "PIN_AY38", direction: "output", io_standard: "1.8 V", role: "status_led" }
+  - { name: "status_led3", pin: "PIN_AY39", direction: "output", io_standard: "1.8 V", role: "status_led" }
+  - { name: "uart_tx",     pin: "PIN_BA40", direction: "output", io_standard: "1.8 V", role: "debug_uart" }
+  - { name: "uart_rx",     pin: "PIN_BA41", direction: "input",  io_standard: "1.8 V", role: "debug_uart" }
+
+jtag:
+  tck_pin: "PIN_AA10"
+  tms_pin: "PIN_AB11"
+  tdi_pin: "PIN_AA11"
+  tdo_pin: "PIN_AB10"
+  interface: "usb_blaster"

@@ -1,0 +1,142 @@
+# JTAG Breakout Board - Schematic (Text Format)
+# Convert 10-pin mining JTAG to standard 14-pin Xilinx
+
+## Circuit Description
+
+This is a simple passive adapter with pull-up resistors for signal integrity.
+
+### Pinout Mapping
+
+Mining Board (10-pin 2x5):              Xilinx Cable (14-pin 2x7):
+    1  2                                     1  2
+    3  4                                     3  4
+    5  6                                     5  6
+    7  8                                     7  8
+    9 10                                     9 10
+                                            11 12
+                                            13 14
+
+Pin Connections:
+  Mining → Xilinx
+  1 (VREF/3.3V) → 1 (VREF)
+  2 (TMS) → 7 (TMS) + 10K pull-up to VREF
+  4 (TCK) → 6 (TCK) + 10K pull-up to VREF
+  6 (TDO) → 5 (TDO)
+  8 (TDI) → 4 (TDI) + 10K pull-up to VREF
+  10 (nTRST) → 3 (nTRST) + 10K pull-up to VREF (optional)
+  3,5,9 (GND) → 9,10,11,12,13,14 (GND)
+  NC → 2,8 (NC on Xilinx)
+
+### Component List
+
+R1: 10K resistor (TMS pull-up)
+R2: 10K resistor (TCK pull-up)
+R3: 10K resistor (TDI pull-up)
+R4: 10K resistor (nTRST pull-up)
+R5: 10K resistor (spare)
+
+C1: 0.1µF capacitor (VREF decoupling)
+
+J1: 2x5 header, 0.1" pitch (mining board side)
+J2: 2x7 header, 0.1" pitch (JTAG cable side)
+
+### ASCII Schematic
+
+Mining Board Side:              Pull-ups:                 Xilinx Cable Side:
+
+ 1 (VREF) ──────────────────────┐                         1 (VREF)
+                                 │
+                    C1 0.1µF    ═╧═ GND
+
+ 2 (TMS) ────────────────────────┼───R1 10K──┬───────────  7 (TMS)
+                                 │            │
+                                 └────────────┘ (to VREF)
+
+ 4 (TCK) ────────────────────────┼───R2 10K──┬───────────  6 (TCK)
+                                 │            │
+                                 └────────────┘ (to VREF)
+
+ 6 (TDO) ────────────────────────────────────────────────  5 (TDO)
+
+ 8 (TDI) ────────────────────────┼───R3 10K──┬───────────  4 (TDI)
+                                 │            │
+                                 └────────────┘ (to VREF)
+
+10 (nTRST) ──────────────────────┼───R4 10K──┬───────────  3 (nTRST)
+                                 │            │
+                                 └────────────┘ (to VREF)
+
+ 3,5,9 (GND) ────────────────────────────────────────────  9-14 (GND)
+
+### PCB Layout (Top View)
+
+  +-------------------------+
+  |  J1 (2x5)          J2 (2x7) |
+  |   1  2              1  2  |
+  |   3  4   R1-R4      3  4  |
+  |   5  6    oooo      5  6  |
+  |   7  8   [C1]       7  8  |
+  |   9 10              9 10  |
+  |                    11 12  |
+  |                    13 14  |
+  +-------------------------+
+   1" x 2" PCB
+
+### Build Instructions
+
+1. Order PCB (2-layer, 1.6mm thickness)
+2. Solder resistors R1-R4 (0805 SMD or through-hole)
+3. Solder capacitor C1 (0805 SMD or through-hole)
+4. Solder header J1 (2x5, facing down for insertion into mining board)
+5. Solder header J2 (2x7, facing up for JTAG cable)
+6. Test with multimeter (check continuity, no shorts)
+
+### Testing
+
+1. Connect mining board side to hashboard (powered off)
+2. Connect JTAG cable to J2
+3. Power on mining board
+4. Measure VREF at pin 1: should be ~3.3V
+5. Run OpenOCD scan_chain test
+6. If all 4 chips detected, board works!
+
+### Cost Breakdown
+
+- PCB (from JLCPCB, 5 boards): $2.00 total = $0.40 each
+- 2x5 header: $0.50
+- 2x7 header: $0.70
+- 4x 10K resistors: $0.20
+- 1x 0.1µF capacitor: $0.05
+- **Total per board: $1.85**
+
+### Alternatives
+
+If you don't want to make a PCB:
+
+1. **Breadboard adapter**:
+   - Use two headers on breadboard
+   - Wire with jumpers
+   - Quick and dirty, but works!
+
+2. **Direct solder**:
+   - Solder wires from mining board header to JTAG cable
+   - Add inline pull-up resistors
+   - Ugly but functional
+
+3. **Commercial adapter**:
+   - Some JTAG adapters have configurable pinouts
+   - May work without custom PCB
+   - Check adapter documentation
+
+### Notes
+
+- Pull-ups are important for signal integrity on long cables
+- Without pull-ups, JTAG may be unreliable
+- C1 decouples VREF, reduces noise
+- Ground pins are tied together for common reference
+- This design works for both 3.3V and 1.8V JTAG (auto-detects via VREF)
+
+### License
+
+This design is released under CERN-OHL-S-2.0 (open hardware license).
+Free to use, modify, and distribute. Must share modifications.

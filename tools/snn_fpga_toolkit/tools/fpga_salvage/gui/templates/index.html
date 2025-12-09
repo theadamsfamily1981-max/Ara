@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FPGA Salvage Tool - Web GUI</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .main-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            padding: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            border-radius: 10px;
+            margin: 0 5px;
+            background: #f0f0f0;
+            transition: all 0.3s;
+        }
+
+        .step.active {
+            background: #667eea;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .step.complete {
+            background: #28a745;
+            color: white;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            color: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+        }
+
+        .log-entry.info { color: #61dafb; }
+        .log-entry.success { color: #28a745; }
+        .log-entry.warning { color: #ffc107; }
+        .log-entry.error { color: #dc3545; }
+
+        .voltage-slider {
+            margin: 20px 0;
+        }
+
+        .voltage-display {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            text-align: center;
+        }
+
+        .hardware-card {
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            border: none;
+        }
+
+        .progress {
+            height: 30px;
+            border-radius: 15px;
+        }
+
+        .modal-backdrop {
+            background-color: rgba(0,0,0,0.7);
+        }
+    </style>
+</head>
+<body>
+    <div class="main-card">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-microchip"></i> FPGA Salvage Tool</h1>
+            <p class="text-muted">Repurpose Mining & ATCA FPGAs for AI Research</p>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#salvage-tab">
+                    <i class="fas fa-wrench"></i> Salvage Wizard
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#voltage-tab">
+                    <i class="fas fa-bolt"></i> Voltage Tuning
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#hardware-tab">
+                    <i class="fas fa-search"></i> Hardware Detection
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#docs-tab">
+                    <i class="fas fa-book"></i> Quick Help
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- Salvage Wizard Tab -->
+            <div class="tab-pane fade show active" id="salvage-tab">
+                <!-- Step Indicator -->
+                <div class="step-indicator">
+                    <div class="step" id="step-idle">
+                        <i class="fas fa-play"></i><br>Start
+                    </div>
+                    <div class="step" id="step-jtag_test">
+                        <i class="fas fa-plug"></i><br>JTAG
+                    </div>
+                    <div class="step" id="step-flash_erase">
+                        <i class="fas fa-eraser"></i><br>Erase
+                    </div>
+                    <div class="step" id="step-program_bitstream">
+                        <i class="fas fa-download"></i><br>Program
+                    </div>
+                    <div class="step" id="step-diagnostics">
+                        <i class="fas fa-stethoscope"></i><br>Diagnose
+                    </div>
+                    <div class="step" id="step-complete">
+                        <i class="fas fa-check"></i><br>Complete
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="progress mb-4">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         id="progress-bar"
+                         style="width: 0%">0%</div>
+                </div>
+
+                <!-- Configuration -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label"><strong>FPGA Vendor/Type</strong></label>
+                        <select class="form-select" id="vendor-select">
+                            <optgroup label="Cryptocurrency Mining FPGAs">
+                                <option value="stratix10" selected>Intel Stratix 10 (Ethereum miners)</option>
+                                <option value="virtex">Xilinx Virtex UltraScale+ (High-end miners)</option>
+                                <option value="kintex">Xilinx Kintex UltraScale+ (Mid-range miners)</option>
+                            </optgroup>
+                            <optgroup label="ATCA Telecom Boards">
+                                <option value="atca-virtex7">ATCA Virtex-7 (Telecom, 2012-2018)</option>
+                                <option value="atca-virtex6">ATCA Virtex-6 (Older telecom)</option>
+                                <option value="atca-stratix4">ATCA Stratix IV (Altera telecom)</option>
+                                <option value="atca-arria10">ATCA Arria 10 (Modern telecom)</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label"><strong>Mode</strong></label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="skip-erase">
+                            <label class="form-check-label" for="skip-erase">
+                                Skip Flash Erase (Diagnostic Only)
+                                <small class="text-muted d-block">Use this for testing without modifying firmware</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="text-center mb-4">
+                    <button class="btn btn-primary btn-lg" id="start-btn" onclick="startSalvage()">
+                        <i class="fas fa-rocket"></i> Start Salvage
+                    </button>
+                    <button class="btn btn-secondary btn-lg" id="stop-btn" onclick="stopSalvage()" disabled>
+                        <i class="fas fa-stop"></i> Stop
+                    </button>
+                </div>
+
+                <!-- Log Viewer -->
+                <h5><i class="fas fa-terminal"></i> Console Output</h5>
+                <div class="log-container" id="log-container">
+                    <div class="log-entry info">[GUI] FPGA Salvage Tool Ready</div>
+                    <div class="log-entry info">[GUI] Select FPGA vendor and click 'Start Salvage'</div>
+                </div>
+            </div>
+
+            <!-- Voltage Tuning Tab -->
+            <div class="tab-pane fade" id="voltage-tab">
+                <h4><i class="fas fa-bolt"></i> PMIC Voltage Tuning</h4>
+                <p class="text-muted">Adjust FPGA core voltage (VCCINT) for AI workloads</p>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="hardware-card">
+                            <h5>Current Status</h5>
+                            <div id="voltage-status">
+                                <p class="text-muted">Click "Read Voltage" to get current PMIC readings</p>
+                            </div>
+                            <button class="btn btn-primary" onclick="readVoltage()">
+                                <i class="fas fa-sync"></i> Read Voltage
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="hardware-card">
+                            <h5>Set Voltage</h5>
+                            <div class="voltage-display" id="voltage-value">0.850 V</div>
+                            <input type="range" class="form-range voltage-slider"
+                                   id="voltage-slider"
+                                   min="0.75" max="0.95" step="0.01" value="0.85"
+                                   oninput="updateVoltageDisplay(this.value)">
+                            <div class="text-center">
+                                <small class="text-muted">Safe range: 0.80V - 0.89V</small>
+                            </div>
+
+                            <div class="mt-3">
+                                <label class="form-label">I2C Bus</label>
+                                <select class="form-select mb-3" id="i2c-bus">
+                                    <option value="0">Bus 0</option>
+                                    <option value="1">Bus 1</option>
+                                    <option value="2">Bus 2</option>
+                                </select>
+
+                                <button class="btn btn-warning w-100" onclick="setVoltage()">
+                                    <i class="fas fa-exclamation-triangle"></i> Apply Voltage
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning mt-3">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>Warning:</strong>
+                            Incorrect voltage can damage your FPGA! Test with conservative settings first.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Voltage Presets -->
+                <div class="mt-4">
+                    <h5>Quick Presets</h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-primary w-100" onclick="setPreset(0.80)">
+                                Efficient (0.80V)<br><small>Low power AI inference</small>
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-success w-100" onclick="setPreset(0.85)">
+                                Stock (0.85V)<br><small>Factory default</small>
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-warning w-100" onclick="setPreset(0.88)">
+                                Performance (0.88V)<br><small>AI training workloads</small>
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-info w-100" onclick="setPreset(0.85)">
+                                Safe (0.85V)<br><small>Initial testing</small>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hardware Detection Tab -->
+            <div class="tab-pane fade" id="hardware-tab">
+                <h4><i class="fas fa-search"></i> Hardware Detection</h4>
+                <p class="text-muted">Auto-detect JTAG adapters and PMICs</p>
+
+                <button class="btn btn-primary mb-3" onclick="detectHardware()">
+                    <i class="fas fa-sync"></i> Scan for Hardware
+                </button>
+
+                <div id="hardware-results">
+                    <p class="text-muted">Click "Scan for Hardware" to detect connected devices</p>
+                </div>
+            </div>
+
+            <!-- Documentation Tab -->
+            <div class="tab-pane fade" id="docs-tab">
+                <h4><i class="fas fa-book"></i> Quick Help</h4>
+
+                <div class="accordion" id="helpAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#help1">
+                                Getting Started
+                            </button>
+                        </h2>
+                        <div id="help1" class="accordion-collapse collapse show" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                <ol>
+                                    <li>Connect USB JTAG adapter to FPGA board</li>
+                                    <li>Power on the FPGA board (12V or 48V for ATCA)</li>
+                                    <li>Go to "Hardware Detection" tab and scan</li>
+                                    <li>Select your FPGA vendor in "Salvage Wizard"</li>
+                                    <li>Click "Start Salvage"</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#help2">
+                                Supported Hardware
+                            </button>
+                        </h2>
+                        <div id="help2" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                <h6>Mining FPGAs:</h6>
+                                <ul>
+                                    <li>Intel Stratix 10 (Ethereum miners)</li>
+                                    <li>Xilinx Virtex UltraScale+ (High-end miners)</li>
+                                    <li>Xilinx Kintex UltraScale+ (Mid-range)</li>
+                                </ul>
+                                <h6>ATCA Telecom Boards:</h6>
+                                <ul>
+                                    <li>Virtex-7 / Virtex-6 (Common)</li>
+                                    <li>Stratix IV / Arria 10 (Intel)</li>
+                                    <li>Most ATCA-4000/5000 series</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#help3">
+                                Troubleshooting
+                            </button>
+                        </h2>
+                        <div id="help3" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                <h6>"JTAG connection failed"</h6>
+                                <ul>
+                                    <li>Check board power (LEDs on?)</li>
+                                    <li>Verify JTAG cable connection</li>
+                                    <li>Try: <code>lsusb | grep -i ftdi</code></li>
+                                </ul>
+                                <h6>"No PMIC detected"</h6>
+                                <ul>
+                                    <li>Try different I2C bus numbers (0, 1, 2)</li>
+                                    <li>Check if i2c-tools installed: <code>sudo apt install i2c-tools</code></li>
+                                    <li>Scan manually: <code>sudo i2cdetect -y 0</code></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 alert alert-info">
+                    <i class="fas fa-info-circle"></i> <strong>Full Documentation:</strong><br>
+                    See <code>docs/FPGA_SALVAGE_GUIDE.md</code> for comprehensive guide
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Warning Modal -->
+    <div class="modal fade" id="warningModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> WARNING</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>This operation will PERMANENTLY erase the proprietary firmware!</strong></p>
+                    <p>Are you sure you want to continue?</p>
+                    <p class="text-muted">Note: You can use "Skip Flash Erase" mode for testing without modifications.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmStart()">Yes, Continue</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+    <!-- Main JavaScript -->
+    <script>
+        const socket = io();
+        let currentState = {current_step: 'idle', progress: 0};
+
+        // Socket.IO event handlers
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+
+        socket.on('log', function(log) {
+            addLog(log);
+        });
+
+        socket.on('status', function(status) {
+            updateStatus(status);
+        });
+
+        socket.on('logs', function(data) {
+            data.logs.forEach(addLog);
+        });
+
+        // Add log entry to console
+        function addLog(log) {
+            const container = document.getElementById('log-container');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${log.level}`;
+            entry.textContent = `[${log.timestamp}] ${log.message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Update UI with current status
+        function updateStatus(status) {
+            currentState = status;
+
+            // Update progress bar
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.style.width = status.progress + '%';
+            progressBar.textContent = status.progress + '%';
+
+            // Update step indicator
+            document.querySelectorAll('.step').forEach(step => {
+                step.classList.remove('active', 'complete');
+            });
+
+            if (status.current_step && document.getElementById('step-' + status.current_step)) {
+                document.getElementById('step-' + status.current_step).classList.add('active');
+            }
+
+            // Disable/enable buttons
+            document.getElementById('start-btn').disabled = status.running;
+            document.getElementById('stop-btn').disabled = !status.running;
+        }
+
+        // Start salvage operation
+        function startSalvage() {
+            const skipErase = document.getElementById('skip-erase').checked;
+
+            if (!skipErase) {
+                // Show warning modal
+                const modal = new bootstrap.Modal(document.getElementById('warningModal'));
+                modal.show();
+            } else {
+                confirmStart();
+            }
+        }
+
+        function confirmStart() {
+            const vendor = document.getElementById('vendor-select').value;
+            const skipErase = document.getElementById('skip-erase').checked;
+
+            // Close modal if open
+            const modalElement = document.getElementById('warningModal');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) modal.hide();
+
+            fetch('/api/start_salvage', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({vendor: vendor, skip_erase: skipErase})
+            });
+        }
+
+        // Voltage tuning functions
+        function updateVoltageDisplay(value) {
+            document.getElementById('voltage-value').textContent = parseFloat(value).toFixed(3) + ' V';
+        }
+
+        function setPreset(voltage) {
+            document.getElementById('voltage-slider').value = voltage;
+            updateVoltageDisplay(voltage);
+        }
+
+        function readVoltage() {
+            const bus = document.getElementById('i2c-bus').value;
+
+            fetch('/api/voltage/read', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({bus: parseInt(bus)})
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('voltage-status').innerHTML =
+                        `<p class="text-danger">${data.error}</p>`;
+                } else {
+                    let html = '<table class="table table-sm">';
+                    if (data.voltage) html += `<tr><td>VCCINT:</td><td><strong>${data.voltage.toFixed(3)} V</strong></td></tr>`;
+                    if (data.current) html += `<tr><td>Current:</td><td>${data.current.toFixed(2)} A</td></tr>`;
+                    if (data.power) html += `<tr><td>Power:</td><td>${data.power.toFixed(1)} W</td></tr>`;
+                    if (data.temperature) html += `<tr><td>PMIC Temp:</td><td>${data.temperature.toFixed(1)} °C</td></tr>`;
+                    html += '</table>';
+                    document.getElementById('voltage-status').innerHTML = html;
+                }
+            });
+        }
+
+        function setVoltage() {
+            const bus = document.getElementById('i2c-bus').value;
+            const voltage = parseFloat(document.getElementById('voltage-slider').value);
+
+            if (!confirm(`Set VCCINT to ${voltage.toFixed(3)}V? This can damage your FPGA if incorrect!`)) {
+                return;
+            }
+
+            fetch('/api/voltage/set', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({bus: parseInt(bus), voltage: voltage})
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                }
+            });
+        }
+
+        // Hardware detection
+        function detectHardware() {
+            document.getElementById('hardware-results').innerHTML =
+                '<p class="text-muted"><i class="fas fa-spinner fa-spin"></i> Scanning...</p>';
+
+            fetch('/api/detect')
+            .then(res => res.json())
+            .then(data => {
+                let html = '';
+
+                // JTAG Adapter
+                html += '<div class="hardware-card">';
+                html += '<h5><i class="fas fa-plug"></i> JTAG Adapter</h5>';
+                if (data.jtag_adapter) {
+                    html += `<p class="text-success"><i class="fas fa-check"></i> ${data.jtag_adapter}</p>`;
+                } else {
+                    html += '<p class="text-danger"><i class="fas fa-times"></i> Not detected</p>';
+                }
+                html += '</div>';
+
+                // PMICs
+                html += '<div class="hardware-card">';
+                html += '<h5><i class="fas fa-microchip"></i> PMICs</h5>';
+                if (data.pmics && data.pmics.length > 0) {
+                    html += '<ul>';
+                    data.pmics.forEach(pmic => {
+                        html += `<li class="text-success"><i class="fas fa-check"></i> ${pmic.type} at ${pmic.address} (Bus ${pmic.bus})</li>`;
+                    });
+                    html += '</ul>';
+                } else {
+                    html += '<p class="text-warning"><i class="fas fa-exclamation-triangle"></i> No PMICs detected</p>';
+                }
+                html += '</div>';
+
+                document.getElementById('hardware-results').innerHTML = html;
+            });
+        }
+    </script>
+</body>
+</html>

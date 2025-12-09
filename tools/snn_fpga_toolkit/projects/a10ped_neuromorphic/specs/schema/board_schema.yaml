@@ -1,0 +1,52 @@
+# Board Configuration Schema
+# Version: 1.0
+# This file defines the schema for board-level specifications
+
+board_name: string             # Board identifier (e.g., "bittware_a10ped")
+vendor: ["intel", "xilinx"]    # Vendor (must match tile spec)
+fpga_part: string              # FPGA part number (must match tile spec)
+revision: string               # Board revision (e.g., "rev2.0")
+
+pcie:
+  refclk_pin: string           # PCIe reference clock pin
+  refclk_freq_mhz: float       # Reference clock frequency
+  reset_pin: string            # PCIe reset pin (active low)
+  lane_pins:
+    - lane: int                # Lane number (0-15)
+      tx_p: string             # Transmit differential positive
+      tx_n: string             # Transmit differential negative
+      rx_p: string             # Receive differential positive
+      rx_n: string             # Receive differential negative
+
+memory:
+  ddr4:
+    controllers:
+      - name: string           # Controller instance name
+        bank_group: string     # FPGA bank group (e.g., "3A")
+        pins_file: string      # Path to pin CSV/table
+        interface_width: int   # Data bus width (bits)
+  hbm2:
+    pseudo_channels: int       # Number of pseudo-channels
+    stack_height: int          # HBM stack height (4H, 8H)
+    # HBM pins are typically auto-assigned by IP
+
+clocks:
+  - name: string               # Clock net name
+    pin: string                # Pin location
+    freq_mhz: float            # Frequency
+    is_diff: bool              # Differential clock (true) or single-ended (false)
+    io_standard: string        # e.g., "LVDS", "HCSL"
+
+misc_ios:
+  - name: string               # Signal name
+    pin: string                # Pin location
+    direction: ["input", "output", "inout"]
+    io_standard: string        # e.g., "1.8 V", "3.3-V LVCMOS"
+    role: string               # Purpose (e.g., "status_led", "debug_uart")
+
+jtag:
+  tck_pin: string
+  tms_pin: string
+  tdi_pin: string
+  tdo_pin: string
+  interface: ["usb_blaster", "ftdi", "xilinx_platform_cable"]

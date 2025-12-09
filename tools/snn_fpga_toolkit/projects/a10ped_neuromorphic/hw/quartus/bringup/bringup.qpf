@@ -1,0 +1,4 @@
+# Quartus Project File
+# A10PED Neuromorphic - Bring-Up (Milestone 1.2)
+
+PROJECT_REVISION = "bringup"

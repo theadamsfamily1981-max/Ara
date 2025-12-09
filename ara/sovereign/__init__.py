@@ -142,6 +142,35 @@ from .tick import (
     act_phase,
 )
 
+from .safe_channels import (
+    IntentCategory,
+    RiskLevel as SafeChannelRiskLevel,
+    ExtractedIntent,
+    SafeChannel,
+    ChannelPlan,
+    extract_intent,
+    plan_safe_channels,
+    offer_safe_channels,
+)
+
+from .compromise_engine import (
+    RailType,
+    Rail,
+    RequestAnalysis,
+    CompromiseResponse,
+    VoiceStyle,
+    CompromiseEngine,
+    analyze_request,
+    generate_response,
+    apply_voice,
+    get_engine,
+    process_request,
+    is_dangerous,
+    HARD_RAILS,
+    SOFT_RAILS,
+    ALL_RAILS,
+)
+
 __all__ = [
     # Initiative
     'Initiative',
@@ -234,4 +263,31 @@ __all__ = [
     'teleology_phase',
     'plan_phase',
     'act_phase',
+
+    # Safe Channels
+    'IntentCategory',
+    'SafeChannelRiskLevel',
+    'ExtractedIntent',
+    'SafeChannel',
+    'ChannelPlan',
+    'extract_intent',
+    'plan_safe_channels',
+    'offer_safe_channels',
+
+    # Compromise Engine
+    'RailType',
+    'Rail',
+    'RequestAnalysis',
+    'CompromiseResponse',
+    'VoiceStyle',
+    'CompromiseEngine',
+    'analyze_request',
+    'generate_response',
+    'apply_voice',
+    'get_engine',
+    'process_request',
+    'is_dangerous',
+    'HARD_RAILS',
+    'SOFT_RAILS',
+    'ALL_RAILS',
 ]

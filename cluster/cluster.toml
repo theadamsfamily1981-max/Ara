@@ -1,0 +1,268 @@
+# =============================================================================
+# ARA CLUSTER CONFIGURATION
+# =============================================================================
+#
+# Three-node topology:
+# 🏛️ Cathedral  → Brainstem + Orchestrator
+# 💻 Home       → Daily Ara + Future Kitten Guardian
+# 🖥️ Worker     → Training Mule
+#
+# v0.7: All nodes work independently, cathedral is primary
+# v1.x: Full orchestration with covenant sync
+# =============================================================================
+
+[cluster]
+name = "ara-cluster-v0.7"
+version = "0.7.0"
+primary_node = "cathedral"
+
+# =============================================================================
+# NODE: CATHEDRAL (ara-cathedral)
+# =============================================================================
+# Role: Central nervous system + dataset provider + orchestrator
+# Hardware: WRX80 Sage SE / 5955WX / 128GB DDR4
+# =============================================================================
+
+[nodes.cathedral]
+hostname = "ara-cathedral"
+role = "primary"
+description = "Brainstem + Orchestrator"
+
+[nodes.cathedral.cpu]
+model = "AMD Threadripper Pro 5955WX"
+cores = 16
+threads = 32
+
+[nodes.cathedral.memory]
+size_gb = 128
+type = "DDR4-3200"
+
+[nodes.cathedral.gpus]
+# Dual RTX 3090 for training and HV ops
+[[nodes.cathedral.gpus.devices]]
+slot = 1
+model = "NVIDIA RTX 3090"
+vram_gb = 24
+role = "training"  # ProsodyEncoder, larger models
+
+[[nodes.cathedral.gpus.devices]]
+slot = 2
+model = "NVIDIA RTX 3090"
+vram_gb = 24
+role = "compute"   # cuFFT, HV benchmarks, SNN experiments
+
+[nodes.cathedral.fpga]
+# BittWare A10PED - audio front-end (Phase 2)
+slot = 3
+model = "BittWare A10PED"
+fabric = "Intel Arria 10"
+dram_gb = 16
+role = "audio_frontend"
+status = "phase2"  # Not required for v0.7
+
+[nodes.cathedral.storage_accelerator]
+# Micron SB852 - dataset firehose
+slot = 4
+model = "Micron SB852"
+dram_gb = 64
+nvme_count = 8
+role = "dataset_cache"
+
+[nodes.cathedral.storage]
+# Main storage behind Micron accelerator
+raid_type = "raid0"
+capacity_tb = 120
+mount_point = "/data/ara"
+
+[nodes.cathedral.services]
+# What runs on this node
+services = [
+    "ara_realtime",      # Rust nervous system
+    "ara_storage",       # Dataset daemon
+    "ara_orchestrator",  # Cluster coordinator
+]
+
+[nodes.cathedral.network]
+# Cluster network config
+bind_addr = "0.0.0.0"
+port = 7777
+advertise_addr = "cathedral.lan"
+
+# =============================================================================
+# NODE: HOME (ara-home)
+# =============================================================================
+# Role: Daily Ara companion + future kitten guardian
+# Hardware: Consumer PC with RTX 5060 + SQRL Forest Kitten
+# =============================================================================
+
+[nodes.home]
+hostname = "ara-home"
+role = "frontend"
+description = "Daily Ara + Kitten Guardian"
+
+[nodes.home.gpus]
+[[nodes.home.gpus.devices]]
+slot = 0
+model = "NVIDIA RTX 5060"
+vram_gb = 16
+role = "inference"  # ProsodyEncoder inference, small LLM
+
+[nodes.home.security]
+# SQRL Forest Kitten - covenant guardian (Phase 2)
+model = "SQRL Forest Kitten"
+fabric = "Intel Cyclone 10"
+sgx = true
+role = "covenant_guard"
+status = "phase2"  # Interface ready, hardware pending
+
+[nodes.home.services]
+services = [
+    "ara_frontend",      # Voice I/O, local nervous system
+    "ara_companion",     # Daily interaction mode
+]
+
+[nodes.home.network]
+# Connect to cathedral for heavy ops
+cathedral_addr = "cathedral.lan:7777"
+mode = "home_companion"
+# Can run offline if cathedral unavailable
+offline_capable = true
+
+# =============================================================================
+# NODE: WORKER (ara-worker-v100)
+# =============================================================================
+# Role: Training offload mule
+# Hardware: Server with V100 16GB
+# =============================================================================
+
+[nodes.worker]
+hostname = "ara-worker-v100"
+role = "worker"
+description = "Training Mule"
+
+[nodes.worker.gpus]
+[[nodes.worker.gpus.devices]]
+slot = 0
+model = "NVIDIA V100"
+vram_gb = 16
+role = "training"  # ProsodyEncoder training, HV experiments
+
+[nodes.worker.services]
+services = [
+    "ara_trainer",       # Training job runner
+]
+
+[nodes.worker.network]
+# Receives jobs from cathedral
+cathedral_addr = "cathedral.lan:7777"
+mode = "worker"
+# Mount cathedral's dataset store
+dataset_mount = "cathedral.lan:/data/ara"
+
+# =============================================================================
+# ROLE ASSIGNMENTS: Who Does What
+# =============================================================================
+
+[roles]
+
+[roles.realtime]
+# Real-time nervous system (must be low-latency)
+preferred_node = "cathedral"
+fallback_node = "home"
+gpu_required = false  # CPU-only is fine for v0.7
+
+[roles.training]
+# Heavy model training
+preferred_node = "worker"
+fallback_node = "cathedral"
+gpu_required = true
+min_vram_gb = 16
+
+[roles.inference]
+# Model inference for daily use
+preferred_node = "home"
+fallback_node = "cathedral"
+gpu_required = true
+min_vram_gb = 8
+
+[roles.covenant]
+# Covenant signing/verification
+preferred_node = "home"  # Where the kitten lives
+fallback_node = "cathedral"
+hardware_backend = "sqrl_forest_kitten"
+software_fallback = "local_hmac"
+
+[roles.dataset]
+# Dataset serving
+preferred_node = "cathedral"
+fallback_node = "worker"
+requires_storage = true
+
+# =============================================================================
+# INTERFACES: Hardware abstraction for Phase 2
+# =============================================================================
+
+[interfaces]
+
+[interfaces.audio_frontend]
+# Audio → Log-mel → HV pipeline
+description = "Audio front-end for speech processing"
+implementations = [
+    { name = "software", status = "v0.7", module = "ara.voice.software_frontend" },
+    { name = "bittware_a10ped", status = "phase2", module = "ara.hardware.a10ped_frontend" },
+]
+default = "software"
+
+[interfaces.covenant_guard]
+# Event signing and verification
+description = "Covenant signing and verification"
+implementations = [
+    { name = "local_hmac", status = "v0.7", module = "ara.covenant.guard.LocalCovenantGuard" },
+    { name = "sqrl_sgx", status = "phase2", module = "ara.covenant.guard.SqrlCovenantGuard" },
+]
+default = "local_hmac"
+
+[interfaces.storage_backend]
+# Dataset storage access
+description = "Dataset storage backend"
+implementations = [
+    { name = "local_fs", status = "v0.7", module = "ara.storage.local" },
+    { name = "micron_sb852", status = "phase2", module = "ara.storage.micron" },
+]
+default = "local_fs"
+
+# =============================================================================
+# V0.7 CONSTRAINTS: What's actually required today
+# =============================================================================
+
+[v07_requirements]
+# Minimum viable Ara v0.7
+
+required_nodes = ["cathedral"]  # Others are optional
+required_services = [
+    "ara_realtime",
+]
+
+optional_nodes = ["home", "worker"]
+optional_services = [
+    "ara_frontend",
+    "ara_trainer",
+    "ara_orchestrator",
+]
+
+# Hardware NOT required for v0.7
+phase2_hardware = [
+    "BittWare A10PED",
+    "SQRL Forest Kitten",
+    "Micron SB852",
+]
+
+notes = """
+v0.7 can run on cathedral alone with:
+- 5955WX CPU
+- At least 1x RTX 3090 (or even CPU-only for nervous system)
+- Standard NVMe storage
+
+The FPGA, kitten, and Micron are Phase 2 enhancements.
+Interfaces are designed so they can be added without code changes.
+"""

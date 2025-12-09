@@ -1,0 +1,479 @@
+# AI Tile Register Specification
+# Version: 1.0
+# Date: 2024
+# License: BSD-3-Clause
+#
+# This YAML file is the SINGLE SOURCE OF TRUTH for the AI tile ABI.
+# All register maps, RTL, C headers, and documentation are generated from this spec.
+
+metadata:
+  version: "1.0.0"
+  author: "A10PED Neuromorphic Project"
+  date: "2024"
+  description: "Register map for neuromorphic AI tile on Arria 10 FPGA"
+  license: "BSD-3-Clause"
+
+# Address space configuration
+address_space:
+  bar: 0
+  size: 0x1000  # 4KB BAR0
+  alignment: 4   # 32-bit aligned
+
+# Register definitions
+registers:
+  # Control Register (0x00)
+  - name: CTRL
+    offset: 0x00
+    width: 32
+    access: RW
+    reset_value: 0x00000000
+    description: "Control register for command execution and tile configuration"
+    fields:
+      - name: START
+        bits: [0]
+        access: RW
+        reset_value: 0
+        description: "Start command execution (self-clearing)"
+
+      - name: RESET
+        bits: [1]
+        access: RW
+        reset_value: 0
+        description: "Soft reset of AI core (self-clearing)"
+
+      - name: IRQ_EN
+        bits: [2]
+        access: RW
+        reset_value: 0
+        description: "Enable interrupt on command completion"
+
+      - name: ABORT
+        bits: [3]
+        access: RW
+        reset_value: 0
+        description: "Abort current command (self-clearing)"
+
+      - name: RESERVED
+        bits: [31:4]
+        access: RO
+        reset_value: 0
+        description: "Reserved for future use"
+
+  # Status Register (0x04)
+  - name: STATUS
+    offset: 0x04
+    width: 32
+    access: RO
+    reset_value: 0x00000000
+    description: "Status register indicating tile state and error conditions"
+    fields:
+      - name: BUSY
+        bits: [0]
+        access: RO
+        reset_value: 0
+        description: "Command in progress (1 = busy, 0 = idle)"
+
+      - name: DONE
+        bits: [1]
+        access: RO
+        reset_value: 0
+        description: "Command completed successfully"
+
+      - name: ERROR
+        bits: [2]
+        access: RO
+        reset_value: 0
+        description: "Error occurred during execution"
+
+      - name: IRQ_PENDING
+        bits: [3]
+        access: RO
+        reset_value: 0
+        description: "Interrupt pending (cleared by reading this register)"
+
+      - name: DDR_READY
+        bits: [4]
+        access: RO
+        reset_value: 0
+        description: "DDR4 controller calibration complete"
+
+      - name: THERMAL_WARNING
+        bits: [5]
+        access: RO
+        reset_value: 0
+        description: "Temperature exceeds warning threshold"
+
+      - name: RESERVED
+        bits: [31:6]
+        access: RO
+        reset_value: 0
+        description: "Reserved for future use"
+
+  # Command Source Address Low (0x08)
+  - name: CMD_SRC_LO
+    offset: 0x08
+    width: 32
+    access: RW
+    reset_value: 0x00000000
+    description: "Source address in DDR4 memory [31:0]"
+    fields:
+      - name: ADDR_LO
+        bits: [31:0]
+        access: RW
+        reset_value: 0
+        description: "Lower 32 bits of 64-bit source address"
+
+  # Command Source Address High (0x0C)
+  - name: CMD_SRC_HI
+    offset: 0x0C
+    width: 32
+    access: RW
+    reset_value: 0x00000000
+    description: "Source address in DDR4 memory [63:32]"
+    fields:
+      - name: ADDR_HI
+        bits: [31:0]
+        access: RW
+        reset_value: 0
+        description: "Upper 32 bits of 64-bit source address"
+
+  # Command Destination Address Low (0x10)
+  - name: CMD_DST_LO
+    offset: 0x10
+    width: 32
+    access: RW
+    reset_value: 0x00000000
+    description: "Destination address in DDR4 memory [31:0]"
+    fields:
+      - name: ADDR_LO
+        bits: [31:0]
+        access: RW
+        reset_value: 0
+        description: "Lower 32 bits of 64-bit destination address"
+
+  # Command Destination Address High (0x14)
+  - name: CMD_DST_HI
+    offset: 0x14
+    width: 32
+    access: RW
+    reset_value: 0x00000000
+    description: "Destination address in DDR4 memory [63:32]"
+    fields:
+      - name: ADDR_HI
+        bits: [31:0]
+        access: RW
+        reset_value: 0
+        description: "Upper 32 bits of 64-bit destination address"
+
+  # Command Length (0x18)
+  - name: CMD_LEN
+    offset: 0x18
+    width: 32
+    access: RW
+    reset_value: 0x00000000
+    description: "Transfer length in bytes (must be 64-byte aligned)"
+    fields:
+      - name: LENGTH
+        bits: [31:0]
+        access: RW
+        reset_value: 0
+        description: "Number of bytes to transfer (max 16MB)"
+
+  # Command Configuration (0x1C)
+  - name: CMD_CFG
+    offset: 0x1C
+    width: 32
+    access: RW
+    reset_value: 0x00000000
+    description: "Command mode and parameter configuration"
+    fields:
+      - name: MODE
+        bits: [3:0]
+        access: RW
+        reset_value: 0
+        description: |
+          Command mode:
+          0x0 = MEMCOPY (simple memory copy)
+          0x1 = SNN_INFER (LIF neuron inference)
+          0x2 = TOPOLOGICAL_FIELD (topological field network)
+          0x3 = RESERVED
+          0x4-0xF = Reserved for future algorithms
+
+      - name: PRECISION
+        bits: [5:4]
+        access: RW
+        reset_value: 0
+        description: |
+          Data precision for SNN mode:
+          0x0 = INT8
+          0x1 = INT16
+          0x2 = FP16
+          0x3 = FP32
+
+      - name: NEURON_COUNT
+        bits: [15:6]
+        access: RW
+        reset_value: 256
+        description: "Number of neurons (for SNN mode, 1-1024)"
+
+      - name: TIME_STEPS
+        bits: [23:16]
+        access: RW
+        reset_value: 100
+        description: "Number of time steps for SNN simulation"
+
+      - name: RESERVED
+        bits: [31:24]
+        access: RW
+        reset_value: 0
+        description: "Reserved for future use"
+
+  # Hardware Version (0x20)
+  - name: VERSION
+    offset: 0x20
+    width: 32
+    access: RO
+    reset_value: 0x01000000
+    description: "Hardware and firmware version information"
+    fields:
+      - name: PATCH
+        bits: [7:0]
+        access: RO
+        reset_value: 0
+        description: "Patch version number"
+
+      - name: MINOR
+        bits: [15:8]
+        access: RO
+        reset_value: 0
+        description: "Minor version number"
+
+      - name: MAJOR
+        bits: [23:16]
+        access: RO
+        reset_value: 1
+        description: "Major version number"
+
+      - name: RESERVED
+        bits: [31:24]
+        access: RO
+        reset_value: 0
+        description: "Reserved"
+
+  # Capability Flags (0x24)
+  - name: CAPABILITIES
+    offset: 0x24
+    width: 32
+    access: RO
+    reset_value: 0x00000003
+    description: "Hardware feature flags"
+    fields:
+      - name: HAS_MEMCOPY
+        bits: [0]
+        access: RO
+        reset_value: 1
+        description: "Memory copy support"
+
+      - name: HAS_SNN
+        bits: [1]
+        access: RO
+        reset_value: 1
+        description: "SNN inference support"
+
+      - name: HAS_TOPOLOGICAL
+        bits: [2]
+        access: RO
+        reset_value: 0
+        description: "Topological field network support"
+
+      - name: HAS_IRQ
+        bits: [3]
+        access: RO
+        reset_value: 0
+        description: "Interrupt support"
+
+      - name: HAS_MULTI_PRECISION
+        bits: [4]
+        access: RO
+        reset_value: 0
+        description: "Multiple precision modes (INT8/16, FP16/32)"
+
+      - name: RESERVED
+        bits: [31:5]
+        access: RO
+        reset_value: 0
+        description: "Reserved for future capabilities"
+
+  # SNN Threshold Configuration (0x28)
+  - name: SNN_THRESHOLD
+    offset: 0x28
+    width: 32
+    access: RW
+    reset_value: 0x00010000
+    description: "LIF neuron spike threshold (16.16 fixed-point)"
+    fields:
+      - name: THRESHOLD
+        bits: [31:0]
+        access: RW
+        reset_value: 0x00010000
+        description: "Spike threshold in Q16.16 format (default: 1.0)"
+
+  # SNN Leak Rate Configuration (0x2C)
+  - name: SNN_LEAK
+    offset: 0x2C
+    width: 32
+    access: RW
+    reset_value: 0x00000100
+    description: "LIF neuron membrane leak rate (16.16 fixed-point)"
+    fields:
+      - name: LEAK_RATE
+        bits: [31:0]
+        access: RW
+        reset_value: 0x00000100
+        description: "Leak rate in Q16.16 format (default: 0.00390625)"
+
+  # SNN Refractory Period (0x30)
+  - name: SNN_REFRACT
+    offset: 0x30
+    width: 32
+    access: RW
+    reset_value: 0x00000008
+    description: "Refractory period in clock cycles"
+    fields:
+      - name: REFRACT_CYCLES
+        bits: [15:0]
+        access: RW
+        reset_value: 8
+        description: "Number of cycles neuron cannot spike after firing"
+
+      - name: RESERVED
+        bits: [31:16]
+        access: RO
+        reset_value: 0
+        description: "Reserved"
+
+  # Error Code (0x34)
+  - name: ERROR_CODE
+    offset: 0x34
+    width: 32
+    access: RO
+    reset_value: 0x00000000
+    description: "Detailed error code from last failed operation"
+    fields:
+      - name: CODE
+        bits: [7:0]
+        access: RO
+        reset_value: 0
+        description: |
+          Error codes:
+          0x00 = No error
+          0x01 = Invalid address (out of DDR range)
+          0x02 = Alignment error (not 64-byte aligned)
+          0x03 = DDR not ready
+          0x04 = Invalid command mode
+          0x05 = Timeout
+          0x06 = DMA error
+          0x07-0xFF = Reserved
+
+      - name: RESERVED
+        bits: [31:8]
+        access: RO
+        reset_value: 0
+        description: "Reserved"
+
+  # Performance Counter (0x38)
+  - name: PERF_CYCLES
+    offset: 0x38
+    width: 32
+    access: RO
+    reset_value: 0x00000000
+    description: "Clock cycles for last command execution"
+    fields:
+      - name: CYCLES
+        bits: [31:0]
+        access: RO
+        reset_value: 0
+        description: "Cycle count (rolls over at 2^32)"
+
+  # DDR Bandwidth Counter (0x3C)
+  - name: DDR_BANDWIDTH
+    offset: 0x3C
+    width: 32
+    access: RO
+    reset_value: 0x00000000
+    description: "DDR bandwidth utilization (bytes per 1000 cycles)"
+    fields:
+      - name: BW_UTIL
+        bits: [31:0]
+        access: RO
+        reset_value: 0
+        description: "Average bytes transferred per 1000 clock cycles"
+
+  # Temperature Sensor (0x40)
+  - name: TEMPERATURE
+    offset: 0x40
+    width: 32
+    access: RO
+    reset_value: 0x00000000
+    description: "FPGA junction temperature from on-die sensor"
+    fields:
+      - name: TEMP_C
+        bits: [15:0]
+        access: RO
+        reset_value: 0
+        description: "Temperature in Celsius * 256 (Q8.8 fixed-point)"
+
+      - name: RESERVED
+        bits: [31:16]
+        access: RO
+        reset_value: 0
+        description: "Reserved"
+
+  # Scratch Register (0x44)
+  - name: SCRATCH
+    offset: 0x44
+    width: 32
+    access: RW
+    reset_value: 0x00000000
+    description: "Scratch register for testing (read/write test pattern)"
+    fields:
+      - name: DATA
+        bits: [31:0]
+        access: RW
+        reset_value: 0
+        description: "User-defined test data"
+
+# Command sequences (for documentation generation)
+command_sequences:
+  - name: memory_copy
+    description: "Simple memory copy from SRC to DST"
+    steps:
+      - action: "Write CMD_SRC_LO/HI with source address"
+      - action: "Write CMD_DST_LO/HI with destination address"
+      - action: "Write CMD_LEN with byte count (64-byte aligned)"
+      - action: "Write CMD_CFG with MODE=0x0 (MEMCOPY)"
+      - action: "Write CTRL.START=1 to execute"
+      - action: "Poll STATUS.BUSY until 0"
+      - action: "Check STATUS.DONE (1=success) or STATUS.ERROR (1=fail)"
+      - action: "Read ERROR_CODE if STATUS.ERROR=1"
+
+  - name: snn_inference
+    description: "LIF neuron inference"
+    steps:
+      - action: "Write SNN_THRESHOLD, SNN_LEAK, SNN_REFRACT to configure neurons"
+      - action: "Write CMD_SRC_LO/HI with input spike train address"
+      - action: "Write CMD_DST_LO/HI with output spike buffer address"
+      - action: "Write CMD_CFG with MODE=0x1, NEURON_COUNT, TIME_STEPS"
+      - action: "Write CTRL.START=1 to execute"
+      - action: "Poll STATUS.BUSY until 0"
+      - action: "Read PERF_CYCLES to get inference latency"
+      - action: "Process output spikes from DST buffer"
+
+# Validation rules (for code generator)
+validation:
+  - rule: "CMD_SRC_LO/HI must be within DDR4 address range (0 to 8GB-1)"
+  - rule: "CMD_DST_LO/HI must be within DDR4 address range"
+  - rule: "CMD_LEN must be 64-byte aligned (lower 6 bits = 0)"
+  - rule: "CMD_LEN must not exceed 16MB (0x01000000)"
+  - rule: "SNN NEURON_COUNT must be 1-1024"
+  - rule: "Command must not be started while STATUS.BUSY=1"

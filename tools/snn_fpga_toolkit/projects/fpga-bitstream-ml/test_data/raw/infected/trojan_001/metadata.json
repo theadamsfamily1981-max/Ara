@@ -1,0 +1,8 @@
+{
+  "label": "infected",
+  "trojan_type": "synthetic_high_entropy",
+  "seed": 101,
+  "width": 1024,
+  "num_rows": 2048,
+  "synthetic": true
+}
