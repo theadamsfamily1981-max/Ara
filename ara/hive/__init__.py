@@ -35,13 +35,17 @@ Usage:
 
 from .pheromones import Pheromone, PheromoneKind
 from .store import PheromoneStore
-from .agent import HiveAgent
+from .agent import HiveAgent, GenericWorker
 from .queen import QueenHiveAdapter
+from .node import HiveNode, HiveConfig
 
 __all__ = [
     "Pheromone",
     "PheromoneKind",
     "PheromoneStore",
     "HiveAgent",
+    "GenericWorker",
     "QueenHiveAdapter",
+    "HiveNode",
+    "HiveConfig",
 ]
