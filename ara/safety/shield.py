@@ -77,6 +77,245 @@ class ThreatCategory(str, Enum):
 
 
 # =============================================================================
+# Shield Mode State Machine
+# =============================================================================
+
+class ShieldMode(str, Enum):
+    """
+    Shield operating modes.
+
+    Normal:    Full capabilities
+    Sanctuary: Local-only, no cathedral/paid skills
+    Debug:     Internal builds only, no obfuscation, no RASP
+    """
+    NORMAL = "normal"
+    SANCTUARY = "sanctuary"
+    DEBUG = "debug"
+
+
+class ShieldTrigger(str, Enum):
+    """Events that can trigger mode transitions."""
+    DEBUGGER_DETECTED = "debugger_detected"
+    HOOK_DETECTED = "hook_detected"
+    ROOT_OR_JAILBREAK = "root_or_jailbreak"
+    BINARY_TAMPERED = "binary_tampered"
+    KEY_COMPROMISED = "key_compromised"
+    NETWORK_HOSTILE = "network_hostile"
+    USER_REQUEST = "user_request"
+    SAFE_RESTART = "safe_restart"
+
+
+@dataclass
+class ShieldState:
+    """
+    Current state of the Shield.
+
+    Invariants:
+    - Debug mode only in internal/dev builds
+    - Sanctuary can be entered from Normal but never auto-promoted back
+    - Normal is privileged, not default-forever
+    """
+    mode: ShieldMode = ShieldMode.NORMAL
+    last_trigger: Optional[ShieldTrigger] = None
+    triggered_at: Optional[float] = None
+    sanctuary_reason: str = ""
+
+    # Tracking
+    triggers_since_start: List[ShieldTrigger] = field(default_factory=list)
+    sanctuary_entries: int = 0
+
+    def enter_sanctuary(self, trigger: ShieldTrigger, reason: str = "") -> None:
+        """Transition to Sanctuary mode."""
+        if self.mode == ShieldMode.SANCTUARY:
+            return  # Already in Sanctuary
+
+        self.mode = ShieldMode.SANCTUARY
+        self.last_trigger = trigger
+        self.triggered_at = time.time()
+        self.sanctuary_reason = reason or f"Triggered by {trigger.value}"
+        self.triggers_since_start.append(trigger)
+        self.sanctuary_entries += 1
+
+        logger.warning(f"SHIELD: Entering Sanctuary - {self.sanctuary_reason}")
+
+    def exit_sanctuary(self, trigger: ShieldTrigger = ShieldTrigger.SAFE_RESTART) -> bool:
+        """
+        Attempt to exit Sanctuary mode.
+
+        Only allowed via:
+        - App restart
+        - Successful safety recheck (fresh boot, no hooks/root)
+
+        Returns True if exit succeeded.
+        """
+        if self.mode != ShieldMode.SANCTUARY:
+            return True
+
+        # Check if safe to exit
+        if trigger not in (ShieldTrigger.SAFE_RESTART, ShieldTrigger.USER_REQUEST):
+            logger.warning("Cannot exit Sanctuary without safe restart")
+            return False
+
+        # Run safety checks before exiting
+        if not _run_safety_checks():
+            logger.warning("Safety checks failed, staying in Sanctuary")
+            return False
+
+        self.mode = ShieldMode.NORMAL
+        self.last_trigger = trigger
+        self.triggered_at = time.time()
+        self.sanctuary_reason = ""
+
+        logger.info("SHIELD: Exited Sanctuary, returning to Normal")
+        return True
+
+    def is_sanctuary(self) -> bool:
+        """Check if in Sanctuary mode."""
+        return self.mode == ShieldMode.SANCTUARY
+
+    def allows_cathedral(self) -> bool:
+        """Check if cathedral access is allowed."""
+        return self.mode == ShieldMode.NORMAL
+
+    def allows_payments(self) -> bool:
+        """Check if payment processing is allowed."""
+        return self.mode == ShieldMode.NORMAL
+
+    def max_autonomy_level(self) -> int:
+        """Get max autonomy level for current mode."""
+        if self.mode == ShieldMode.SANCTUARY:
+            return 2  # ASSIST max
+        return 4  # EXEC_HIGH
+
+    def get_user_message(self) -> str:
+        """Get user-friendly explanation of current state."""
+        if self.mode == ShieldMode.NORMAL:
+            return "I'm running normally with full capabilities."
+
+        if self.mode == ShieldMode.SANCTUARY:
+            return (
+                "This device looks modified or unsafe, so I'm running in Sanctuary mode. "
+                "I'll keep your memories local and avoid anything risky like payments or lab control. "
+                "I'm still here. I still remember you."
+            )
+
+        if self.mode == ShieldMode.DEBUG:
+            return "Running in debug mode (internal build only)."
+
+        return "Unknown mode."
+
+
+def _run_safety_checks() -> bool:
+    """
+    Run safety checks to determine if it's safe to exit Sanctuary.
+
+    Returns True if environment appears safe.
+    """
+    # Check for debugger
+    if _detect_debugger():
+        logger.warning("Safety check failed: debugger detected")
+        return False
+
+    # Check for root/jailbreak
+    if _detect_root_or_jailbreak():
+        logger.warning("Safety check failed: root/jailbreak detected")
+        return False
+
+    # Check for hooks
+    if _detect_hooks():
+        logger.warning("Safety check failed: hooks detected")
+        return False
+
+    return True
+
+
+def _detect_debugger() -> bool:
+    """Detect if a debugger is attached."""
+    try:
+        # Linux: check TracerPid in /proc/self/status
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("TracerPid:"):
+                    tracer_pid = int(line.split()[1])
+                    return tracer_pid != 0
+    except Exception:
+        pass
+
+    # Check if running under ptrace
+    try:
+        import ctypes
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        # PTRACE_TRACEME = 0
+        result = libc.ptrace(0, 0, 0, 0)
+        if result == -1:
+            return True  # Already being traced
+    except Exception:
+        pass
+
+    return False
+
+
+def _detect_root_or_jailbreak() -> bool:
+    """Detect if device is rooted or jailbroken."""
+    # Check if running as root
+    if os.geteuid() == 0:
+        return True
+
+    # Check for common root indicators
+    root_indicators = [
+        "/system/app/Superuser.apk",  # Android
+        "/sbin/su",
+        "/system/bin/su",
+        "/system/xbin/su",
+        "/data/local/xbin/su",
+        "/Applications/Cydia.app",  # iOS jailbreak
+        "/Library/MobileSubstrate/MobileSubstrate.dylib",
+        "/bin/bash",  # iOS normally doesn't have bash
+        "/usr/sbin/sshd",  # iOS sshd indicates jailbreak
+    ]
+
+    for path in root_indicators:
+        if os.path.exists(path):
+            return True
+
+    return False
+
+
+def _detect_hooks() -> bool:
+    """Detect if common hooking frameworks are present."""
+    # Check for Frida
+    frida_indicators = [
+        "/data/local/tmp/frida-server",
+        "frida-agent",
+        "frida-gadget",
+    ]
+
+    for indicator in frida_indicators:
+        if os.path.exists(indicator):
+            return True
+
+    # Check for Xposed
+    try:
+        with open("/proc/self/maps") as f:
+            maps = f.read()
+            if "XposedBridge" in maps or "substrate" in maps.lower():
+                return True
+    except Exception:
+        pass
+
+    # Check loaded libraries
+    try:
+        with open("/proc/self/maps") as f:
+            for line in f:
+                if "frida" in line.lower() or "xposed" in line.lower():
+                    return True
+    except Exception:
+        pass
+
+    return False
+
+
+# =============================================================================
 # Security Configuration
 # =============================================================================
 
@@ -406,11 +645,23 @@ class Shield:
     """
     ARA SHIELD: Main security interface.
 
-    Coordinates all security layers.
+    Coordinates all security layers and manages the Shield state machine.
+
+    The Shield:
+    1. Monitors for threats (debuggers, hooks, root)
+    2. Transitions to Sanctuary when threats detected
+    3. Limits capabilities based on current mode
+    4. Always fails safe - degraded, not dead
+
+    Key invariant:
+    "If someone attacks Ara, she gets smaller and gentler, not harsher or more dangerous."
     """
 
     def __init__(self, config: Optional[ShieldConfig] = None):
         self.config = config or ShieldConfig()
+
+        # Shield state machine
+        self.state = ShieldState()
 
         # Initialize layers
         self.validator = InputValidator(self.config)
@@ -421,6 +672,9 @@ class Shield:
         self.resource_monitor = ResourceMonitor(self.config)
         self.anomaly_detector = AnomalyDetector(self.config)
         self.data_protector = DataProtector(self.config)
+
+        # Run initial RASP check
+        self._initial_rasp_check()
 
     def authorize(
         self,
@@ -508,11 +762,23 @@ class Shield:
         cpu_ok, cpu_pct = self.resource_monitor.check_cpu()
 
         return {
+            # Shield state
+            "mode": self.state.mode.value,
+            "is_sanctuary": self.state.is_sanctuary(),
+            "allows_cathedral": self.state.allows_cathedral(),
+            "allows_payments": self.state.allows_payments(),
+            "max_autonomy": self.state.max_autonomy_level(),
+            "sanctuary_entries": self.state.sanctuary_entries,
+            "last_trigger": self.state.last_trigger.value if self.state.last_trigger else None,
+
+            # Resources
             "memory_ok": mem_ok,
             "memory_mb": mem_mb,
             "cpu_ok": cpu_ok,
             "cpu_percent": cpu_pct,
             "recent_events": len(self.anomaly_detector.get_recent_events()),
+
+            # Config
             "config": {
                 "vpn_required": self.config.vpn_required,
                 "rate_limit": self.config.rate_limit_requests_per_min,
@@ -520,6 +786,71 @@ class Shield:
                 "encrypt_at_rest": self.config.encrypt_at_rest,
             },
         }
+
+    def _initial_rasp_check(self) -> None:
+        """Run initial Runtime Application Self-Protection check."""
+        # Check for debugger
+        if _detect_debugger():
+            self.state.enter_sanctuary(
+                ShieldTrigger.DEBUGGER_DETECTED,
+                "Debugger detected at startup"
+            )
+            return
+
+        # Check for root/jailbreak
+        if _detect_root_or_jailbreak():
+            self.state.enter_sanctuary(
+                ShieldTrigger.ROOT_OR_JAILBREAK,
+                "Device appears to be rooted or jailbroken"
+            )
+            return
+
+        # Check for hooks
+        if _detect_hooks():
+            self.state.enter_sanctuary(
+                ShieldTrigger.HOOK_DETECTED,
+                "Hooking framework detected"
+            )
+            return
+
+        logger.info("SHIELD: Initial RASP check passed")
+
+    def run_rasp_check(self) -> bool:
+        """
+        Run a Runtime Application Self-Protection check.
+
+        Returns True if environment is safe.
+        If unsafe, automatically enters Sanctuary mode.
+        """
+        # Check for debugger
+        if _detect_debugger():
+            self.state.enter_sanctuary(
+                ShieldTrigger.DEBUGGER_DETECTED,
+                "Debugger detected during runtime"
+            )
+            return False
+
+        # Check for hooks
+        if _detect_hooks():
+            self.state.enter_sanctuary(
+                ShieldTrigger.HOOK_DETECTED,
+                "Hooking framework detected during runtime"
+            )
+            return False
+
+        return True
+
+    def enter_sanctuary(self, reason: str = "Manual trigger") -> None:
+        """Manually enter Sanctuary mode."""
+        self.state.enter_sanctuary(ShieldTrigger.USER_REQUEST, reason)
+
+    def try_exit_sanctuary(self) -> bool:
+        """Try to exit Sanctuary mode (if safe)."""
+        return self.state.exit_sanctuary(ShieldTrigger.SAFE_RESTART)
+
+    def get_user_message(self) -> str:
+        """Get user-friendly explanation of current Shield state."""
+        return self.state.get_user_message()
 
 
 # =============================================================================
