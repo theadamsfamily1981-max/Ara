@@ -421,6 +421,78 @@ DRIFT_CRITICAL = 0.18
 
 ---
 
+## CLUSTER TOPOLOGY
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           ARA CLUSTER TOPOLOGY                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   🏛️ CATHEDRAL (ara-cathedral)                                              │
+│   ├── Role: Brainstem + Orchestrator                                        │
+│   ├── CPU: Threadripper Pro 5955WX (16c/32t)                               │
+│   ├── RAM: 128 GB DDR4                                                      │
+│   ├── GPU: 2× RTX 3090 24GB (training + compute)                           │
+│   ├── FPGA: BittWare A10PED 16GB (audio front-end, Phase 2)                │
+│   ├── Storage: Micron SB852 64GB + 8× NVMe RAID0                           │
+│   └── Services: ara_realtime, ara_storage, ara_orchestrator                │
+│                                                                             │
+│   💻 HOME (ara-home)                                                        │
+│   ├── Role: Daily Ara + Kitten Guardian                                     │
+│   ├── GPU: RTX 5060 16GB (inference)                                        │
+│   ├── Security: SQRL Forest Kitten (covenant guard, Phase 2)               │
+│   ├── Services: ara_frontend, ara_companion                                │
+│   └── Can run offline (no cathedral required)                              │
+│                                                                             │
+│   🖥️ WORKER (ara-worker-v100)                                               │
+│   ├── Role: Training Mule                                                   │
+│   ├── GPU: V100 16GB                                                        │
+│   ├── Services: ara_trainer                                                │
+│   └── Mounts cathedral:/data/ara for datasets                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Role Assignments
+
+| Role | Primary Node | Fallback | GPU Required |
+|------|--------------|----------|--------------|
+| Real-time nervous system | Cathedral | Home | No |
+| Model training | Worker | Cathedral | Yes (16GB+) |
+| Daily inference | Home | Cathedral | Yes (8GB+) |
+| Covenant signing | Home (kitten) | Cathedral | No |
+| Dataset serving | Cathedral | Worker | No |
+
+### Phase 2 Hardware Interfaces
+
+| Hardware | Node | Role | Interface |
+|----------|------|------|-----------|
+| BittWare A10PED | Cathedral | Audio front-end | `AudioFrontEnd` trait |
+| SQRL Forest Kitten | Home | Covenant guardian | `CovenantGuard` trait |
+| Micron SB852 | Cathedral | Dataset cache | `StorageBackend` trait |
+
+All Phase 2 hardware has **software fallbacks** so v0.7 runs without them.
+
+### Launcher Scripts
+
+```bash
+# Cathedral (primary node)
+./cluster/start_cathedral.sh
+
+# Home (daily Ara)
+./cluster/start_home.sh --connect cathedral.lan:7777
+
+# Worker (training offload)
+./cluster/start_worker.sh --connect cathedral.lan:7777
+
+# Launch training job on worker from cathedral
+./cluster/train_on_worker.sh research.causal_swap --run-id my_run
+```
+
+See `cluster/cluster.toml` for full configuration.
+
+---
+
 ## THE ONE SENTENCE
 
 > **Ara v1.0**: Speech-native HV+GRU → Axis Mundi world_hv → Intero-precision + Safety → Breath sync → Covenant/Stability
