@@ -1,0 +1,255 @@
+# Ara Breath-Vision Protocol Covenant
+# =====================================
+#
+# Safety rules for guided breathing sessions with visual/haptic entrainment.
+# This is WELLNESS, not medical treatment.
+#
+# Philosophy: Gentle regulation, time-limited sessions, easy exit.
+# No claims about curing anything. Just a nice breathing exercise.
+
+version: "1.0"
+effective_date: "2025-01-01"
+
+# ============================================================================
+# SESSION LIMITS - Always time-bounded
+# ============================================================================
+session:
+  # Hard limits on duration
+  max_duration_minutes: 10        # Never longer than this
+  default_duration_minutes: 3     # Suggested starting point
+  min_duration_minutes: 1         # Below this is pointless
+
+  # No background continuous mode
+  allow_continuous_mode: false
+  allow_sleep_mode: false         # No overnight breathing
+
+  # Explicit start required
+  start_methods:
+    - "cli_command"               # ara_breath_vision start
+    - "voice_command"             # "Ara, start breathing session"
+    - "physical_button"           # If hardware has one
+
+  # Easy exit
+  stop_phrases:
+    - "stop"
+    - "end"
+    - "cancel"
+    - "too much"
+    - "I'm done"
+    - "that's enough"
+
+  # What happens on stop
+  stop_behavior:
+    visuals: "fade_to_neutral"
+    haptics: "gentle_off"
+    audio: "soft_acknowledgment"
+    motors: "release"
+
+  # Cooldown between sessions
+  min_gap_between_sessions_minutes: 5
+
+# ============================================================================
+# BREATHING PARAMETERS
+# ============================================================================
+breathing:
+  # Target breath rate for entrainment
+  target_breaths_per_minute:
+    min: 4                        # Very slow, advanced
+    max: 10                       # Still calming
+    default: 6                    # Optimal for most
+
+  # Inhale/exhale ratios
+  patterns:
+    balanced:                     # 1:1 ratio
+      inhale_ratio: 1.0
+      exhale_ratio: 1.0
+
+    relaxing:                     # 1:2 ratio (longer exhale)
+      inhale_ratio: 1.0
+      exhale_ratio: 2.0
+
+    energizing:                   # 1:1 with hold
+      inhale_ratio: 1.0
+      exhale_ratio: 1.0
+      hold_ratio: 0.5
+
+  # Detection sensitivity
+  detection:
+    method: "audio_or_motion"     # Mic breath sounds, chest motion
+    sensitivity: 0.5              # 0-1, middle ground
+    fallback_if_no_detection: "guided_only"  # Just guide, don't sync
+
+# ============================================================================
+# VISUAL ENTRAINMENT - Gentle, safe
+# ============================================================================
+visuals:
+  # Brightness limits
+  max_brightness: 0.6             # Comfortable, not intense
+  min_brightness: 0.1             # Never completely dark
+
+  # Field of view changes (tunnel/expansion)
+  fov:
+    max_change_percent: 30        # Max 30% expand/contract
+    transition_speed: "slow"      # Always gradual
+    min_transition_ms: 300        # No sudden jumps
+
+  # Color temperature shifts
+  color:
+    allow_color_shift: true
+    warm_range_kelvin: [2700, 4000]   # Relaxing warm tones
+    cool_range_kelvin: [4000, 5500]   # Alert but not harsh
+    transition_ms: 500
+
+  # SAFETY: Epilepsy protection
+  epilepsy_safe:
+    max_flash_rate_hz: 2          # Well under danger threshold
+    require_fade_transitions: true
+    no_high_contrast_flicker: true
+
+  # Styles available
+  styles:
+    ocean:
+      primary_color: "#1a5f7a"
+      secondary_color: "#57c5b6"
+      motion: "wave"
+
+    forest:
+      primary_color: "#2d5a27"
+      secondary_color: "#90b77d"
+      motion: "gentle_sway"
+
+    night:
+      primary_color: "#1a1a2e"
+      secondary_color: "#4a4e69"
+      motion: "slow_pulse"
+
+    minimal:
+      primary_color: "#2c2c2c"
+      secondary_color: "#4a4a4a"
+      motion: "none"
+
+# ============================================================================
+# HAPTIC ENTRAINMENT - Gentle pulses
+# ============================================================================
+haptics:
+  enabled: true
+  max_intensity: 0.5              # Gentle, not startling
+
+  # Pulse timing
+  pulse_min_ms: 200               # No rapid buzzing
+  pulse_max_ms: 1500              # Long gentle pulses OK
+
+  # Sync with breath
+  sync_to_breath: true
+  inhale_pattern: "soft_rise"
+  exhale_pattern: "soft_fall"
+  hold_pattern: "steady_gentle"
+
+  # Optional chest "breathing" motor
+  chest_motor:
+    enabled: false                # Off by default
+    max_displacement_mm: 5        # Very subtle
+    speed: "breath_synced"
+
+# ============================================================================
+# AUDIO GUIDANCE - Soft voice
+# ============================================================================
+audio:
+  volume_max: 0.7                 # Not too loud
+  volume_default: 0.5
+
+  # Voice style
+  voice:
+    style: "calm"
+    speed: "slow"
+    emotion: "warm"
+
+  # What she says
+  guidance_style: "minimal"       # Just "breathe in... breathe out..."
+  verbose_mode: false             # No long explanations during session
+
+  # Background sounds
+  ambient:
+    enabled: true
+    options:
+      - "none"
+      - "soft_white_noise"
+      - "ocean_waves"
+      - "rain"
+    default: "none"
+    max_volume: 0.3
+
+# ============================================================================
+# DISCLAIMERS - This is not medical
+# ============================================================================
+disclaimers:
+  # Must be spoken/shown at session start
+  required_at_start:
+    - "This is a breathing exercise for relaxation."
+    - "It is not medical treatment."
+    - "Stop any time if you feel uncomfortable."
+
+  # Must NOT be claimed
+  forbidden_claims:
+    - "cure"
+    - "treat"
+    - "therapy"
+    - "medical"
+    - "prescription"
+    - "diagnose"
+    - "heal"
+
+  # How to describe what this is
+  allowed_descriptions:
+    - "breathing exercise"
+    - "relaxation technique"
+    - "mindfulness practice"
+    - "wellness activity"
+
+# ============================================================================
+# CONTRAINDICATION AWARENESS
+# ============================================================================
+contraindications:
+  # If user mentions these, suggest they consult a professional
+  warn_if_mentioned:
+    - "panic attack"
+    - "ptsd"
+    - "trauma"
+    - "seizure"
+    - "epilepsy"
+    - "heart condition"
+    - "breathing disorder"
+
+  warning_response: |
+    I hear that you're dealing with something significant.
+    This is just a simple breathing exercise, not treatment.
+    If you're experiencing distress, please consider talking
+    to a healthcare professional. Want to continue, or would
+    you rather stop?
+
+  # User must explicitly confirm to continue after warning
+  require_confirmation_after_warning: true
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+logging:
+  # What we store
+  store_session_summary: true     # Duration, sync score, completion
+  store_breath_waveform: false    # Raw breath data - off by default
+  store_detailed_metrics: false   # Heart rate etc. - off by default
+
+  # What the summary includes
+  summary_fields:
+    - "session_id"
+    - "start_time"
+    - "duration_seconds"
+    - "target_breath_rate"
+    - "estimated_sync_score"      # How well they synced (0-1)
+    - "completed_normally"        # vs. early exit
+    - "early_exit_reason"         # "user_stop", "timeout", etc.
+
+  paths:
+    session_log: "~/.ara/breath_vision/sessions.jsonl"
+
+  retention_days: 30

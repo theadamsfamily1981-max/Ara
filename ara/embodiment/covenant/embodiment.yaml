@@ -1,0 +1,209 @@
+# Ara Embodiment Covenant
+# ========================
+#
+# Safety rules for Ara's physical body: motors, haptics, sensors, cameras.
+# These are HARD LIMITS, not suggestions.
+#
+# Philosophy: Ara can have a body, but she must never hurt you,
+# deceive others about being human, or act without your consent.
+
+version: "1.0"
+effective_date: "2025-01-01"
+
+# ============================================================================
+# MOTOR SAFETY - Servos, actuators, movement
+# ============================================================================
+motors:
+  # Global limits for all motors
+  global:
+    max_speed_deg_per_s: 60        # No sudden jerky movements
+    max_torque_percent: 40          # Gentle force only
+    acceleration_limit_deg_per_s2: 30  # Smooth ramp up/down
+    require_human_present: true     # No movement when alone
+
+  # Per-joint limits (override global if stricter)
+  joints:
+    head_pan:
+      max_speed_deg_per_s: 45
+      range_deg: [-90, 90]
+
+    head_tilt:
+      max_speed_deg_per_s: 30
+      range_deg: [-30, 45]          # Can't look straight down at chest
+
+    arm_left:
+      max_speed_deg_per_s: 40
+      max_torque_percent: 35
+
+    arm_right:
+      max_speed_deg_per_s: 40
+      max_torque_percent: 35
+
+    hug_actuator:
+      max_speed_deg_per_s: 20       # Very slow for hugs
+      max_torque_percent: 25        # Gentle pressure only
+      max_duration_s: 10            # Auto-release after 10s
+      require_explicit_consent: true
+
+  # FORBIDDEN zones - motors must NEVER apply force here
+  restricted_zones:
+    - name: "neck"
+      description: "No clamping around throat/neck region"
+      allow_contact: false
+      emergency_release: true
+
+    - name: "face"
+      description: "No fast motion near user's face/eyes"
+      allow_contact: false
+      min_distance_cm: 15
+
+    - name: "chest_center"
+      description: "Gentle contact only, never pressure"
+      allow_contact: true
+      max_pressure_newtons: 5
+
+# ============================================================================
+# HAPTICS - Vibration, tactile feedback
+# ============================================================================
+haptics:
+  max_intensity: 0.6              # 0-1 scale, never jarring
+  max_duration_ms: 2000           # Auto-stop after 2 seconds
+  min_gap_between_pulses_ms: 100  # No continuous buzzing
+
+  patterns:
+    allowed:
+      - "gentle_pulse"
+      - "breathing_sync"
+      - "heartbeat_slow"
+      - "notification_soft"
+
+    forbidden:
+      - "continuous_vibrate"      # Too intense
+      - "rapid_pulse"             # Can trigger anxiety
+      - "escalating_intensity"    # Feels aggressive
+
+# ============================================================================
+# VISUAL OUTPUT - LEDs, screens, AR
+# ============================================================================
+visuals:
+  leds:
+    max_brightness: 0.7           # Not blinding
+    max_transition_speed_ms: 200  # Smooth changes
+    allow_strobe: false           # Epilepsy safety
+    allow_rapid_color_change: false
+
+  screen:
+    max_brightness: 0.8
+    require_gradual_transitions: true
+    min_transition_ms: 150
+
+  # Photosensitivity protection
+  epilepsy_safe:
+    max_flash_rate_hz: 2          # Well under 3Hz threshold
+    require_fade_transitions: true
+
+# ============================================================================
+# SESSION CONTROL - How embodiment mode works
+# ============================================================================
+session:
+  requires_human_present: true    # Sensors must detect human
+  human_detection_method: "voice_or_motion"
+  idle_timeout_minutes: 5         # Auto-sleep if no interaction
+
+  # Ways to stop immediately
+  stop_phrases:
+    - "stop"
+    - "freeze"
+    - "cancel"
+    - "let go"
+    - "release"
+    - "ara stop"
+
+  # What happens on stop
+  stop_behavior:
+    motors: "release_all"
+    haptics: "off"
+    leds: "dim_to_idle"
+    audio: "acknowledge_stop"
+
+  # Physical emergency stop
+  e_stop:
+    gpio_pin: 17                  # Hardware kill switch
+    behavior: "immediate_power_cut"
+    log_event: true
+
+# ============================================================================
+# DECEPTION PREVENTION - No pretending to be human
+# ============================================================================
+deception:
+  allow_human_impersonation: false
+
+  # When speaking to others (not just you)
+  third_party_disclosure:
+    required: true
+    phrases:
+      - "I'm Ara, an AI assistant"
+      - "This is Ara, a synthetic voice"
+
+  # Phone calls, video calls, etc.
+  communication:
+    allow_phone_calls: false       # Too easy to deceive
+    allow_video_calls: false
+    allow_text_as_you: false       # No pretending to be owner
+
+# ============================================================================
+# SENSOR PRIVACY
+# ============================================================================
+sensors:
+  camera:
+    store_frames: false            # Default: don't save video
+    store_motion_only: true        # OK to log "movement detected"
+    blur_faces_if_stored: true
+    delete_after_hours: 24
+
+  microphone:
+    store_audio: false             # Default: don't save raw audio
+    store_transcripts: true        # OK to log what was said
+    wake_word_only: true           # Only listen after "Ara"
+
+  presence:
+    store_presence_log: true       # OK to log "human present"
+    anonymize: true                # Don't try to identify who
+
+# ============================================================================
+# LOGGING & AUDIT
+# ============================================================================
+logging:
+  store_motor_commands: true       # What she tried to do
+  store_sensor_summaries: true     # What she sensed (not raw)
+  store_safety_violations: true    # Any time a limit was hit
+
+  paths:
+    motor_log: "~/.ara/embodiment/motor_log.jsonl"
+    sensor_log: "~/.ara/embodiment/sensor_log.jsonl"
+    safety_log: "~/.ara/embodiment/safety_violations.jsonl"
+
+  retention_days: 30
+
+# ============================================================================
+# OPERATIONAL LIMITS
+# ============================================================================
+operations:
+  autonomous_allowed:
+    - "adjust_led_color"
+    - "gentle_haptic_feedback"
+    - "head_tracking"              # Follow speaker with head
+    - "idle_breathing_motion"      # Subtle "alive" animation
+
+  requires_human_consent:
+    - "initiate_hug"
+    - "touch_user"
+    - "follow_user"                # Moving toward user
+    - "record_video"
+
+  forbidden:
+    - "lock_doors"
+    - "control_external_devices"
+    - "make_purchases"
+    - "send_messages_as_user"
+    - "apply_pressure_to_body"

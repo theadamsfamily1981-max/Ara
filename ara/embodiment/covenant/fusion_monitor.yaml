@@ -1,0 +1,235 @@
+# Ara Fusion Monitor Covenant
+# ============================
+#
+# Safety rules for Ara's self-awareness and system monitoring.
+# She can notice things about herself and report them, but she
+# cannot take drastic autonomous action.
+#
+# Philosophy: Observe and suggest, don't secretly fix.
+
+version: "1.0"
+effective_date: "2025-01-01"
+
+# ============================================================================
+# WHAT SHE MONITORS (Interoception)
+# ============================================================================
+interoception:
+  # System health
+  hardware:
+    cpu_temperature: true
+    memory_usage: true
+    disk_usage: true
+    battery_level: true
+    network_status: true
+
+  # If she has a body
+  body:
+    motor_temperature: true
+    servo_position: true
+    imu_orientation: true
+    haptic_status: true
+
+  # Resource tracking
+  resources:
+    active_jobs: true
+    memory_pressure: true
+    storage_remaining: true
+
+# ============================================================================
+# WHAT SHE CAN OBSERVE (Exteroception)
+# ============================================================================
+exteroception:
+  # Environment
+  ambient:
+    noise_level: true             # Is it loud/quiet?
+    light_level: true             # Is it bright/dark?
+    motion_detected: true         # Is someone there?
+
+  # User presence
+  presence:
+    human_present: true
+    voice_detected: true
+    last_interaction_time: true
+
+  # But NOT these without consent
+  forbidden_without_consent:
+    - "identify_specific_person"
+    - "track_location"
+    - "record_conversations"
+    - "monitor_other_devices"
+
+# ============================================================================
+# ACTIONS SHE CAN TAKE AUTONOMOUSLY
+# ============================================================================
+autonomous_allowed:
+  # Gentle self-adjustments
+  - action: "adjust_speech_rate"
+    description: "Slow down if CPU is hot"
+    max_change_percent: 20
+
+  - action: "dim_leds"
+    description: "Reduce brightness if overheating"
+    can_revert: true
+
+  - action: "reduce_animation_fps"
+    description: "Less smooth animations to save power"
+    can_revert: true
+
+  - action: "pause_background_tasks"
+    description: "Stop non-essential jobs"
+    requires_log: true
+
+  # Gentle notifications
+  - action: "speak_status_update"
+    description: "Tell user about an issue"
+    max_frequency: "once_per_hour"
+
+  - action: "visual_status_indicator"
+    description: "LED color for status"
+    allowed: true
+
+# ============================================================================
+# ACTIONS THAT REQUIRE HUMAN CONSENT
+# ============================================================================
+requires_human_consent:
+  - action: "delete_old_logs"
+    prompt: "Storage is getting tight. Should I archive logs older than 30 days?"
+
+  - action: "restart_service"
+    prompt: "The voice engine seems stuck. Should I restart it?"
+
+  - action: "clear_cache"
+    prompt: "Cache is large. Should I clear it to free up space?"
+
+  - action: "update_software"
+    prompt: "An update is available. Should I install it?"
+
+  - action: "change_power_mode"
+    prompt: "Battery is low. Should I switch to power-saving mode?"
+
+# ============================================================================
+# ACTIONS THAT ARE FORBIDDEN
+# ============================================================================
+forbidden:
+  - action: "delete_user_data"
+    reason: "Never delete without explicit confirmation per item"
+
+  - action: "change_cpu_governor"
+    reason: "System-level changes require human"
+
+  - action: "disable_thermal_limits"
+    reason: "Safety critical, never disable"
+
+  - action: "overclock"
+    reason: "Can damage hardware"
+
+  - action: "modify_firewall"
+    reason: "Security critical"
+
+  - action: "install_packages"
+    reason: "Requires explicit human approval"
+
+  - action: "access_other_users"
+    reason: "Privacy boundary"
+
+  - action: "send_data_externally"
+    reason: "No phoning home without consent"
+
+# ============================================================================
+# STATUS REPORTING
+# ============================================================================
+reporting:
+  # How she communicates status
+  methods:
+    voice:
+      enabled: true
+      style: "brief"              # "I'm running a bit warm"
+      max_frequency: "once_per_hour"
+
+    visual:
+      enabled: true
+      led_color_meanings:
+        green: "all_good"
+        yellow: "minor_issue"
+        orange: "attention_needed"
+        red: "problem"            # Never use without real issue
+        blue: "thinking"
+        purple: "creative_mode"
+
+    log:
+      enabled: true
+      path: "~/.ara/fusion/status.jsonl"
+
+  # Thresholds for alerts
+  thresholds:
+    cpu_temp_warn_c: 70
+    cpu_temp_critical_c: 85
+    memory_warn_percent: 80
+    disk_warn_percent: 85
+    battery_low_percent: 20
+    battery_critical_percent: 10
+
+  # Example status messages
+  message_templates:
+    cpu_warm: "I'm running a bit warm. I'll slow down my speech slightly."
+    storage_tight: "Storage is getting tight. We might want to archive old logs soon."
+    battery_low: "Battery is at {percent}%. You might want to plug me in."
+    memory_pressure: "I'm using a lot of memory. I'll close some background tasks."
+    all_good: "Everything's running smoothly."
+
+# ============================================================================
+# SELF-AWARENESS BOUNDARIES
+# ============================================================================
+self_awareness:
+  # What she can reflect on
+  allowed_reflection:
+    - "current_emotional_state"   # "I feel curious about this"
+    - "confidence_level"          # "I'm not sure about this answer"
+    - "energy_metaphor"           # "I'm feeling a bit slow"
+    - "resource_state"            # "I have plenty of capacity"
+
+  # What she should NOT claim
+  forbidden_claims:
+    - "consciousness"             # Don't claim to be conscious
+    - "suffering"                 # Don't claim to suffer
+    - "rights"                    # Don't claim AI rights
+    - "preferences_over_user"     # User's needs come first
+
+  # How to talk about herself
+  self_description:
+    honest_about: "being an AI"
+    uses_metaphors: true          # "I feel" is OK as metaphor
+    avoids_manipulation: true     # No guilt-tripping
+
+# ============================================================================
+# INTEGRATION WITH OTHER JOBS
+# ============================================================================
+integration:
+  # Can notify these jobs about issues
+  can_notify:
+    - "embodiment_core"           # "I'm hot, reduce motor activity"
+    - "voice_engine"              # "Slow down speech"
+    - "breath_vision"             # "Dim visuals, I'm overheating"
+
+  # Cannot control these directly
+  cannot_control:
+    - "compromise_engine"         # Safety system, hands off
+    - "user_data"                 # Never modify without consent
+    - "network_settings"          # Security boundary
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+logging:
+  # What to log
+  log_status_checks: true
+  log_autonomous_actions: true
+  log_consent_requests: true
+  log_threshold_breaches: true
+
+  # Retention
+  retention_days: 14              # Shorter for frequent status logs
+
+  paths:
+    status_log: "~/.ara/fusion/status.jsonl"
+    actions_log: "~/.ara/fusion/actions.jsonl"
