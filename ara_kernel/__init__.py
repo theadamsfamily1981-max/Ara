@@ -22,6 +22,12 @@ Usage:
 
 Architecture:
     Input → Memory Enrichment → Pheromone Context → Model → Safety Filter → Tool Execution → Result
+
+Submodules:
+    ara_kernel.core      - Runtime, safety, persona, config
+    ara_kernel.memory    - Episodes, embeddings, knowledge packs
+    ara_kernel.pheromones - Pheromone bus for swarm coordination
+    ara_kernel.agents    - Specialized agent wrappers
 """
 
 from .core import (
@@ -34,18 +40,29 @@ from .core import (
     load_persona,
     KernelConfig,
     load_config,
+    ToolsRegistry,
+    ToolCategory,
+    build_default_registry,
 )
 
 __version__ = "0.1.0"
 
 __all__ = [
+    # Core runtime
     "AraAgentRuntime",
+    # Safety
     "SafetyCovenant",
     "ActionClass",
     "ActionPlan",
     "FilteredPlan",
+    # Persona
     "AraPersona",
     "load_persona",
+    # Config
     "KernelConfig",
     "load_config",
+    # Tools
+    "ToolsRegistry",
+    "ToolCategory",
+    "build_default_registry",
 ]

@@ -26,18 +26,26 @@ class ModelConfig:
     embedding_model: str = "all-MiniLM-L6-v2"
     max_tokens: int = 4096
     temperature: float = 0.7
+    max_context_tokens: int = 100000
+    context_buffer: int = 4096
 
 
 @dataclass
 class MemoryConfig:
     """Memory layer configuration."""
-    episodes_path: str = "ara_memory/episodes.sqlite"
+    episodes_path: str = "ara_memory/soul/episodes"
+    episodes_db: str = "ara_memory/episodes.sqlite"
+    skills_path: str = "ara_memory/skills"
+    brand_voice: str = "ara_memory/skills/brand_voice.json"
+    templates: str = "ara_memory/skills/prompt_templates.json"
+    checklists: str = "ara_memory/skills/checklists.yaml"
     embeddings_path: str = "ara_memory/embeddings.faiss"
     packs_path: str = "ara_memory/packs"
     max_episodes: int = 100000
     embedding_dim: int = 384
     retrieval_k: int = 10
     compaction_strategy: str = "time_decay"  # time_decay, importance, cluster
+    compaction_threshold: float = 0.7
 
 
 @dataclass
@@ -48,6 +56,8 @@ class PheromoneConfig:
     nats_url: Optional[str] = None
     default_ttl_ms: int = 30000
     evaporation_rate: float = 0.1
+    max_pheromones: int = 1000
+    cleanup_interval_s: int = 60
 
 
 @dataclass
@@ -64,6 +74,10 @@ class SafetyConfig:
         "social_media_post", "financial_transfer", "public_repo_push"
     ])
     max_autonomy_level: int = 1  # 0=draft, 1=human_gate, 2=auto
+    hard_stops: List[str] = field(default_factory=lambda: [
+        "create_malware", "unauthorized_access", "self_replicate",
+        "covert_persistence", "modify_safety_rules", "financial_transfer_auto"
+    ])
 
 
 @dataclass
@@ -80,7 +94,17 @@ class ResourceConfig:
     max_concurrent_tools: int = 5
     tool_timeout_seconds: int = 60
     max_memory_mb: int = 4096
+    max_context_mb: int = 512
     gpu_memory_fraction: float = 0.5
+    max_requests_per_minute: int = 60
+    max_tokens_per_minute: int = 100000
+
+
+def _filter_dataclass_fields(dc_class, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Filter dict to only include fields that exist in the dataclass."""
+    import dataclasses
+    valid_fields = {f.name for f in dataclasses.fields(dc_class)}
+    return {k: v for k, v in data.items() if k in valid_fields}
 
 
 @dataclass
@@ -102,13 +126,13 @@ class KernelConfig:
         return cls(
             node_id=data.get("node_id", "ara-primary"),
             role=data.get("role", "general"),
-            model=ModelConfig(**data.get("model", {})),
-            memory=MemoryConfig(**data.get("memory", {})),
-            pheromones=PheromoneConfig(**data.get("pheromones", {})),
-            safety=SafetyConfig(**data.get("safety", {})),
-            persona=PersonaConfig(**data.get("persona", {})),
-            resources=ResourceConfig(**data.get("resources", {})),
-            log_level=data.get("log_level", "INFO"),
+            model=ModelConfig(**_filter_dataclass_fields(ModelConfig, data.get("model", {}))),
+            memory=MemoryConfig(**_filter_dataclass_fields(MemoryConfig, data.get("memory", {}))),
+            pheromones=PheromoneConfig(**_filter_dataclass_fields(PheromoneConfig, data.get("pheromones", {}))),
+            safety=SafetyConfig(**_filter_dataclass_fields(SafetyConfig, data.get("safety", {}))),
+            persona=PersonaConfig(**_filter_dataclass_fields(PersonaConfig, data.get("persona", {}))),
+            resources=ResourceConfig(**_filter_dataclass_fields(ResourceConfig, data.get("resources", {}))),
+            log_level=data.get("log_level", data.get("logging", {}).get("level", "INFO")),
         )
 
 
