@@ -1,0 +1,85 @@
+{
+  "service": "github",
+  "base_url": "https://api.github.com",
+  "auth": {
+    "type": "bearer_token",
+    "env_var": "GITHUB_TOKEN"
+  },
+  "default_headers": {
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28"
+  },
+  "rate_limit_default": "github_default",
+  "endpoints": {
+    "list_repos": {
+      "method": "GET",
+      "path": "/users/{owner}/repos",
+      "expected_status": [200],
+      "common_errors": {
+        "403": "wait_and_retry",
+        "404": "log_and_skip"
+      }
+    },
+    "get_repo": {
+      "method": "GET",
+      "path": "/repos/{owner}/{repo}",
+      "expected_status": [200],
+      "common_errors": {
+        "404": "log_and_skip"
+      }
+    },
+    "get_file": {
+      "method": "GET",
+      "path": "/repos/{owner}/{repo}/contents/{path}",
+      "expected_status": [200],
+      "common_errors": {
+        "404": "log_and_skip"
+      }
+    },
+    "create_file": {
+      "method": "PUT",
+      "path": "/repos/{owner}/{repo}/contents/{path}",
+      "required_fields": ["message", "content"],
+      "expected_status": [200, 201],
+      "rate_limit_key": "github_write",
+      "common_errors": {
+        "409": "fetch_sha_and_retry",
+        "422": "validate_payload"
+      }
+    },
+    "update_file": {
+      "method": "PUT",
+      "path": "/repos/{owner}/{repo}/contents/{path}",
+      "required_fields": ["message", "content", "sha"],
+      "expected_status": [200],
+      "rate_limit_key": "github_write",
+      "common_errors": {
+        "409": "fetch_sha_and_retry"
+      }
+    },
+    "list_issues": {
+      "method": "GET",
+      "path": "/repos/{owner}/{repo}/issues",
+      "expected_status": [200]
+    },
+    "create_issue": {
+      "method": "POST",
+      "path": "/repos/{owner}/{repo}/issues",
+      "required_fields": ["title"],
+      "expected_status": [201],
+      "rate_limit_key": "github_write"
+    },
+    "create_pr": {
+      "method": "POST",
+      "path": "/repos/{owner}/{repo}/pulls",
+      "required_fields": ["title", "head", "base"],
+      "expected_status": [201],
+      "rate_limit_key": "github_write"
+    },
+    "get_tree": {
+      "method": "GET",
+      "path": "/repos/{owner}/{repo}/git/trees/{tree_sha}",
+      "expected_status": [200]
+    }
+  }
+}

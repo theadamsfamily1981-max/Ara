@@ -1,0 +1,32 @@
+{
+  "github_default": {
+    "requests_per_minute": 60,
+    "min_delay_ms": 100,
+    "backoff_factor": 2.0,
+    "max_retries": 3
+  },
+  "github_write": {
+    "requests_per_minute": 30,
+    "min_delay_ms": 200,
+    "backoff_factor": 2.0,
+    "max_retries": 3
+  },
+  "printful_default": {
+    "requests_per_minute": 5,
+    "min_delay_ms": 1200,
+    "backoff_factor": 2.5,
+    "max_retries": 5
+  },
+  "twitter_default": {
+    "requests_per_minute": 15,
+    "min_delay_ms": 1000,
+    "backoff_factor": 2.0,
+    "max_retries": 3
+  },
+  "suno_default": {
+    "requests_per_minute": 10,
+    "min_delay_ms": 500,
+    "backoff_factor": 2.0,
+    "max_retries": 3
+  }
+}
