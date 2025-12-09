@@ -1,0 +1,16 @@
+# K10 Day 1 Toolkit Requirements
+
+# Core dependencies
+pyyaml>=6.0          # Configuration file parsing
+requests>=2.28.0     # HTTP/API requests
+param
+
+iko>=2.8.0      # SSH access
+
+# Network tools
+pyserial>=3.5        # UART/serial console access (Method C)
+
+# Optional: Enhanced functionality
+# nmap (install via system package manager)
+# Pillow>=9.0.0      # Image analysis
+# cryptography>=38.0 # Encrypted bitstream analysis

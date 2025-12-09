@@ -1,0 +1,78 @@
+# Quartus Settings File
+# A10PED Neuromorphic - AI Tile v0 (Phase 1)
+#
+# FPGA: Intel Arria 10 GX1150 (first FPGA on BittWare A10PED)
+# Features:
+#   - PCIe Gen3 x8 Hard IP (Avalon-MM DMA)
+#   - DDR4 EMIF controller (8GB SO-DIMM)
+#   - AI CSR block (generated from YAML)
+#   - Memcopy DMA kernel
+
+set_global_assignment -name FAMILY "Arria 10"
+set_global_assignment -name DEVICE 10AX115N2F40E2LG
+set_global_assignment -name TOP_LEVEL_ENTITY ai_tile_v0_top
+set_global_assignment -name ORIGINAL_QUARTUS_VERSION 23.4.0
+set_global_assignment -name PROJECT_CREATION_TIME_DATE "16:00:00 NOVEMBER 24, 2024"
+set_global_assignment -name LAST_QUARTUS_VERSION "23.4.0 Pro Edition"
+
+# Device options
+set_global_assignment -name DEVICE_FILTER_PACKAGE FBGA
+set_global_assignment -name DEVICE_FILTER_PIN_COUNT 1517
+set_global_assignment -name DEVICE_FILTER_SPEED_GRADE 2
+
+# Compilation flow settings
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
+set_global_assignment -name MAX_CORE_JUNCTION_TEMP 100
+set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 256
+
+# Optimization settings
+set_global_assignment -name OPTIMIZATION_MODE "AGGRESSIVE PERFORMANCE"
+set_global_assignment -name SEED 1
+
+# PCIe configuration
+set_global_assignment -name ENABLE_SIGNALTAP OFF
+set_global_assignment -name STRATIXV_CONFIGURATION_SCHEME "PASSIVE SERIAL"
+set_global_assignment -name USE_CONFIGURATION_DEVICE OFF
+set_global_assignment -name GENERATE_RBF_FILE ON
+
+# Power settings
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
+set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
+
+# Timing constraints
+set_global_assignment -name SDC_FILE ai_tile_v0.sdc
+
+# Source files
+set_global_assignment -name VERILOG_FILE ai_tile_v0_top.v
+set_global_assignment -name VERILOG_FILE ../../rtl/ai_csr.v
+set_global_assignment -name VERILOG_FILE ../../rtl/memcopy_kernel.v
+set_global_assignment -name QSYS_FILE ai_tile_v0_sys.qsys
+set_global_assignment -name SOURCE_FILE ai_tile_v0_sys/synthesis/ai_tile_v0_sys.qip
+
+# Pin assignments for A10PED
+# NOTE: These are placeholder pins - MUST BE VERIFIED against A10PED schematic
+
+# PCIe Gen3 x8 pins (hip_serial interface - managed by HIP)
+# These are assigned automatically by Platform Designer for PCIe HIP
+
+# 100 MHz reference clock for PCIe
+set_location_assignment PIN_AR37 -to pcie_refclk
+set_instance_assignment -name IO_STANDARD HCSL -to pcie_refclk
+
+# PCIe reset (active low)
+set_location_assignment PIN_BB41 -to pcie_perst_n
+set_instance_assignment -name IO_STANDARD "1.8 V" -to pcie_perst_n
+
+# DDR4 pins (managed by EMIF IP - auto-assigned)
+# Platform Designer will assign these based on pin planner
+
+# Status LEDs (if available on A10PED - verify schematic)
+set_location_assignment PIN_AV39 -to status_led[0]
+set_location_assignment PIN_AW39 -to status_led[1]
+set_location_assignment PIN_AY38 -to status_led[2]
+set_location_assignment PIN_AY39 -to status_led[3]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to status_led[*]
+
+# If LEDs not available, use virtual pins
+# set_instance_assignment -name VIRTUAL_PIN ON -to status_led[*]

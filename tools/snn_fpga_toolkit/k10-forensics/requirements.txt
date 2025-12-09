@@ -1,0 +1,14 @@
+# K10 / ColEngine P2 Firmware Analysis Toolkit
+# Requirements for forensic analysis of mining firmware and SD images
+
+# Core dependencies
+numpy>=1.21.0
+
+# Optional: For advanced entropy visualization
+# matplotlib>=3.4.0
+# seaborn>=0.11.0
+
+# Note: System utilities required (install via OS package manager):
+# - fdisk (util-linux)
+# - parted
+# - mount/umount (if analyzing SD partitions)

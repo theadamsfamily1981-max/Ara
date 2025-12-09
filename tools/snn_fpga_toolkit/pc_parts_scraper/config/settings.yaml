@@ -1,0 +1,952 @@
+# PC Parts Scraper Configuration
+# ================================
+
+# General Settings
+general:
+  user_agent_rotation: true
+  request_timeout: 30
+  max_retries: 3
+  retry_delay: 5
+  concurrent_requests: 10
+  respect_robots_txt: true
+
+# Database
+database:
+  type: sqlite
+  path: data/pc_parts.db
+
+# Proxy Settings
+proxy:
+  enabled: false
+  rotation: true
+  pool:
+    - "http://proxy1:8080"
+    - "http://proxy2:8080"
+    - "socks5://proxy3:1080"
+
+# Rate Limiting (requests per minute per domain)
+rate_limits:
+  default: 30
+  ebay.com: 20
+  craigslist.org: 10
+  govplanet.com: 15
+
+# Search Categories
+pc_parts_categories:
+  - cpu
+  - gpu
+  - gpu_datacenter
+  - gpu_professional
+  - fpga
+  - ai_accelerator
+  - motherboard
+  - ram
+  - storage
+  - psu
+  - case
+  - cooling
+  - peripheral
+  - cable
+  - adapter
+  - network
+  - legacy
+  - rare
+
+# Keywords for rare/vintage parts
+rare_part_keywords:
+  # ===========================================
+  # RARE & HIGH-END NVIDIA GPUs
+  # ===========================================
+
+  # NVIDIA Data Center / Compute GPUs (ULTRA RARE)
+  - "nvidia h100"
+  - "nvidia h200"
+  - "nvidia a100"
+  - "nvidia a800"
+  - "nvidia a30"
+  - "nvidia a40"
+  - "nvidia a10"
+  - "nvidia a16"
+  - "nvidia l40"
+  - "nvidia l4"
+  - "tesla v100"
+  - "tesla p100"
+  - "tesla p40"
+  - "tesla p4"
+  - "tesla k80"
+  - "tesla k40"
+  - "tesla k20"
+  - "tesla m40"
+  - "tesla m60"
+  - "nvidia dgx"
+  - "nvlink bridge"
+  - "sxm2"
+  - "sxm4"
+  - "sxm5"
+
+  # NVIDIA Quadro Professional (Rare)
+  - "quadro rtx 8000"
+  - "quadro rtx 6000"
+  - "quadro rtx 5000"
+  - "quadro rtx 4000"
+  - "quadro gv100"
+  - "quadro gp100"
+  - "quadro p6000"
+  - "quadro p5000"
+  - "quadro m6000"
+  - "quadro k6000"
+  - "quadro k5200"
+  - "rtx a6000"
+  - "rtx a5500"
+  - "rtx a5000"
+  - "rtx a4500"
+  - "rtx a4000"
+  - "rtx 6000 ada"
+  - "rtx 5000 ada"
+
+  # NVIDIA Titan Series (Collector's Items)
+  - "titan v"
+  - "titan rtx"
+  - "titan xp"
+  - "titan x pascal"
+  - "titan x maxwell"
+  - "titan black"
+  - "titan z"
+  - "gtx titan"
+
+  # Rare Consumer NVIDIA
+  - "rtx 4090"
+  - "rtx 3090 ti"
+  - "rtx 3090"
+  - "rtx 3080 ti"
+  - "gtx 1080 ti"
+  - "gtx 980 ti"
+  - "gtx 780 ti"
+  - "gtx 690"
+  - "gtx 590"
+  - "gtx 295"
+  - "geforce 9800 gx2"
+  - "geforce 7950 gx2"
+
+  # ===========================================
+  # RARE & HIGH-END AMD GPUs
+  # ===========================================
+
+  # AMD Instinct (Data Center - ULTRA RARE)
+  - "instinct mi300"
+  - "instinct mi250"
+  - "instinct mi210"
+  - "instinct mi100"
+  - "instinct mi60"
+  - "instinct mi50"
+  - "instinct mi25"
+  - "radeon instinct"
+
+  # AMD Radeon Pro (Professional)
+  - "radeon pro w7900"
+  - "radeon pro w7800"
+  - "radeon pro w6900x"
+  - "radeon pro w6800"
+  - "radeon pro vii"
+  - "radeon pro duo"
+  - "radeon pro wx 9100"
+  - "radeon pro wx 8200"
+  - "radeon pro ssg"
+  - "firepro w9100"
+  - "firepro w9000"
+  - "firepro w8100"
+  - "firepro s9170"
+  - "firepro s9150"
+
+  # Rare Consumer AMD
+  - "radeon vii"
+  - "rx 7900 xtx"
+  - "rx 6950 xt"
+  - "rx 6900 xt"
+  - "r9 fury x"
+  - "r9 fury"
+  - "r9 295x2"
+  - "r9 290x"
+  - "hd 7990"
+  - "hd 6990"
+  - "hd 5970"
+  - "hd 4870 x2"
+  - "hd 3870 x2"
+
+  # ===========================================
+  # INTEL GPUs (Rare/New)
+  # ===========================================
+  - "intel arc a770"
+  - "intel arc a750"
+  - "intel arc a380"
+  - "intel data center gpu"
+  - "intel ponte vecchio"
+  - "intel flex"
+  - "xe hpg"
+
+  # ===========================================
+  # FPGA BOARDS & CARDS (HIGH VALUE)
+  # ===========================================
+
+  # Xilinx/AMD FPGAs (Premium)
+  - "xilinx alveo"
+  - "alveo u250"
+  - "alveo u200"
+  - "alveo u280"
+  - "alveo u50"
+  - "alveo u55c"
+  - "alveo v80"
+  - "xilinx virtex"
+  - "virtex ultrascale"
+  - "virtex-7"
+  - "virtex-6"
+  - "virtex-5"
+  - "xilinx kintex"
+  - "kintex ultrascale"
+  - "kintex-7"
+  - "xilinx artix"
+  - "artix-7"
+  - "xilinx zynq"
+  - "zynq ultrascale"
+  - "zynq mpsoc"
+  - "xilinx spartan"
+  - "spartan-7"
+  - "spartan-6"
+  - "xilinx versal"
+  - "versal ai core"
+  - "versal premium"
+
+  # Intel/Altera FPGAs (Premium)
+  - "intel stratix"
+  - "stratix 10"
+  - "stratix v"
+  - "stratix iv"
+  - "intel agilex"
+  - "agilex 7"
+  - "agilex 5"
+  - "intel arria"
+  - "arria 10"
+  - "arria v"
+  - "intel cyclone"
+  - "cyclone 10"
+  - "cyclone v"
+  - "cyclone iv"
+  - "intel max"
+  - "max 10"
+  - "altera fpga"
+  - "altera de10"
+  - "de10-nano"
+  - "de1-soc"
+  - "de0-nano"
+
+  # Other FPGA Brands
+  - "lattice fpga"
+  - "lattice ecp5"
+  - "lattice machxo"
+  - "lattice ice40"
+  - "lattice crosslink"
+  - "lattice certus"
+  - "microsemi fpga"
+  - "microchip polarfire"
+  - "polarfire soc"
+  - "smartfusion"
+  - "igloo2"
+  - "achronix speedster"
+  - "achronix fpga"
+  - "efinix fpga"
+  - "gowin fpga"
+
+  # FPGA Dev Boards & Kits
+  - "fpga development board"
+  - "fpga dev kit"
+  - "fpga evaluation"
+  - "fpga accelerator"
+  - "fpga pcie"
+  - "fpga mezzanine"
+  - "fmc connector"
+  - "fpga mining"
+  - "fpga hft"
+  - "bittware fpga"
+  - "alpha data fpga"
+  - "dini group"
+  - "htg fpga"
+  - "terasic fpga"
+  - "digilent fpga"
+  - "numato fpga"
+
+  # ===========================================
+  # MODULAR FPGA SALVAGE GOLD (SOMs & Modules)
+  # ===========================================
+
+  # Trenz Electronic SOMs (Premium Zynq UltraScale+)
+  - "trenz te0803"
+  - "trenz te0807"
+  - "trenz te0808"
+  - "trenz te0820"
+  - "trenz som"
+  - "trenz module"
+  - "trenz zynq"
+  - "trenz ultrascale"
+
+  # ALINX SOMs (Chinese Premium - Great Value)
+  - "alinx acu3eg"
+  - "alinx acu2cg"
+  - "alinx som"
+  - "alinx module"
+  - "alinx zynq"
+  - "alinx ultrascale"
+  - "alinx fpga"
+
+  # Avnet/96Boards Ecosystem
+  - "ultra96"
+  - "ultra96-v2"
+  - "avnet ultra96"
+  - "96boards"
+  - "avnet zynq"
+  - "avnet som"
+  - "minized"
+  - "microzed"
+  - "picozed"
+  - "uzed"
+
+  # Enclustra SOMs (Swiss Premium)
+  - "enclustra mercury"
+  - "enclustra mars"
+  - "enclustra cosmos"
+  - "mercury xu"
+  - "mercury+ xu"
+  - "mars xu"
+
+  # Xilinx/AMD Official SOMs
+  - "kria som"
+  - "kria k26"
+  - "kria kv260"
+  - "kria kr260"
+  - "xilinx som"
+  - "zynq som"
+
+  # Zynq UltraScale+ MPSoC Specific (The Gold)
+  - "zu3eg"
+  - "zu2cg"
+  - "zu4ev"
+  - "zu5ev"
+  - "zu7ev"
+  - "zu9eg"
+  - "zu15eg"
+  - "zu19eg"
+  - "zynq ultrascale mpsoc"
+  - "mpsoc som"
+  - "mpsoc module"
+
+  # Zynq-7000 SOMs (Budget Option)
+  - "z7020"
+  - "z7010"
+  - "z7015"
+  - "z7045"
+  - "zynq 7000 som"
+  - "zynq 7020"
+  - "zynq 7045"
+
+  # SOM Carriers & Breakouts (The Cheap Infrastructure)
+  - "som carrier"
+  - "som baseboard"
+  - "carrier board fpga"
+  - "breakout board fpga"
+  - "mezzanine connector"
+  - "fmc carrier"
+  - "fmc+ carrier"
+  - "samtec connector"
+  - "highspeed connector"
+
+  # Module Form Factors
+  - "sodimm fpga"
+  - "so-dimm module"
+  - "com express"
+  - "qseven module"
+  - "smarc module"
+
+  # Specific Eval Boards (Often Discounted)
+  - "zcu102"
+  - "zcu104"
+  - "zcu106"
+  - "zcu111"
+  - "vcu118"
+  - "vcu128"
+  - "kcu105"
+  - "kcu116"
+  - "zedboard"
+  - "arty z7"
+  - "pynq"
+  - "pynq-z1"
+  - "pynq-z2"
+  - "cmod"
+  - "basys"
+  - "nexys"
+
+  # ===========================================
+  # VINTAGE GPUs (Classic/Collector)
+  # ===========================================
+  - "3dfx"
+  - "voodoo"
+  - "voodoo 5"
+  - "voodoo 4"
+  - "voodoo 3"
+  - "voodoo 2"
+  - "voodoo banshee"
+  - "voodoo rush"
+  - "geforce 256"
+  - "geforce2"
+  - "geforce3"
+  - "geforce4"
+  - "geforce fx"
+  - "radeon 9800"
+  - "radeon 9700"
+  - "radeon x800"
+  - "radeon x850"
+  - "radeon x1900"
+  - "radeon x1950"
+  - "matrox parhelia"
+  - "matrox millennium"
+  - "matrox g400"
+  - "matrox g200"
+  - "s3 virge"
+  - "s3 savage"
+  - "riva tnt"
+  - "riva tnt2"
+  - "ati rage"
+  - "ati mach64"
+  - "trident 3d"
+  - "sis 315"
+  - "number nine"
+  - "diamond multimedia"
+  - "stb systems"
+  - "hercules 3d prophet"
+
+  # ===========================================
+  # COMPUTE & AI ACCELERATORS
+  # ===========================================
+  - "google tpu"
+  - "coral tpu"
+  - "edge tpu"
+  - "habana gaudi"
+  - "habana goya"
+  - "graphcore ipu"
+  - "cerebras"
+  - "groq"
+  - "sambanova"
+  - "mythic"
+  - "hailo"
+  - "blaize"
+  - "nvidia jetson"
+  - "jetson agx"
+  - "jetson orin"
+  - "jetson xavier"
+
+  # ===========================================
+  # VINTAGE CPUs
+  # ===========================================
+  - "pentium pro"
+  - "pentium mmx"
+  - "pentium ii"
+  - "pentium iii"
+  - "athlon xp"
+  - "athlon 64"
+  - "athlon mp"
+  - "opteron"
+  - "slot 1"
+  - "slot a"
+  - "socket 7"
+  - "socket 370"
+  - "socket 478"
+  - "socket 939"
+  - "socket 754"
+  - "socket 940"
+  - "xeon phi"
+  - "itanium"
+  - "alpha 21264"
+  - "sparc"
+  - "mips"
+  - "powerpc"
+
+  # ===========================================
+  # VINTAGE RAM
+  # ===========================================
+  - "sdram"
+  - "rdram"
+  - "rambus"
+  - "edo ram"
+  - "simm"
+  - "dimm pc100"
+  - "dimm pc133"
+  - "ddr1"
+  - "ddr2 800"
+  - "registered ecc"
+  - "fb-dimm"
+
+  # ===========================================
+  # VINTAGE STORAGE
+  # ===========================================
+  - "ide"
+  - "pata"
+  - "scsi"
+  - "ultra320 scsi"
+  - "sas 15k"
+  - "zip drive"
+  - "jaz drive"
+  - "mfm"
+  - "rll"
+
+  # ===========================================
+  # SERVER & DATACENTER
+  # ===========================================
+  - "server pull"
+  - "engineering sample"
+  - "es chip"
+  - "datacenter pull"
+  - "colo equipment"
+  - "infiniband"
+  - "mellanox"
+  - "connectx-6"
+  - "connectx-7"
+  - "bluefield"
+
+  # ===========================================
+  # LEGACY INTERFACES
+  # ===========================================
+  - "agp"
+  - "agp 8x"
+  - "pci"
+  - "pci-x"
+  - "isa"
+  - "vesa"
+  - "mca"
+  - "eisa"
+
+  # ===========================================
+  # VINTAGE SOUND
+  # ===========================================
+  - "sound blaster"
+  - "sound blaster awe"
+  - "sound blaster live"
+  - "creative labs"
+  - "gravis ultrasound"
+  - "roland mt-32"
+  - "adlib"
+  - "turtle beach"
+
+  # ===========================================
+  # VINTAGE NETWORK
+  # ===========================================
+  - "3com"
+  - "token ring"
+  - "arcnet"
+  - "coax"
+  - "bnc"
+
+  # ===========================================
+  # HIDDEN GOLD: CRYPTO MINING HARDWARE
+  # ===========================================
+  # Mining rigs often have multiple high-end GPUs
+  - "mining rig"
+  - "gpu mining"
+  - "crypto mining"
+  - "ethereum mining"
+  - "mining frame"
+  - "8 gpu rig"
+  - "6 gpu rig"
+  - "mining motherboard"
+  - "b250 mining"
+  - "h110 btc"
+  # FPGA miners (valuable FPGAs inside)
+  - "fpga miner"
+  - "blackminer"
+  - "sqrl"
+  - "cvp-13"
+  - "bcu-1525"
+  - "vcu1525"
+  # ASICs (can harvest heatsinks, fans, PSUs)
+  - "antminer"
+  - "whatsminer"
+  - "avalon miner"
+  - "innosilicon"
+
+  # ===========================================
+  # HIDDEN GOLD: NETWORKING EQUIPMENT
+  # ===========================================
+  # High-end switches often have FPGAs/ASICs
+  - "arista"
+  - "arista 7050"
+  - "arista 7060"
+  - "arista 7280"
+  - "cisco nexus"
+  - "nexus 9000"
+  - "nexus 7000"
+  - "juniper mx"
+  - "juniper qfx"
+  # Network cards with FPGAs
+  - "solarflare"
+  - "xilinx solarflare"
+  - "exablaze"
+  - "napatech"
+  - "smartnic"
+  - "bluefield dpu"
+  - "pensando"
+  - "fungible"
+
+  # ===========================================
+  # HIDDEN GOLD: TEST & MEASUREMENT
+  # ===========================================
+  # Oscilloscopes and analyzers have premium FPGAs
+  - "tektronix"
+  - "keysight"
+  - "agilent"
+  - "rohde schwarz"
+  - "lecroy"
+  - "rigol"
+  - "logic analyzer"
+  - "spectrum analyzer"
+  - "signal generator"
+  - "oscilloscope parts"
+  - "oscilloscope board"
+  # SDR equipment
+  - "usrp"
+  - "ettus"
+  - "lime sdr"
+  - "hackrf"
+  - "rtl-sdr"
+  - "adalm pluto"
+
+  # ===========================================
+  # HIDDEN GOLD: INDUSTRIAL & EMBEDDED
+  # ===========================================
+  # PLC and industrial controllers
+  - "plc module"
+  - "siemens plc"
+  - "allen bradley"
+  - "rockwell automation"
+  - "beckhoff"
+  - "national instruments"
+  - "ni pxi"
+  - "ni crio"
+  - "compactrio"
+  # Machine vision
+  - "machine vision"
+  - "basler camera"
+  - "flir camera"
+  - "cognex"
+  - "keyence"
+  # Motion control
+  - "servo drive"
+  - "galil"
+  - "elmo drive"
+
+  # ===========================================
+  # HIDDEN GOLD: TELECOM EQUIPMENT
+  # ===========================================
+  # Base stations and telecom gear have DSPs/FPGAs
+  - "base station"
+  - "bts equipment"
+  - "ericsson rbs"
+  - "nokia flexi"
+  - "huawei bts"
+  - "small cell"
+  - "femtocell"
+  # Telecom cards
+  - "telecom blade"
+  - "atca blade"
+  - "advancedtca"
+  - "microtca"
+  - "amc module"
+  - "cpci board"
+  - "compactpci"
+  - "vme board"
+  - "vmeboard"
+  - "vxs"
+
+  # ===========================================
+  # HIDDEN GOLD: MEDICAL IMAGING
+  # ===========================================
+  # Medical equipment has serious silicon
+  - "ultrasound board"
+  - "ct scanner parts"
+  - "mri parts"
+  - "medical imaging"
+  - "philips medical"
+  - "ge healthcare"
+  - "siemens healthineers"
+
+  # ===========================================
+  # HIDDEN GOLD: AEROSPACE & DEFENSE SURPLUS
+  # ===========================================
+  - "mil-spec"
+  - "military surplus electronics"
+  - "rugged computer"
+  - "conduction cooled"
+  - "vpx board"
+  - "openvpx"
+  - "cpci serial"
+  - "arinc 653"
+  - "do-254"
+
+  # ===========================================
+  # UNIVERSITY & RESEARCH LAB SURPLUS
+  # ===========================================
+  - "university surplus"
+  - "lab surplus"
+  - "research equipment"
+  - "scientific equipment"
+  - "lab liquidation"
+  - "university liquidation"
+
+  # ===========================================
+  # HIGH-VALUE CONNECTORS (For DIY Carriers)
+  # ===========================================
+  - "samtec searay"
+  - "samtec qsh"
+  - "samtec qth"
+  - "samtec bsh"
+  - "samtec tiger"
+  - "hirose df40"
+  - "hirose fx23"
+  - "molex slimstack"
+  - "amphenol"
+  - "fmc lpc"
+  - "fmc hpc"
+  - "vita 57"
+
+  # ===========================================
+  # MEMORY MODULES (High-Value Server RAM)
+  # ===========================================
+  - "hbm"
+  - "hbm2"
+  - "hbm2e"
+  - "hbm3"
+  - "gddr6x"
+  - "gddr6"
+  - "lrdimm"
+  - "3ds rdimm"
+  - "nvdimm"
+  - "optane dimm"
+  - "persistent memory"
+
+  # ===========================================
+  # POWER DELIVERY (For Custom Builds)
+  # ===========================================
+  - "server psu"
+  - "hp psu"
+  - "dell psu"
+  - "supermicro psu"
+  - "platinum psu"
+  - "titanium psu"
+  - "breakout board psu"
+  - "gpu power cable"
+  - "pcie riser"
+  - "powered riser"
+
+# Alert Configuration
+alerts:
+  enabled: true
+  channels:
+    discord:
+      enabled: false
+      webhook_url: ""
+    slack:
+      enabled: false
+      webhook_url: ""
+    email:
+      enabled: false
+      smtp_server: ""
+      smtp_port: 587
+      username: ""
+      password: ""
+      recipients: []
+
+  # Price thresholds for alerts
+  price_alerts:
+    # Alert if rare GPU under this price
+    vintage_gpu_max: 50.00
+    vintage_cpu_max: 30.00
+    rare_motherboard_max: 100.00
+    # FPGA thresholds (these are usually expensive)
+    fpga_alveo_max: 2000.00
+    fpga_stratix_max: 1500.00
+    fpga_virtex_max: 1000.00
+    fpga_dev_board_max: 500.00
+    # Datacenter GPU thresholds
+    datacenter_gpu_max: 3000.00
+    titan_max: 800.00
+    quadro_max: 1000.00
+
+  # Keyword alerts - notify immediately when found
+  instant_alert_keywords:
+    # Vintage GPUs
+    - "3dfx voodoo 5"
+    - "voodoo 5 6000"
+    - "voodoo 5 5500"
+    - "titan v"
+    - "titan z"
+
+    # NVIDIA Datacenter (ULTRA HIGH VALUE)
+    - "nvidia h100"
+    - "nvidia h200"
+    - "nvidia a100"
+    - "tesla v100"
+    - "nvidia dgx"
+    - "sxm4"
+    - "sxm5"
+
+    # AMD Datacenter
+    - "instinct mi300"
+    - "instinct mi250"
+    - "instinct mi100"
+
+    # Premium FPGAs (ULTRA HIGH VALUE)
+    - "alveo u280"
+    - "alveo u250"
+    - "alveo u200"
+    - "virtex ultrascale"
+    - "stratix 10"
+    - "agilex 7"
+    - "versal ai core"
+    - "versal premium"
+
+    # MODULAR FPGA SALVAGE GOLD (Best Value Targets)
+    - "trenz te0803"
+    - "trenz te0807"
+    - "alinx acu3eg"
+    - "alinx acu2cg"
+    - "ultra96-v2"
+    - "kria k26"
+    - "zu3eg"
+    - "zu7ev"
+    - "zu9eg"
+    - "enclustra mercury"
+    - "zcu102"
+    - "zcu104"
+
+    # Other High Value
+    - "xeon phi"
+    - "graphcore ipu"
+    - "habana gaudi"
+    - "cerebras"
+    - "groq"
+    - "google tpu"
+    - "pentium pro 200"
+
+    # HIDDEN GOLD ALERTS
+    # FPGA Mining Cards (Premium FPGAs inside)
+    - "vcu1525"
+    - "bcu-1525"
+    - "cvp-13"
+    - "sqrl"
+
+    # SmartNICs with FPGAs
+    - "solarflare"
+    - "napatech"
+    - "bluefield dpu"
+    - "pensando"
+
+    # Test Equipment (Often has Virtex/Kintex)
+    - "usrp"
+    - "ettus"
+    - "ni pxi"
+    - "compactrio"
+
+    # Telecom Blades (Premium silicon)
+    - "atca blade"
+    - "advancedtca"
+    - "microtca"
+    - "amc module"
+
+    # Multi-GPU Mining Rigs
+    - "8 gpu rig"
+    - "6 gpu rig"
+    - "mining rig"
+
+# Scraper Source Configuration
+sources:
+  # Surplus & Junk
+  surplus:
+    enabled: true
+    sites:
+      - name: "govplanet"
+        url: "https://www.govplanet.com"
+        category: "government_surplus"
+      - name: "publicsurplus"
+        url: "https://www.publicsurplus.com"
+        category: "government_surplus"
+      - name: "gsaauctions"
+        url: "https://gsaauctions.gov"
+        category: "government_surplus"
+      - name: "propertyroom"
+        url: "https://www.propertyroom.com"
+        category: "police_surplus"
+
+  # Discount & Overstock
+  discount:
+    enabled: true
+    sites:
+      - name: "woot"
+        url: "https://computers.woot.com"
+        category: "overstock"
+      - name: "newegg_open_box"
+        url: "https://www.newegg.com/open-box"
+        category: "open_box"
+      - name: "microcenter_clearance"
+        url: "https://www.microcenter.com/search/search_results.aspx?Ntk=all&N=4294966998"
+        category: "clearance"
+      - name: "amazon_warehouse"
+        url: "https://www.amazon.com/Warehouse-Deals"
+        category: "warehouse"
+
+  # Used Marketplaces
+  used:
+    enabled: true
+    sites:
+      - name: "ebay"
+        url: "https://www.ebay.com"
+        category: "auction"
+      - name: "mercari"
+        url: "https://www.mercari.com"
+        category: "marketplace"
+      - name: "offerup"
+        url: "https://offerup.com"
+        category: "local"
+      - name: "facebook_marketplace"
+        url: "https://www.facebook.com/marketplace"
+        category: "local"
+        requires_auth: true
+
+  # Electronics Recyclers
+  recycler:
+    enabled: true
+    sites:
+      - name: "freegeek"
+        url: "https://www.freegeek.org"
+        category: "recycler"
+      - name: "interconnection"
+        url: "https://interconnection.org"
+        category: "recycler"
+
+  # Liquidation
+  liquidation:
+    enabled: true
+    sites:
+      - name: "liquidation"
+        url: "https://www.liquidation.com"
+        category: "liquidation"
+      - name: "bstock"
+        url: "https://bstock.com"
+        category: "b2b_liquidation"
+      - name: "directliquidation"
+        url: "https://www.directliquidation.com"
+        category: "liquidation"
+
+# Scheduling
+schedule:
+  # How often to run full scrapes
+  full_scrape_interval: "6h"
+  # How often to check for price drops
+  price_check_interval: "1h"
+  # How often to check instant alert keywords
+  rare_item_check_interval: "15m"

@@ -1,0 +1,7 @@
+{
+  "label": "clean",
+  "seed": 5,
+  "width": 1024,
+  "num_rows": 2048,
+  "synthetic": true
+}

@@ -1,0 +1,63 @@
+# BittWare A10PED Neuromorphic Tile Specification
+# Version: 1.0
+# Target: Intel Arria 10 GX1150
+
+tile_name: "a10ped_tile0"
+vendor: "intel"
+family: "arria10"
+fpga_part: "10AX115N2F40E2LG"
+
+memory:
+  type: "ddr4"
+  size_gb: 8.0
+  interface: "emif"
+  channels: 1
+  data_width: 72    # 64-bit + 8-bit ECC
+
+pcie:
+  lanes: 8
+  gen: 3
+  endpoint_name: "pcie_a10ped_ep"
+  bars:
+    - { number: 0, size_kb: 1024, purpose: "csr" }
+    - { number: 2, size_kb: 262144, purpose: "dma" }  # 256MB
+
+csr:
+  base_addr: 0x0000
+  regs:
+    - { name: "CTRL",          offset: 0x00, width: 32, access: "rw", reset_value: 0x00000000, desc: "Control register: START[0], RESET[1], IRQ_EN[2], ABORT[3]" }
+    - { name: "STATUS",        offset: 0x04, width: 32, access: "ro", reset_value: 0x00000000, desc: "Status: BUSY[0], DONE[1], ERROR[2], IRQ_PENDING[3], DDR_READY[4]" }
+    - { name: "CMD_SRC_LO",    offset: 0x08, width: 32, access: "rw", reset_value: 0x00000000, desc: "Command source address [31:0]" }
+    - { name: "CMD_SRC_HI",    offset: 0x0C, width: 32, access: "rw", reset_value: 0x00000000, desc: "Command source address [63:32]" }
+    - { name: "CMD_DST_LO",    offset: 0x10, width: 32, access: "rw", reset_value: 0x00000000, desc: "Command destination address [31:0]" }
+    - { name: "CMD_DST_HI",    offset: 0x14, width: 32, access: "rw", reset_value: 0x00000000, desc: "Command destination address [63:32]" }
+    - { name: "CMD_LEN",       offset: 0x18, width: 32, access: "rw", reset_value: 0x00000000, desc: "Transfer length in bytes (64-byte aligned)" }
+    - { name: "CMD_CFG",       offset: 0x1C, width: 32, access: "rw", reset_value: 0x00000000, desc: "Command config: MODE[3:0], PRECISION[5:4], NEURON_COUNT[15:6], TIME_STEPS[23:16]" }
+    - { name: "VERSION",       offset: 0x20, width: 32, access: "ro", reset_value: 0x01000000, desc: "Hardware version: MAJOR[23:16], MINOR[15:8], PATCH[7:0]" }
+    - { name: "CAPABILITIES",  offset: 0x24, width: 32, access: "ro", reset_value: 0x00000003, desc: "Feature flags: MEMCOPY[0], SNN[1], TOPOLOGICAL[2], IRQ[3]" }
+    - { name: "SNN_THRESHOLD", offset: 0x28, width: 32, access: "rw", reset_value: 0x00010000, desc: "LIF neuron spike threshold (Q16.16 fixed-point)" }
+    - { name: "SNN_LEAK",      offset: 0x2C, width: 32, access: "rw", reset_value: 0x00000100, desc: "Membrane leak rate (Q16.16 fixed-point)" }
+    - { name: "SNN_REFRACT",   offset: 0x30, width: 32, access: "rw", reset_value: 0x00000008, desc: "Refractory period in clock cycles" }
+    - { name: "ERROR_CODE",    offset: 0x34, width: 32, access: "ro", reset_value: 0x00000000, desc: "Error code from last operation" }
+    - { name: "PERF_CYCLES",   offset: 0x38, width: 32, access: "ro", reset_value: 0x00000000, desc: "Performance counter: cycles for last command" }
+    - { name: "DDR_BANDWIDTH", offset: 0x3C, width: 32, access: "ro", reset_value: 0x00000000, desc: "DDR bandwidth utilization" }
+    - { name: "TEMPERATURE",   offset: 0x40, width: 32, access: "ro", reset_value: 0x00000000, desc: "FPGA junction temperature (Q8.8 Celsius)" }
+    - { name: "SCRATCH",       offset: 0x44, width: 32, access: "rw", reset_value: 0x00000000, desc: "Scratch register for testing" }
+
+clocks:
+  - { name: "core_clk",   freq_mhz: 250.0, role: "fabric", source: "pcie_pll" }
+  - { name: "pcie_clk",   freq_mhz: 250.0, role: "pcie",   source: "pcie_hip" }
+  - { name: "ddr_clk",    freq_mhz: 266.7, role: "mem",    source: "emif_pll" }
+  - { name: "refclk_100", freq_mhz: 100.0, role: "user",   source: "external" }
+
+snn_core:
+  top_module: "snn_core_v1"
+  parameters:
+    neuron_count: 512
+    precision: "int16"
+    burst_size: 16
+  interface:
+    csr_port: "csr_avs"
+    csr_type: "avalon"
+    mem_ports:
+      - { name: "ddr_avm", type: "avalon", data_width: 512, role: "readwrite" }

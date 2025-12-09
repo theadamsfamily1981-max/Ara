@@ -1,0 +1,31 @@
+{
+  "input_file": "projects/fpga-bitstream-ml/test_data/raw/clean/seed_004/design.rbf",
+  "output_file": "projects/fpga-bitstream-ml/test_data/images/clean/seed_004_design_entropy.png",
+  "format": "sof",
+  "bitstream_size_bytes": 262404,
+  "bitstream_size_bits": 2099232,
+  "detected_width": 2048,
+  "width_detection_method": "autocorrelation",
+  "image_shape": [
+    1025,
+    2048
+  ],
+  "entropy_map_shape": [
+    253,
+    509
+  ],
+  "window_size": 16,
+  "stride": 4,
+  "entropy_statistics": {
+    "mean": 0.983077883720398,
+    "std": 0.02829461172223091,
+    "min": 0.7203628420829773,
+    "max": 1.0,
+    "q25": 0.9823166131973267,
+    "q50": 0.9946660995483398,
+    "q75": 0.9988990426063538,
+    "high_entropy_fraction": 0.9989439107915233
+  },
+  "anomaly_count": 3661,
+  "anomaly_fraction": 0.028428989648772683
+}

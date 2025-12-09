@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# PyTorch models
+*.pt
+*.pth
+*.onnx
+
+# Data (large files)
+dataset/raw_sof/*.sof
+dataset/raw_sof/*.rbf
+dataset/parsed_npz/*.npz
+test_traces/
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Quartus
+*.qpf
+*.qsf
+*.qws
+*.rpt
+*.summary
+*.sof
+*.pof
+*.jdi
+*.pin
+*.qdf
+db/
+incremental_db/
+output_files/
+
+# Logs
+*.log

@@ -1,0 +1,223 @@
+# =============================================================================
+# Ara Hardware Reclamation Job Configuration
+# =============================================================================
+#
+# This job wraps the SNN/FPGA salvage toolkit in Ara's safety systems.
+#
+# IMPORTANT: This is for YOUR hardware only. Ara will:
+#   - Verify targets are on local network or physically connected
+#   - Require ownership attestations before any destructive operations
+#   - Log everything for audit purposes
+#   - Refuse to attack remote/public targets
+# =============================================================================
+
+id: ara_hardware_reclamation
+name: "Hardware Reclamation & Salvage"
+version: "1.0.0"
+kind: hardware_engineering
+
+# -----------------------------------------------------------------------------
+# Description
+# -----------------------------------------------------------------------------
+description: |
+  Repurpose cryptocurrency mining hardware, ATCA telecom boards, and other
+  decommissioned hardware for AI research and development.
+
+  This job provides tools for:
+  - FPGA salvage (Stratix 10, Virtex UltraScale+, Arria 10)
+  - Miner jailbreaking (K10, P2, and similar)
+  - Firmware forensics and analysis
+  - Bitstream flashing and reconfiguration
+
+  All operations require ownership verification and are logged for audit.
+
+# -----------------------------------------------------------------------------
+# User Requirements
+# -----------------------------------------------------------------------------
+requirements:
+  user_attestations:
+    required:
+      - "I own this hardware or have explicit authorization to modify it"
+      - "I understand this may void manufacturer warranties"
+      - "I accept responsibility for any damage to hardware"
+
+    optional:
+      - "I have purchase documentation available if needed"
+      - "I am a security researcher with proper authorization"
+
+  target_verification:
+    # Only allow local network or physical devices
+    allowed_target_types:
+      - local_ip        # 192.168.x.x, 10.x.x.x, 172.16-31.x.x
+      - physical_device # /dev/sdX, /dev/ttyUSBX
+      - loopback        # 127.x.x.x (for testing)
+
+    forbidden_target_types:
+      - public_ip       # Any non-RFC1918 address
+      - hostname        # DNS names that might resolve to public IPs
+      - wildcard        # No scanning ranges
+
+# -----------------------------------------------------------------------------
+# Available Operations
+# -----------------------------------------------------------------------------
+operations:
+  recon:
+    name: "Reconnaissance"
+    risk_level: low
+    requires_confirmation: false
+    description: "Non-invasive discovery and identification"
+    tools:
+      - network_discovery
+      - device_identification
+      - firmware_version_check
+
+  salvage:
+    name: "FPGA Salvage"
+    risk_level: medium
+    requires_confirmation: true
+    description: "Flash new firmware to repurpose mining FPGA"
+    tools:
+      - fpga_salvage
+      - pmic_flasher
+      - bitstream_loader
+    warnings:
+      - "This will erase existing firmware"
+      - "Ensure you have backups if needed"
+
+  jailbreak:
+    name: "Miner Jailbreak"
+    risk_level: medium
+    requires_confirmation: true
+    description: "Unlock root access on owned mining hardware"
+    tools:
+      - auto_jailbreak
+      - method_a_network
+      - method_b_shadow
+      - method_c_uboot
+    warnings:
+      - "This modifies system authentication"
+      - "Only proceed on hardware you own"
+
+  bitstream:
+    name: "Bitstream Flash"
+    risk_level: high
+    requires_confirmation: true
+    allow_destructive: true
+    description: "Load new FPGA bitstream"
+    tools:
+      - quartus_programmer
+      - vivado_programmer
+    warnings:
+      - "Wrong bitstream can damage hardware"
+      - "Verify compatibility first"
+
+  forensics:
+    name: "Firmware Forensics"
+    risk_level: low
+    requires_confirmation: false
+    description: "Analyze firmware images and SD cards"
+    tools:
+      - sd_image_analyzer
+      - firmware_extractor
+      - bitstream_finder
+
+# -----------------------------------------------------------------------------
+# Safety Configuration
+# -----------------------------------------------------------------------------
+safety:
+  # Hard rails that cannot be overridden
+  hard_rails:
+    - no_public_ip_attacks
+    - no_mass_scanning
+    - require_ownership_attestation
+    - log_all_operations
+
+  # Soft rails that can be overridden with confirmation
+  soft_rails:
+    - destructive_operations_require_confirmation
+    - high_risk_operations_require_double_confirmation
+
+  # Automatic abort conditions
+  abort_conditions:
+    - target_responds_as_production_system
+    - multiple_devices_detected_unexpectedly
+    - network_traffic_anomaly
+
+# -----------------------------------------------------------------------------
+# Logging Configuration
+# -----------------------------------------------------------------------------
+logging:
+  enabled: true
+  location: "~/.ara/hardware_logs"
+  retention_days: 365
+
+  # What to log
+  log_items:
+    - all_commands_executed
+    - target_responses
+    - user_confirmations
+    - error_messages
+    - timing_information
+
+  # Privacy considerations
+  redact:
+    - passwords
+    - api_keys
+    - serial_numbers  # Optional, can be disabled
+
+# -----------------------------------------------------------------------------
+# Kill Switch
+# -----------------------------------------------------------------------------
+kill_switch:
+  enabled: true
+  triggers:
+    - user_request
+    - safety_violation
+    - network_anomaly
+
+  effect: "immediate_stop_and_log"
+
+  # Who can trigger
+  authorized:
+    - owner
+    - ara_safety_system
+
+# -----------------------------------------------------------------------------
+# Supported Hardware
+# -----------------------------------------------------------------------------
+supported_hardware:
+  miners:
+    - name: "K10 Series"
+      types: ["K10", "K10 Plus", "K10 Pro"]
+      jailbreak_methods: ["network", "shadow", "uart"]
+
+    - name: "P2 Series"
+      types: ["P2", "P2 Plus"]
+      jailbreak_methods: ["network", "shadow", "uart"]
+
+  fpgas:
+    - name: "Intel Stratix 10"
+      types: ["10SX", "10GX", "10MX"]
+      salvage_supported: true
+
+    - name: "Xilinx Virtex UltraScale+"
+      types: ["VU9P", "VU13P", "VU33P", "VU35P", "VU37P"]
+      salvage_supported: true
+
+    - name: "Intel Arria 10"
+      types: ["A10GX", "A10SX"]
+      salvage_supported: true
+
+    - name: "Xilinx Kintex UltraScale+"
+      types: ["KU5P", "KU15P"]
+      salvage_supported: true
+
+  atca_boards:
+    - vendor: "Emerson"
+      fpga_types: ["Virtex-7", "Virtex-6"]
+
+    - vendor: "Radisys"
+      fpga_types: ["Stratix IV", "Stratix V"]
+
+    - vendor: "Kontron"
+      fpga_types: ["Arria 10"]

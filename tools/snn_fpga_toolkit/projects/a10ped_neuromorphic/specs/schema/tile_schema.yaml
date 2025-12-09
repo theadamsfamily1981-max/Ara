@@ -1,0 +1,55 @@
+# Neuromorphic AI Tile Schema
+# Version: 1.0
+# This file defines the schema for tile specifications
+
+tile_name: string              # Unique identifier (e.g., "a10ped_tile0")
+vendor: ["intel", "xilinx"]    # FPGA vendor
+family: string                 # e.g., "arria10", "virtex-ultrascale-plus"
+fpga_part: string              # Exact part number (e.g., "10AX115N2F40E2LG")
+
+memory:
+  type: ["ddr4", "hbm2", "gddr6"]  # Memory technology
+  size_gb: float               # Total capacity in GB
+  interface: string            # "emif" (Intel), "xilinx_hbm" (Xilinx)
+  channels: int                # Number of memory channels
+  data_width: int              # Data width per channel (bits)
+
+pcie:
+  lanes: int                   # PCIe lane count (4, 8, 16)
+  gen: int                     # PCIe generation (2, 3, 4, 5)
+  endpoint_name: string        # IP block/module name
+  bars:
+    - number: int              # BAR number (0-5)
+      size_kb: int             # BAR size in KB
+      purpose: string          # "csr", "dma", "reserved"
+
+csr:
+  base_addr: int               # Base address in BAR0
+  regs:
+    - name: string             # Register name (e.g., "CTRL")
+      offset: int              # Byte offset from base_addr
+      width: int               # Register width in bits
+      access: ["rw", "ro", "wo"]
+      reset_value: int         # Reset value (hex)
+      desc: string             # Description
+
+clocks:
+  - name: string               # Clock domain name
+    freq_mhz: float            # Target frequency in MHz
+    role: ["fabric", "pcie", "mem", "user"]  # Clock purpose
+    source: string             # Clock source (e.g., "pll", "external")
+
+snn_core:
+  top_module: string           # Module name (e.g., "snn_core_v1")
+  parameters:
+    neuron_count: int          # Number of neurons
+    precision: ["int8", "int16", "fp16", "fp32"]
+    burst_size: int            # Memory burst size
+  interface:
+    csr_port: string           # CSR bus interface name
+    csr_type: ["avalon", "axi4lite", "apb"]
+    mem_ports:
+      - name: string
+        type: ["axi", "avalon", "native"]
+        data_width: int
+        role: ["read", "write", "readwrite"]

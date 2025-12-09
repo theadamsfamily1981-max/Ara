@@ -1,0 +1,42 @@
+# Build artifacts
+*.o
+*.ko
+*.mod
+*.mod.c
+*.symvers
+*.order
+.*.cmd
+.tmp_versions/
+Module.markers
+
+# Kernel module build
+modules.order
+Module.symvers
+
+# Object files
+*.o
+*.so
+*.so.*
+*.a
+
+# Compiled binaries
+tools/monitoring/snn_monitor
+examples/simple_snn
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation build
+docs/html/
+docs/latex/
+
+# Test artifacts
+tests/*.log
+tests/*.out
+
+# Temporary files
+*.tmp

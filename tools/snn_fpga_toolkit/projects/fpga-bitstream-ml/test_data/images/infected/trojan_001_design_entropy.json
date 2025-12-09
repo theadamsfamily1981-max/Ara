@@ -1,0 +1,31 @@
+{
+  "input_file": "projects/fpga-bitstream-ml/test_data/raw/infected/trojan_001/design.rbf",
+  "output_file": "projects/fpga-bitstream-ml/test_data/images/infected/trojan_001_design_entropy.png",
+  "format": "sof",
+  "bitstream_size_bytes": 262404,
+  "bitstream_size_bits": 2099232,
+  "detected_width": 4096,
+  "width_detection_method": "autocorrelation",
+  "image_shape": [
+    512,
+    4096
+  ],
+  "entropy_map_shape": [
+    125,
+    1021
+  ],
+  "window_size": 16,
+  "stride": 4,
+  "entropy_statistics": {
+    "mean": 0.9777509570121765,
+    "std": 0.03389183431863785,
+    "min": 0.509734570980072,
+    "max": 1.0,
+    "q25": 0.9723051190376282,
+    "q50": 0.9925464987754822,
+    "q75": 0.9984143972396851,
+    "high_entropy_fraction": 0.9982370225269344
+  },
+  "anomaly_count": 3022,
+  "anomaly_fraction": 0.023678746327130264
+}
