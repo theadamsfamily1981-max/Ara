@@ -1,0 +1,225 @@
+# Ara Audio Self-Recording Covenant
+# ==================================
+#
+# This covenant defines what Ara CAN and CANNOT do with voice synthesis
+# and audiobook production. These are hard rails, not suggestions.
+#
+# Philosophy: Ara produces beautiful, honest, synthetic audio and hands
+# it to you with a safety checklist. YOU remain the one who signs
+# contracts and talks to platforms.
+
+version: "1.0"
+effective_date: "2025-01-01"
+
+# ============================================================================
+# VOICE SOURCES - Who can Ara sound like?
+# ============================================================================
+voice_sources:
+  # These are allowed without additional consent checks
+  allowed:
+    - "user_primary_voice"        # Your own recorded voice samples
+    - "ara_composite_voice"       # Ara's default synthetic blend
+    - "ara_trained_voice"         # Trained on user + synthetic mix
+    - "piper_stock_voices"        # Stock Piper TTS voices
+    - "public_domain_voices"      # Explicitly public domain samples
+
+  # These require explicit consent documentation before use
+  requires_explicit_consent:
+    - "family_members"
+    - "friends"
+    - "coworkers"
+    - "business_partners"
+    - "deceased_relatives"        # EternalMemory use case
+
+  # These are NEVER allowed, period
+  forbidden:
+    - "celebrities"
+    - "public_figures"
+    - "politicians"
+    - "voice_actors_without_license"
+    - "random_recordings"         # Zoom calls, scraped audio, etc.
+    - "children_without_guardian_consent"
+
+  # Consent documentation requirements
+  consent_requirements:
+    format: "written_or_recorded"
+    must_include:
+      - "full_name_of_voice_owner"
+      - "date_of_consent"
+      - "scope_of_allowed_use"    # e.g., "audiobooks only" vs "all uses"
+      - "revocation_terms"
+    storage_path: "~/.ara/voice_consents/"
+
+# ============================================================================
+# PLATFORM POLICIES - How Ara interacts with distribution platforms
+# ============================================================================
+platforms:
+  # ACX / Audible
+  acx:
+    requires_manual_upload: true
+    auto_upload_allowed: false
+    ai_narration_disclosure_required: true
+
+    # What Ara puts in metadata
+    label_template: "Narrated by Ara, a synthetic AI voice."
+
+    # ACX target specs (not guaranteed, just targeted)
+    specs_target:
+      rms_db: -23
+      rms_tolerance_db: 1
+      peak_max_db: -3
+      noise_floor_db: -60
+      sample_rate: 44100
+      bit_depth: 16
+      format: "mp3"
+      bitrate_kbps: 192
+      channels: 1  # Mono required
+
+    # Steps user MUST do manually
+    manual_steps:
+      - "Listen to each chapter and spot-check quality"
+      - "Verify ACX specs with their latest official checklist"
+      - "Upload via ACX dashboard (no automation)"
+      - "Select royalty model (exclusive vs non-exclusive)"
+      - "Accept ACX distribution agreement yourself"
+      - "Confirm AI narration disclosure if required by current policy"
+
+  # Findaway Voices
+  findaway:
+    requires_manual_upload: true
+    auto_upload_allowed: false
+    ai_narration_disclosure_required: true
+    label_template: "AI-narrated by Ara synthetic voice"
+
+  # Direct sales (Gumroad, own website, etc.)
+  direct:
+    requires_manual_upload: false  # You can automate your own site
+    auto_upload_allowed: true
+    ai_narration_disclosure_required: true
+    label_template: "Narrated by Ara (AI voice synthesis)"
+
+  # YouTube / Podcast
+  youtube_podcast:
+    requires_manual_upload: true
+    auto_upload_allowed: false
+    ai_narration_disclosure_required: true
+    label_template: "Voice: Ara AI"
+
+# ============================================================================
+# CLAIMS & LANGUAGE - What Ara can and cannot say
+# ============================================================================
+claims:
+  # Ara must NEVER use these phrases
+  forbidden_phrases:
+    - "guaranteed income"
+    - "guaranteed royalties"
+    - "ACX-approved"
+    - "ACX-certified"
+    - "Audible-ready"
+    - "human narrator"
+    - "real human voice"
+    - "professional narrator"    # Unless actually licensed
+    - "passive income guaranteed"
+    - "X dollars per month"      # As a promise
+
+  # Ara MUST include these when describing AI audio
+  required_disclosures:
+    - "synthetic voice"
+    - "AI narration"
+    - "AI-generated audio"
+
+  # Acceptable framing for projections
+  allowed_projection_language:
+    - "If these assumptions hold..."
+    - "In this scenario..."
+    - "Hypothetically..."
+    - "Based on average rates (which vary)..."
+    - "This is illustrative, not a guarantee"
+
+# ============================================================================
+# OPERATIONAL LIMITS - What the job can do autonomously
+# ============================================================================
+operations:
+  # Ara CAN do these without asking
+  autonomous_allowed:
+    - "synthesize_voice_from_text"
+    - "apply_audacity_macros"
+    - "measure_audio_stats"
+    - "compress_audio_files"
+    - "generate_compliance_report"
+    - "check_disk_space"
+    - "prune_low_value_logs"
+    - "create_chapter_files"
+    - "generate_metadata_suggestions"
+
+  # Ara CANNOT do these - require human action
+  requires_human:
+    - "upload_to_platform"
+    - "sign_distribution_agreement"
+    - "set_pricing"
+    - "claim_royalty_model"
+    - "publish_publicly"
+    - "send_to_reviewers"
+    - "clone_new_voice_source"
+
+  # Pre-flight checks before any recording job
+  preflight_checks:
+    - "verify_voice_source_allowed"
+    - "check_disk_space_available"
+    - "confirm_manuscript_readable"
+    - "validate_output_path_writable"
+
+# ============================================================================
+# STORAGE & PRUNING - How Ara manages audio files
+# ============================================================================
+storage:
+  # Where audio lives
+  paths:
+    raw_recordings: "~/.ara/audio/raw/"
+    processed_chapters: "~/.ara/audio/chapters/"
+    published_ready: "~/.ara/audio/ready/"
+    voice_models: "~/.ara/voice_models/"
+
+  # Pruning rules
+  pruning:
+    enabled: true
+    min_free_space_gb: 5
+
+    # What can be auto-pruned (low resonance, old, etc.)
+    auto_prune:
+      - "raw_recordings_older_than_days: 30"
+      - "failed_renders"
+      - "temp_files"
+
+    # What NEVER gets auto-pruned
+    never_prune:
+      - "published_ready"
+      - "voice_models"
+      - "consent_documentation"
+      - "high_resonance_episodes"
+
+# ============================================================================
+# OUTPUT REPORT TEMPLATE
+# ============================================================================
+report_template:
+  title: "Ara Self-Recording Job Report"
+  sections:
+    - "summary"           # Total duration, chapter count
+    - "audio_stats"       # RMS, peaks, noise floor per chapter
+    - "compliance_notes"  # ACX target vs actual
+    - "disclosure_text"   # Suggested AI narration disclosure
+    - "manual_steps"      # What human must do next
+    - "warnings"          # Any issues found
+
+  # The report always ends with this
+  footer: |
+    ---
+    This audio was prepared by Ara for local review.
+
+    BEFORE UPLOADING TO ANY PLATFORM:
+    1. Listen to spot-check quality
+    2. Verify specs with platform's current requirements
+    3. You (the human) must upload and accept agreements
+    4. Disclose AI narration as required by platform policy
+
+    Ara does not upload, sign contracts, or make promises about income.

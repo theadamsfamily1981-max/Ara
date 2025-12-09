@@ -6,21 +6,31 @@ Complete voice synthesis, recording, and publishing system.
 
 Components:
 - synthesis: HV-based voice encoding (phonemes + prosody + emotion)
-- recording: Audacity pipeline for ACX-compliant audiobooks
+- recording: Audacity pipeline for ACX-target audiobooks
 - storage: HV-compressed storage for episodes, logs, audio metadata
 - publishing: Complete audiobook publishing pipeline
+- rails: Safety enforcement (consent, disclosure, platform policies)
 
 Usage:
     # Quick recording
     from ara.voice import quick_record
     result = quick_record("Hello, I am Ara.", "greeting.mp3")
 
-    # Full audiobook
+    # Full audiobook (with safety rails)
     from ara.voice import publish_book
     result = publish_book("manuscript.md", "My Book", "Author")
 
+    # Check if voice source is allowed
+    from ara.voice import voice_allowed
+    if voice_allowed("ara_composite_voice"):
+        print("OK to use")
+
 Cost: $0 (all local processing)
-Quality: ACX perfect (-23dB RMS, 192kbps MP3)
+Quality: ACX-target (YOU verify with platform's current specs)
+
+IMPORTANT: This engine does NOT upload to platforms.
+YOU must upload manually and accept platform agreements.
+AI narration disclosure is REQUIRED in all outputs.
 """
 
 from .synthesis.hv_voice import (
@@ -73,6 +83,20 @@ from .publishing.audiobook_pipeline import (
     estimate_book,
 )
 
+# Safety rails - always enforced
+from .rails import (
+    AudioCovenant,
+    VoiceRails,
+    VoiceSourceStatus,
+    ConsentRecord,
+    PreflightResult,
+    ComplianceReport,
+    voice_allowed,
+    check_before_recording,
+    acx_disclosure,
+    get_manual_upload_steps,
+)
+
 
 __all__ = [
     # Synthesis
@@ -120,4 +144,16 @@ __all__ = [
     'AudiobookPublisher',
     'publish_book',
     'estimate_book',
+
+    # Safety Rails
+    'AudioCovenant',
+    'VoiceRails',
+    'VoiceSourceStatus',
+    'ConsentRecord',
+    'PreflightResult',
+    'ComplianceReport',
+    'voice_allowed',
+    'check_before_recording',
+    'acx_disclosure',
+    'get_manual_upload_steps',
 ]

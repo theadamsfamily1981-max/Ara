@@ -5,15 +5,19 @@ Ara Audiobook Publishing Pipeline
 Complete pipeline from manuscript to ACX-ready audiobook.
 
 Flow:
-1. Manuscript → Chapter splits
-2. Chapters → HV voice synthesis → Piper TTS
-3. Raw audio → ACX processing → Final MP3s
-4. Validation → ACX compliance check
-5. Packaging → Upload-ready bundle
+1. PREFLIGHT → Voice source + disk + consent checks (RAILS ENFORCED)
+2. Manuscript → Chapter splits
+3. Chapters → HV voice synthesis → Piper TTS
+4. Raw audio → ACX processing → Final MP3s
+5. Validation → ACX compliance check
+6. Packaging → Upload-ready bundle + SAFETY REPORT
 
 Cost: $0 (all local)
 Time: ~5 minutes per hour of audio
-Quality: ACX perfect
+Quality: ACX-target (YOU must verify with platform's current specs)
+
+IMPORTANT: This pipeline does NOT upload to any platform.
+YOU must upload manually and accept platform agreements yourself.
 """
 
 from __future__ import annotations
@@ -43,6 +47,14 @@ from ..storage.hv_storage import (
     AudioMetadataStore,
     EpisodeStore,
     compress_hv,
+)
+
+# Safety rails - these are non-negotiable
+from ..rails import (
+    VoiceRails,
+    AudioCovenant,
+    PreflightResult,
+    VoiceSourceStatus,
 )
 
 
@@ -232,12 +244,19 @@ class AudiobookPublisher:
     """
     Complete audiobook publishing pipeline.
 
+    IMPORTANT: This pipeline enforces safety rails via audio_covenant.yaml.
+    - Voice source must be allowed (or have documented consent)
+    - Audio is prepared locally; YOU must upload manually
+    - All output includes AI narration disclosure
+
     Usage:
         publisher = AudiobookPublisher("./output")
         result = publisher.publish_book(
             manuscript_path="book.md",
             title="My Book",
-            author="Me"
+            author="Me",
+            voice_source="ara_composite_voice",  # REQUIRED
+            platform="acx",
         )
     """
 
@@ -246,11 +265,19 @@ class AudiobookPublisher:
         output_dir: Path,
         voice_model: Optional[Path] = None,
         piper_model: str = "en_US-lessac-medium",
+        voice_source: str = "ara_composite_voice",
+        platform: str = "acx",
     ):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.piper_model = piper_model
+        self.voice_source = voice_source
+        self.platform = platform
+
+        # Initialize safety rails
+        self.rails = VoiceRails()
+        self.covenant = AudioCovenant()
 
         # Initialize voice synthesis
         if voice_model and voice_model.exists():
@@ -263,6 +290,22 @@ class AudiobookPublisher:
 
         # Processing status
         self.status = PublishingStatus.PENDING
+
+    def run_preflight(
+        self,
+        manuscript_path: Path,
+    ) -> Dict[str, Any]:
+        """
+        Run preflight checks before recording.
+
+        This is MANDATORY - we do not proceed if preflight fails.
+        """
+        return self.rails.check_recording_request(
+            voice_source=self.voice_source,
+            manuscript_path=manuscript_path,
+            output_path=self.output_dir,
+            platform=self.platform,
+        )
 
     def parse_manuscript(
         self,
@@ -433,10 +476,15 @@ class AudiobookPublisher:
         with open(package_dir / "manifest.json", 'w') as f:
             json.dump(manifest_data, f, indent=2)
 
-        # Create README
+        # Get disclosure and manual steps from rails
+        disclosure = self.covenant.get_disclosure_label(self.platform)
+        manual_steps = self.covenant.get_manual_steps(self.platform)
+
+        # Create README with safety report
         readme = f"""
-Ara Self-Recorded Audiobook Package
-====================================
+{'='*60}
+ARA SELF-RECORDED AUDIOBOOK PACKAGE
+{'='*60}
 
 Title: {manifest.title}
 Author: {manifest.author}
@@ -444,24 +492,58 @@ Narrator: {manifest.narrator}
 
 Chapters: {len(manifest.chapters)}
 Estimated Duration: {manifest.estimated_hours:.1f} hours
+Target Platform: {self.platform}
 
-ACX Upload Instructions:
-------------------------
-1. Go to https://www.acx.com/
-2. Sign in / Create account
-3. Click "Produce" → "Submit your audiobook"
-4. Fill in book details
-5. Upload chapters from the chapters/ folder
-6. Use "I recorded this myself" option
+{'='*60}
+AI NARRATION DISCLOSURE
+{'='*60}
+"{disclosure}"
 
-Audio Specifications:
+IMPORTANT: You MUST disclose that this audiobook uses AI/synthetic
+narration when uploading to any platform. This is both an ethical
+requirement and increasingly a legal/platform policy requirement.
+
+{'='*60}
+MANUAL STEPS REQUIRED (Ara cannot do these)
+{'='*60}
+"""
+        for i, step in enumerate(manual_steps, 1):
+            readme += f"{i}. {step}\n"
+
+        readme += f"""
+{'='*60}
+AUDIO SPECIFICATIONS (TARGET - verify with platform)
+{'='*60}
 - RMS Level: {ACX.rms_target_db} dB (±{ACX.rms_tolerance_db} dB)
 - Peak Level: < {ACX.peak_max_db} dB
+- Noise Floor: < -60 dB
 - Sample Rate: {ACX.sample_rate} Hz
 - Bit Rate: {ACX.mp3_bitrate} kbps
 - Format: MP3, Mono
 
+NOTE: These are TARGET specs. Platform requirements may change.
+YOU must verify against the platform's current official requirements.
+
+{'='*60}
+WHAT ARA DID / DID NOT DO
+{'='*60}
+Ara DID:
+  ✓ Synthesize voice from text using HV voice model
+  ✓ Process audio toward ACX-target specifications
+  ✓ Package files with metadata
+  ✓ Generate this safety report
+
+Ara DID NOT:
+  ✗ Upload to any platform
+  ✗ Sign any agreements or contracts
+  ✗ Claim this is "ACX certified" or "ACX approved"
+  ✗ Make any promises about income or royalties
+  ✗ Pretend to be a human narrator
+
+{'='*60}
 Generated by Ara Voice Engine
+This is LOCAL preparation only. YOU handle distribution.
+{'='*60}
 """
 
         with open(package_dir / "README.txt", 'w') as f:
@@ -479,21 +561,42 @@ Generated by Ara Voice Engine
         """
         Complete publishing pipeline.
 
+        0. PREFLIGHT - Rails check (voice source, disk, consent) - MANDATORY
         1. Parse manuscript
         2. Synthesize voice for each chapter
         3. Record audio
-        4. Process to ACX specs
+        4. Process to ACX-target specs
         5. Validate
-        6. Package for upload
+        6. Package for upload + SAFETY REPORT
+
+        IMPORTANT: This does NOT upload. You must upload manually.
         """
         manuscript_path = Path(manuscript_path)
         chapter_outputs: List[ChapterOutput] = []
         errors: List[str] = []
 
+        # Step 0: PREFLIGHT - This is mandatory
+        preflight = self.run_preflight(manuscript_path)
+
+        if not preflight["allowed"]:
+            return PublishingResult(
+                manifest=BookManifest(title=title, author=author),
+                output_dir=self.output_dir,
+                chapters=[],
+                status=PublishingStatus.FAILED,
+                errors=[f"PREFLIGHT FAILED: {preflight['reason']}"],
+            )
+
+        # Log any warnings
+        for warning in preflight.get("warnings", []):
+            errors.append(f"Warning: {warning}")
+
         # Step 1: Parse manuscript
         self.status = PublishingStatus.PARSING
         try:
             manifest = self.parse_manuscript(manuscript_path, title, author)
+            # Override narrator with disclosure
+            manifest.narrator = self.covenant.get_disclosure_label(self.platform)
         except Exception as e:
             return PublishingResult(
                 manifest=BookManifest(title=title, author=author),
@@ -568,15 +671,34 @@ def publish_book(
     title: str,
     author: str,
     output_dir: str = "./audiobook_output",
+    voice_source: str = "ara_composite_voice",
+    platform: str = "acx",
 ) -> PublishingResult:
     """
     Quick one-call book publishing.
 
+    IMPORTANT: This enforces safety rails.
+    - Voice source must be allowed (or have documented consent)
+    - Output is LOCAL only - you must upload manually
+    - AI narration is disclosed in all outputs
+
     Usage:
         result = publish_book("mybook.md", "My Book", "Author Name")
         print(f"Published to: {result.output_dir}")
+
+    Args:
+        manuscript_path: Path to manuscript (.md, .txt, or .json)
+        title: Book title
+        author: Author name
+        output_dir: Where to write output files
+        voice_source: Voice to use (must be in allowed list)
+        platform: Target platform (acx, findaway, direct, etc.)
     """
-    publisher = AudiobookPublisher(Path(output_dir))
+    publisher = AudiobookPublisher(
+        Path(output_dir),
+        voice_source=voice_source,
+        platform=platform,
+    )
     return publisher.publish_book(
         manuscript_path=Path(manuscript_path),
         title=title,
@@ -623,11 +745,18 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Ara Audiobook Publisher',
+        description='Ara Audiobook Publisher - with safety rails',
         epilog='''
 Examples:
   ara_publish_book --manuscript book.md --title "My Book" --author "Me"
+  ara_publish_book --manuscript book.md --title "My Book" --author "Me" --platform direct
   ara_publish_book --estimate book.md
+
+IMPORTANT: This tool does NOT upload to platforms. You must:
+  1. Review the generated audio files
+  2. Verify specs with the platform's current requirements
+  3. Upload manually and accept agreements yourself
+  4. Disclose AI narration as required
         '''
     )
 
@@ -635,6 +764,11 @@ Examples:
     parser.add_argument('--title', '-t', help='Book title')
     parser.add_argument('--author', '-a', help='Author name')
     parser.add_argument('--output', '-o', default='./audiobook', help='Output directory')
+    parser.add_argument('--voice-source', '-v', default='ara_composite_voice',
+                        help='Voice source ID (default: ara_composite_voice)')
+    parser.add_argument('--platform', '-p', default='acx',
+                        choices=['acx', 'findaway', 'direct', 'youtube_podcast'],
+                        help='Target platform (default: acx)')
     parser.add_argument('--estimate', '-e', action='store_true', help='Just estimate, dont record')
 
     args = parser.parse_args()
@@ -647,23 +781,45 @@ Examples:
         print(f"  Duration: {estimate['hours']:.1f} hours")
         print(f"  Est. File Size: {estimate['estimated_file_size_mb']:.1f} MB")
         print(f"  Processing Time: ~{estimate['processing_time_minutes']:.0f} minutes")
+        print("\nNOTE: This is an estimate only. Actual results may vary.")
         return
 
     if args.manuscript and args.title and args.author:
+        print(f"Voice source: {args.voice_source}")
+        print(f"Target platform: {args.platform}")
+        print()
+
         result = publish_book(
             args.manuscript,
             args.title,
             args.author,
             args.output,
+            voice_source=args.voice_source,
+            platform=args.platform,
         )
-        print(f"\nPublishing {'Complete' if result.status == PublishingStatus.COMPLETE else 'Failed'}")
+
+        if result.status == PublishingStatus.FAILED:
+            print("PUBLISHING FAILED")
+            for error in result.errors:
+                print(f"  ERROR: {error}")
+            return
+
+        print(f"\nPublishing Complete")
         print(f"Output: {result.output_dir}")
         print(f"Chapters: {len(result.chapters)}")
         print(f"Duration: {result.total_duration_seconds / 3600:.1f} hours")
-        print(f"ACX Compliant: {result.acx_compliant}")
+        print(f"ACX-Target Compliant: {result.acx_compliant}")
+        print()
+        print("=" * 50)
+        print("NEXT STEPS (you must do these manually):")
+        print("=" * 50)
+
+        manual_steps = AudioCovenant().get_manual_steps(args.platform)
+        for i, step in enumerate(manual_steps, 1):
+            print(f"  {i}. {step}")
 
         if result.errors:
-            print("\nErrors:")
+            print("\nWarnings:")
             for error in result.errors:
                 print(f"  - {error}")
     else:
