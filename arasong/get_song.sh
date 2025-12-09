@@ -12,6 +12,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 SONGS_DIR="$SCRIPT_DIR/songs"
 
 SONG="${1:-what_do_you_wanna_hear.json}"
@@ -47,14 +48,16 @@ if [ -f "$WAV_PATH" ]; then
     exit 0
 fi
 
-# Render the song
+# Render the song (run from repo root so imports work)
 echo "🎵 Rendering: $SONG"
 echo ""
 
-cd "$SCRIPT_DIR"
+cd "$REPO_ROOT"
 python3 -c "
-from engine.song_player import AraSongPlayer
-from pathlib import Path
+import sys
+sys.path.insert(0, '.')
+
+from arasong.engine.song_player import AraSongPlayer
 
 player = AraSongPlayer(sample_rate=48000)
 player.load_song('$SONG_PATH')
