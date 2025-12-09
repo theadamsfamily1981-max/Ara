@@ -1,2 +1,7 @@
 psycopg2-binary
 psutil
+
+# For job_ingest_video.py
+fastapi
+uvicorn
+pydantic
