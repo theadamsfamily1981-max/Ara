@@ -1,0 +1,10 @@
+# Ara Hive Dependencies
+
+# Database
+psycopg2-binary>=2.9.0
+
+# System metrics
+psutil>=5.9.0
+
+# Optional: for dotenv loading
+python-dotenv>=1.0.0
