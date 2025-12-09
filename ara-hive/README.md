@@ -1,151 +1,85 @@
-# Ara Hive - Postgres-Backed Distributed Job Scheduler
+# Ara Hive - Phase 1
 
-A bee colony-inspired job scheduler using PostgreSQL for shared state.
-
-## Architecture
+Bee colony-inspired job scheduler using PostgreSQL.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      POSTGRES (Master)                      │
-│  ┌─────────┐  ┌─────────┐  ┌─────────────────────────────┐  │
-│  │  tasks  │  │  nodes  │  │          sites              │  │
-│  │ (queue) │  │ (boxes) │  │  (task_type + node + q_hat) │  │
-│  └─────────┘  └─────────┘  └─────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-        │               │                    │
-        ▼               ▼                    ▼
-   ┌─────────┐    ┌─────────┐         ┌─────────┐
-   │ Worker1 │    │ Worker2 │   ...   │ WorkerN │
-   │ bee_    │    │ bee_    │         │ bee_    │
-   │ agent.py│    │ agent.py│         │ agent.py│
-   └─────────┘    └─────────┘         └─────────┘
+ara-hive/
+  db/
+    schema.sql           # Tables: nodes, sites, tasks
+    seed_dummy_tasks.sql # Test data
+  src/
+    register_node.py     # Node heartbeat
+    bee_agent.py         # Worker bee
+    evaporate_sites.py   # Pheromone decay
+  requirements.txt
 ```
 
 ## Quick Start
 
-### 1. Setup Master (Postgres)
+### 1. Master: Setup Postgres
 
 ```bash
-# Install Postgres
-sudo apt install postgresql postgresql-contrib
-
-# Create database
-sudo -u postgres createdb ara_hive
-
-# Apply schema
-sudo -u postgres psql ara_hive -f schema.sql
+sudo -u postgres createuser ara -P        # password: ara
+sudo -u postgres createdb ara_hive -O ara
+psql -U ara -d ara_hive -f db/schema.sql
 ```
 
-### 2. Setup Worker (Any Machine)
+### 2. Each Node: Setup Python
 
 ```bash
-git clone <repo> ara-hive
-cd ara-hive
-
-# Create virtualenv
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-
-# Configure
-cp .env.example .env
-# Edit .env with your master's IP:
-# DB_DSN=dbname=ara_hive user=postgres host=192.168.1.100
 ```
 
-### 3. Register Node + Start Worker
+### 3. Each Node: Register + Start Worker
 
 ```bash
-source venv/bin/activate
-export $(cat .env | xargs)
-
-# Register this machine (creates node + sites)
-python register_node.py worker --task-types dummy_cpu
-
-# Start bee agent
-python bee_agent.py --task-type dummy_cpu --node-id 1
+export ARA_HIVE_DSN="dbname=ara_hive user=ara password=ara host=<MASTER_IP>"
+python src/register_node.py --role worker
+python src/bee_agent.py
 ```
 
-### 4. Seed Tasks
+### 4. Master: Seed Test Tasks
 
 ```bash
-# Seed 20 dummy tasks
-python seed_tasks.py dummy_cpu 20
-
-# Watch them drain
-python seed_tasks.py --status
+psql -U ara -d ara_hive -f db/seed_dummy_tasks.sql
 ```
 
-### 5. Run Evaporation (on master)
+### 5. Master: Evaporation Cron
 
-```bash
-# One-shot (for cron)
-python evaporate.py
-
-# Or as daemon
-python evaporate.py --daemon --interval 60
+```cron
+* * * * * cd /path/to/ara-hive && ARA_HIVE_DSN="..." venv/bin/python src/evaporate_sites.py
 ```
 
-## Files
-
-| File | Purpose |
-|------|---------|
-| `schema.sql` | PostgreSQL schema (tasks, nodes, sites, views) |
-| `bee_agent.py` | Worker that claims and executes tasks |
-| `register_node.py` | Register machine + send heartbeats |
-| `evaporate.py` | Pheromone decay + stale node detection |
-| `seed_tasks.py` | Inject test tasks into queue |
-
-## Key Concepts
-
-### Tasks
-Jobs in the queue. Workers claim them with `FOR UPDATE SKIP LOCKED`.
-
-### Nodes
-Physical machines. Send heartbeats to prove they're alive.
-
-### Sites
-`(task_type, node_id)` pairs with pheromone values:
-- `q_hat`: Smoothed reward (EMA of 1/duration)
-- `intensity`: Waggle dance strength = 0.1 + q_hat
-
-### Waggle Dance Selection
-Workers pick sites proportional to intensity. Better sites (lower latency) accumulate more intensity and attract more jobs.
-
-### Evaporation
-Sites that aren't updated fade: `intensity *= 0.95`. This prevents stale pheromone from dominating.
-
-## Views
+## Waggle Board Queries
 
 ```sql
--- See the waggle board
-SELECT * FROM waggle_board;
+-- Top sites by pheromone
+SELECT s.id, s.task_type, n.hostname, s.q_hat, s.intensity, s.congestion
+FROM sites s JOIN nodes n ON n.id = s.node_id
+ORDER BY s.intensity DESC LIMIT 10;
 
--- Queue status by task type
-SELECT * FROM queue_status;
+-- Task throughput by minute
+SELECT task_type, date_trunc('minute', finished_at) AS minute, count(*) AS done
+FROM tasks WHERE status = 'done'
+GROUP BY task_type, minute ORDER BY minute DESC;
 
--- Node health (healthy/stale/dead)
-SELECT * FROM node_health;
+-- Node health
+SELECT id, hostname, role, cpu_load_pct, mem_used_pct, last_heartbeat
+FROM nodes ORDER BY role, hostname;
 ```
 
-## Customizing Task Execution
+## Next: Swap `time.sleep` for Real Work
 
-Edit `execute_task()` in `bee_agent.py`:
+Edit `src/bee_agent.py` and replace the sleep with your actual job:
 
 ```python
-def execute_task(task_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    if task_type == "image_gen":
-        return run_stable_diffusion(payload["prompt"])
-    elif task_type == "transcode":
-        return ffmpeg_transcode(payload["input"], payload["output"])
-    else:
-        # Default: sleep
-        time.sleep(payload.get("work_ms", 500) / 1000.0)
-        return {"status": "ok"}
+# In bee_agent.py, after claiming task:
+t0 = time.time()
+# time.sleep(work_ms / 1000.0)  # <-- remove this
+result = your_real_job(payload)   # <-- add this
+duration = time.time() - t0
 ```
 
-## Scaling
-
-1. **More workers**: Just run `bee_agent.py` on more machines
-2. **More task types**: Create sites for new types via `register_node.py --task-types type1 type2`
-3. **GPU tasks**: Register with `python register_node.py gpu --gpu --task-types image_gen`
+The hive mechanics stay identical.
