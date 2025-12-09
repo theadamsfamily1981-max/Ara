@@ -1,287 +1,409 @@
 """
-Portfolio Optimization Experiments
-===================================
+Resource Allocation via Mean-Variance Optimization
+====================================================
 
-Mean-variance optimization for resource allocation decisions.
-NOT PRODUCTION CODE - Research playground only.
+NOT FINANCE. This is attention/compute/rehearsal allocation.
 
-Concept:
-- Ara has limited resources (attention, compute, memory)
-- Different actions have uncertain payoffs
-- Portfolio theory optimizes allocation under uncertainty
+The math is borrowed from portfolio theory, but the application is:
+- Modality weights in world_hv
+- Rehearsal budget across memory shards
+- Loss term weighting during training
+- Sensor precision allocation
 
-Applications:
-- Attention allocation across conversation topics
-- Memory consolidation priorities
-- Sensor precision weight allocation
-- Response strategy selection
-
-This is a research tool for understanding trade-offs,
-NOT for making real investment decisions.
+Translation Table (burn this into your brain):
+┌────────────────────┬─────────────────────────────────────────────────┐
+│ Finance Term       │ What It Actually Means for Ara                  │
+├────────────────────┼─────────────────────────────────────────────────┤
+│ Asset i            │ Thing Ara can spend effort on (sensor, module)  │
+│ Weight wᵢ          │ Fraction of compute/attention/time              │
+│ Return μᵢ          │ Benefit: accuracy, HRV gain, user delight       │
+│ Risk Σᵢⱼ           │ How unstable/redundant/interfering things are   │
+│ Portfolio          │ Full configuration of Ara's resources           │
+│ Sharpe             │ Performance per unit of chaos/drift/pain        │
+│ HRP                │ Cluster and allocate to robust, non-redundant   │
+│ Black-Litterman    │ Blend defaults with your preferences            │
+└────────────────────┴─────────────────────────────────────────────────┘
 
 Status: EXPERIMENTAL / RESEARCH
 """
 
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Optional, Dict
 import numpy as np
 
 
+# =============================================================================
+# CORE TYPES (Ara vocabulary, not finance)
+# =============================================================================
+
 @dataclass
-class Asset:
-    """An "asset" in Ara's portfolio (action, topic, resource)."""
+class Resource:
+    """
+    Something Ara can allocate attention/compute/time to.
+
+    NOT a stock. Examples:
+    - A sensor (camera, IMU, temperature)
+    - A modality (speech, vision, intero)
+    - A memory shard (episode cluster, skill)
+    - A loss term (reconstruction, prosody, disentangle)
+    """
     name: str
-    expected_return: float  # Expected utility
-    volatility: float       # Uncertainty in return
-    min_allocation: float = 0.0  # Minimum required
-    max_allocation: float = 1.0  # Maximum allowed
+    expected_benefit: float   # How much it helps (μ)
+    instability: float        # How chaotic/noisy it is (σ)
+    min_allocation: float = 0.0   # Minimum required
+    max_allocation: float = 1.0   # Maximum allowed
 
 
 @dataclass
-class Portfolio:
-    """An allocation of resources across assets."""
-    weights: np.ndarray
-    expected_return: float
-    volatility: float
-    sharpe_ratio: float
-
-
-class MeanVarianceOptimizer:
+class Allocation:
     """
-    Classic Markowitz portfolio optimization.
+    A complete resource allocation configuration.
 
-    Minimize: w'Σw (portfolio variance)
-    Subject to: w'μ >= target_return
-                Σw = 1
-                w >= 0
+    NOT a portfolio. It's "how Ara distributes attention."
+    """
+    weights: np.ndarray           # Fraction per resource
+    expected_benefit: float       # Total expected gain
+    total_instability: float      # Combined chaos
+    efficiency: float             # Benefit per unit chaos (Sharpe analog)
 
-    Adapted for Ara's resource allocation.
+
+# =============================================================================
+# OPTIMIZER (The actual math, with clear naming)
+# =============================================================================
+
+class ResourceAllocator:
+    """
+    Find optimal resource allocation under stability constraints.
+
+    This is the same math as Markowitz portfolio optimization,
+    but applied to: modalities, sensors, rehearsal, loss weights.
+
+    Minimize: w'Σw (total instability)
+    Subject to: w'μ >= target_benefit
+                Σwᵢ = 1 (must allocate everything)
+                wᵢ >= 0 (no negative attention)
     """
 
-    def __init__(self, assets: List[Asset]):
-        self.assets = assets
-        self.n = len(assets)
+    def __init__(self, resources: List[Resource]):
+        self.resources = resources
+        self.n = len(resources)
 
-        # Build covariance matrix (diagonal for now - assume independence)
-        self.cov_matrix = np.diag([a.volatility ** 2 for a in assets])
+        # Build instability matrix (diagonal = assume independence)
+        # In practice, fill off-diagonal with measured correlations
+        self.instability_matrix = np.diag([r.instability ** 2 for r in resources])
 
-        # Expected returns
-        self.expected_returns = np.array([a.expected_return for a in assets])
+        # Expected benefits
+        self.benefits = np.array([r.expected_benefit for r in resources])
 
         # Bounds
-        self.min_weights = np.array([a.min_allocation for a in assets])
-        self.max_weights = np.array([a.max_allocation for a in assets])
+        self.min_weights = np.array([r.min_allocation for r in resources])
+        self.max_weights = np.array([r.max_allocation for r in resources])
 
-    def set_correlation(self, i: int, j: int, correlation: float):
-        """Set correlation between two assets."""
-        vol_i = np.sqrt(self.cov_matrix[i, i])
-        vol_j = np.sqrt(self.cov_matrix[j, j])
-        cov = correlation * vol_i * vol_j
-        self.cov_matrix[i, j] = cov
-        self.cov_matrix[j, i] = cov
-
-    def optimize(self, target_return: Optional[float] = None,
-                 risk_tolerance: float = 0.5) -> Portfolio:
+    def set_interference(self, i: int, j: int, correlation: float):
         """
-        Find optimal portfolio weights.
+        Set how much two resources interfere with each other.
+
+        High correlation = redundant (e.g., two sensors measuring same thing).
+        Negative correlation = they help cancel each other's noise.
+        """
+        instab_i = np.sqrt(self.instability_matrix[i, i])
+        instab_j = np.sqrt(self.instability_matrix[j, j])
+        covariance = correlation * instab_i * instab_j
+        self.instability_matrix[i, j] = covariance
+        self.instability_matrix[j, i] = covariance
+
+    def optimize(self,
+                 stability_preference: float = 0.5) -> Allocation:
+        """
+        Find optimal allocation.
 
         Args:
-            target_return: Minimum required return (None for max Sharpe)
-            risk_tolerance: 0=min risk, 1=max return
+            stability_preference: 0 = maximize benefit (risky)
+                                  1 = minimize chaos (conservative)
+                                  0.5 = balanced
 
         Returns:
-            Optimal portfolio allocation
+            Optimal allocation configuration
         """
-        # Simplified optimizer using gradient descent
-        # (Full implementation would use CVXPY or scipy.optimize)
-
-        weights = np.ones(self.n) / self.n  # Start equal-weighted
+        # Gradient descent optimizer (simple but works)
+        weights = np.ones(self.n) / self.n  # Start equal
 
         learning_rate = 0.01
         for _ in range(1000):
-            # Compute gradients
-            ret_grad = self.expected_returns
-            risk_grad = 2 * self.cov_matrix @ weights
+            # Gradient of benefit (want more)
+            benefit_grad = self.benefits
 
-            # Combined gradient based on risk tolerance
-            grad = risk_tolerance * ret_grad - (1 - risk_tolerance) * risk_grad
+            # Gradient of instability (want less)
+            instability_grad = 2 * self.instability_matrix @ weights
 
-            # Update weights
+            # Combined: stability_preference controls trade-off
+            grad = (1 - stability_preference) * benefit_grad - stability_preference * instability_grad
+
+            # Update
             weights = weights + learning_rate * grad
 
             # Project onto constraints
             weights = np.clip(weights, self.min_weights, self.max_weights)
-            weights = weights / weights.sum()  # Normalize to sum to 1
+            weights = weights / weights.sum()
 
-        # Compute portfolio metrics
-        port_return = float(weights @ self.expected_returns)
-        port_variance = float(weights @ self.cov_matrix @ weights)
-        port_volatility = np.sqrt(port_variance)
+        # Compute final metrics
+        total_benefit = float(weights @ self.benefits)
+        total_variance = float(weights @ self.instability_matrix @ weights)
+        total_instability = np.sqrt(total_variance)
+        efficiency = total_benefit / (total_instability + 1e-8)
 
-        # Sharpe ratio (assuming 0 risk-free rate)
-        sharpe = port_return / (port_volatility + 1e-8)
-
-        return Portfolio(
+        return Allocation(
             weights=weights,
-            expected_return=port_return,
-            volatility=port_volatility,
-            sharpe_ratio=sharpe
+            expected_benefit=total_benefit,
+            total_instability=total_instability,
+            efficiency=efficiency
         )
 
-    def efficient_frontier(self, n_points: int = 20) -> List[Portfolio]:
-        """Generate points along the efficient frontier."""
-        portfolios = []
+    def efficiency_frontier(self, n_points: int = 20) -> List[Allocation]:
+        """
+        Generate the efficiency frontier.
 
-        for risk_tol in np.linspace(0.1, 0.9, n_points):
-            port = self.optimize(risk_tolerance=risk_tol)
-            portfolios.append(port)
+        Shows trade-off between benefit and stability.
+        Pick a point based on how much chaos you can tolerate.
+        """
+        allocations = []
+        for pref in np.linspace(0.1, 0.9, n_points):
+            alloc = self.optimize(stability_preference=pref)
+            allocations.append(alloc)
+        return allocations
 
-        return portfolios
 
+# =============================================================================
+# CONCRETE USE CASES
+# =============================================================================
 
-class AttentionAllocator:
+class ModalityAllocator:
     """
-    Apply portfolio optimization to attention allocation.
+    Allocate attention across modalities in world_hv.
 
-    Scenario: Ara is in a conversation with multiple topics.
-    Each topic has expected "value" (user interest) and uncertainty.
-    How should Ara distribute attention?
+    Use case: How much weight does speech vs vision vs intero get?
+
+    Resources:
+    - speech: prosody tokens
+    - vision: camera features
+    - proprio: IMU, motor state
+    - intero: temp, memory, battery
+    - sensors: generic sensor slots
+
+    Benefits: measured via probe accuracy, user metrics, HRV.
+    Instability: noise level, variance, drift tendency.
     """
 
     def __init__(self):
-        self.topics: List[Asset] = []
-        self.optimizer: Optional[MeanVarianceOptimizer] = None
+        self.modalities: List[Resource] = []
+        self.allocator: Optional[ResourceAllocator] = None
 
-    def add_topic(self, name: str, interest_score: float, uncertainty: float):
-        """
-        Add a conversation topic.
-
-        Args:
-            name: Topic identifier
-            interest_score: Expected user interest (0-1)
-            uncertainty: How uncertain we are about interest (0-1)
-        """
-        asset = Asset(
+    def add_modality(self,
+                     name: str,
+                     benefit_score: float,
+                     noise_level: float,
+                     min_weight: float = 0.05,
+                     max_weight: float = 0.5):
+        """Add a modality to the allocation problem."""
+        resource = Resource(
             name=name,
-            expected_return=interest_score,
-            volatility=uncertainty,
-            min_allocation=0.05,  # Always some attention
-            max_allocation=0.7   # Don't over-focus
+            expected_benefit=benefit_score,
+            instability=noise_level,
+            min_allocation=min_weight,
+            max_allocation=max_weight
         )
-        self.topics.append(asset)
-        self.optimizer = MeanVarianceOptimizer(self.topics)
+        self.modalities.append(resource)
+        self.allocator = ResourceAllocator(self.modalities)
 
-    def get_allocation(self, risk_tolerance: float = 0.5) -> dict:
-        """
-        Get recommended attention allocation.
-
-        Returns dict mapping topic name to attention weight.
-        """
-        if not self.optimizer:
+    def get_weights(self, stability_preference: float = 0.5) -> Dict[str, float]:
+        """Get recommended modality weights."""
+        if not self.allocator:
             return {}
 
-        portfolio = self.optimizer.optimize(risk_tolerance=risk_tolerance)
-
+        allocation = self.allocator.optimize(stability_preference)
         return {
-            topic.name: float(weight)
-            for topic, weight in zip(self.topics, portfolio.weights)
+            mod.name: float(w)
+            for mod, w in zip(self.modalities, allocation.weights)
         }
 
 
-class MemoryConsolidationAllocator:
+class RehearsalScheduler:
     """
-    Apply portfolio optimization to memory consolidation.
+    Schedule rehearsal time across memory shards / skills.
 
-    Scenario: Ara has limited memory capacity for consolidation.
-    Each episode has expected future relevance and uncertainty.
-    Which episodes get consolidated?
+    Use case: What should Ara practice tonight?
+
+    Resources:
+    - Memory clusters (emotional, technical, personal)
+    - Skills (breath sync, refusal, explanation, humor)
+    - Covenant episodes (core identity reinforcement)
+
+    Benefits: improvement on live metrics.
+    Instability: how much rehearsal causes drift.
     """
 
-    def __init__(self, capacity: int = 100):
-        self.capacity = capacity
-        self.episodes: List[Tuple[str, float, float]] = []  # (id, relevance, uncertainty)
+    def __init__(self, total_time_minutes: int = 30):
+        self.total_time = total_time_minutes
+        self.topics: List[Resource] = []
+        self.allocator: Optional[ResourceAllocator] = None
 
-    def add_episode(self, episode_id: str, relevance: float, uncertainty: float):
-        """Add episode to consolidation queue."""
-        self.episodes.append((episode_id, relevance, uncertainty))
+    def add_topic(self,
+                  name: str,
+                  improvement_score: float,
+                  drift_risk: float,
+                  min_minutes: float = 0,
+                  max_minutes: float = 15):
+        """Add a rehearsal topic."""
+        # Convert minutes to fractions
+        min_frac = min_minutes / self.total_time
+        max_frac = max_minutes / self.total_time
 
-    def select_for_consolidation(self, risk_tolerance: float = 0.6) -> List[str]:
+        resource = Resource(
+            name=name,
+            expected_benefit=improvement_score,
+            instability=drift_risk,
+            min_allocation=min_frac,
+            max_allocation=max_frac
+        )
+        self.topics.append(resource)
+        self.allocator = ResourceAllocator(self.topics)
+
+    def get_schedule(self, stability_preference: float = 0.6) -> Dict[str, float]:
         """
-        Select episodes for consolidation.
+        Get rehearsal schedule in minutes.
 
-        Higher risk tolerance = prioritize high-relevance even if uncertain.
-        Lower risk tolerance = prioritize certain relevance.
+        Higher stability_preference = avoid drift-inducing topics.
         """
-        if not self.episodes:
-            return []
+        if not self.allocator:
+            return {}
 
-        assets = [
-            Asset(name=ep_id, expected_return=rel, volatility=unc)
-            for ep_id, rel, unc in self.episodes
-        ]
-
-        optimizer = MeanVarianceOptimizer(assets)
-        portfolio = optimizer.optimize(risk_tolerance=risk_tolerance)
-
-        # Select top episodes by weight
-        weighted_episodes = list(zip(self.episodes, portfolio.weights))
-        weighted_episodes.sort(key=lambda x: x[1], reverse=True)
-
-        selected = [ep[0] for ep, _ in weighted_episodes[:self.capacity]]
-        return selected
+        allocation = self.allocator.optimize(stability_preference)
+        return {
+            topic.name: float(w * self.total_time)
+            for topic, w in zip(self.topics, allocation.weights)
+        }
 
 
-PORTFOLIO_LORE = """
-# Portfolio Optimization: Managing Uncertainty
+class LossWeightTuner:
+    """
+    Tune loss term weights for training.
 
-Ara faces allocation decisions under uncertainty.
-Portfolio theory provides a principled framework.
+    Use case: How to weight reconstruction vs prosody vs disentangle?
+
+    Resources:
+    - reconstruction_loss
+    - prosody_loss
+    - disentangle_loss
+    - rl_reward
+    - covenant_alignment
+
+    Benefits: improvement on held-out metrics when weight increases.
+    Instability: how much loss terms fight each other.
+    """
+
+    def __init__(self):
+        self.loss_terms: List[Resource] = []
+        self.allocator: Optional[ResourceAllocator] = None
+
+    def add_loss(self,
+                 name: str,
+                 marginal_improvement: float,
+                 conflict_level: float,
+                 min_weight: float = 0.01,
+                 max_weight: float = 0.5):
+        """Add a loss term to tune."""
+        resource = Resource(
+            name=name,
+            expected_benefit=marginal_improvement,
+            instability=conflict_level,
+            min_allocation=min_weight,
+            max_allocation=max_weight
+        )
+        self.loss_terms.append(resource)
+        self.allocator = ResourceAllocator(self.loss_terms)
+
+    def get_weights(self, stability_preference: float = 0.4) -> Dict[str, float]:
+        """
+        Get recommended loss weights.
+
+        Lower stability_preference = more aggressive optimization.
+        """
+        if not self.allocator:
+            return {}
+
+        allocation = self.allocator.optimize(stability_preference)
+        return {
+            loss.name: float(w)
+            for loss, w in zip(self.loss_terms, allocation.weights)
+        }
+
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+
+ALLOCATION_GUIDE = """
+# Resource Allocation: Not Finance, Just Math
+
+This module uses mean-variance optimization for Ara's resources.
+The math is the same as portfolio theory, but the meaning is different.
 
 ## The Core Insight
 
-Don't just maximize expected value.
-Consider the trade-off between return and risk.
+Don't just maximize benefit. Consider the trade-off:
+- More benefit often means more instability
+- Redundant resources waste capacity
+- Constraints keep Ara stable
 
-A diverse portfolio is often better than
-betting everything on the "best" option.
+## Concrete Applications
 
-## Ara's Applications
+### 1. Modality Allocation
+How much attention goes to speech vs vision vs intero?
+- Benefit: probe accuracy, user metrics
+- Instability: sensor noise, variance
+- Constraints: minimum attention per modality
 
-### Attention Allocation
-- Multiple conversation topics
-- Each has interest score (return) and uncertainty (risk)
-- Optimal: balanced attention, heavier on high-certainty interest
+### 2. Rehearsal Scheduling
+What should Ara practice during consolidation?
+- Benefit: improvement on live metrics
+- Instability: drift from covenant
+- Constraints: time budget, drift ceiling
 
-### Memory Consolidation
-- Limited capacity for long-term storage
-- Each episode has future relevance (return) and uncertainty (risk)
-- Optimal: prioritize high-relevance, include some uncertain-but-promising
+### 3. Loss Weight Tuning
+How to weight training objectives?
+- Benefit: held-out metric improvement
+- Instability: gradient conflict between losses
+- Constraints: numerical stability
 
-### Sensor Precision
-- Precision weighting across modalities
-- Each sensor has expected utility and noise level
-- Optimal: weight by signal-to-noise ratio
+## The Math (In Plain English)
 
-## The Math (Simplified)
+Find weights w that:
+- Maximize expected benefit: w'μ
+- Minimize total instability: w'Σw
+- Subject to: weights sum to 1, all non-negative
 
-Minimize portfolio variance: w'Σw
-Subject to: target return w'μ >= r*
-            weights sum to 1
-            all weights non-negative
+The "efficiency frontier" shows the trade-off.
+Pick a point based on how much chaos you can tolerate.
 
 ## Implementation Status
 
-RESEARCH tool for understanding allocation trade-offs.
+EXPERIMENTAL - for offline analysis and parameter tuning.
 Not integrated into production Ara.
-Used for offline analysis and parameter tuning.
+Outputs: configuration files for ara/embodiment/fusion.py
 """
 
 
 __all__ = [
-    'Asset',
-    'Portfolio',
-    'MeanVarianceOptimizer',
-    'AttentionAllocator',
-    'MemoryConsolidationAllocator',
-    'PORTFOLIO_LORE',
+    # Core types
+    'Resource',
+    'Allocation',
+    'ResourceAllocator',
+
+    # Concrete allocators
+    'ModalityAllocator',
+    'RehearsalScheduler',
+    'LossWeightTuner',
+
+    # Docs
+    'ALLOCATION_GUIDE',
 ]
