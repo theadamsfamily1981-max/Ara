@@ -1,0 +1,56 @@
+[
+  {
+    "pipeline_id": "publish_markdown_to_repo",
+    "description": "Publish a markdown file to GitHub repository",
+    "steps": [
+      {
+        "service": "github",
+        "endpoint": "create_file",
+        "params_from": "file_params"
+      }
+    ],
+    "on_error": {
+      "github": "retry_with_backoff"
+    },
+    "requires_human_approval": false,
+    "tags": ["github", "publish", "content"]
+  },
+  {
+    "pipeline_id": "publish_blog_post",
+    "description": "Publish a blog post to GitHub and announce on Twitter",
+    "steps": [
+      {
+        "service": "github",
+        "endpoint": "create_file",
+        "params_from": "blog_file"
+      },
+      {
+        "service": "twitter",
+        "endpoint": "post_tweet",
+        "params_from": "announcement"
+      }
+    ],
+    "on_error": {
+      "github": "retry_with_backoff",
+      "twitter": "log_and_skip"
+    },
+    "requires_human_approval": true,
+    "tags": ["blog", "publish", "social"]
+  },
+  {
+    "pipeline_id": "research_and_draft",
+    "description": "Research a topic and draft content",
+    "steps": [
+      {
+        "service": "github",
+        "endpoint": "get_tree",
+        "params_from": "repo_params"
+      }
+    ],
+    "on_error": {
+      "github": "log_and_skip"
+    },
+    "requires_human_approval": false,
+    "tags": ["research", "draft"]
+  }
+]

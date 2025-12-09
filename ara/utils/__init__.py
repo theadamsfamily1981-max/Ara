@@ -110,6 +110,16 @@ def format_size(num_bytes: int) -> str:
     return f"{num_bytes:.2f} PB"
 
 
+from .covenant import (
+    Covenant,
+    AutomationLevel,
+    ContentScore,
+    CovenantViolation,
+    get_covenant,
+    reset_covenant,
+)
+
+
 __all__ = [
     "get_device",
     "set_seed",
@@ -117,4 +127,11 @@ __all__ = [
     "format_size",
     "TORCH_AVAILABLE",
     "NUMPY_AVAILABLE",
+    # Covenant
+    "Covenant",
+    "AutomationLevel",
+    "ContentScore",
+    "CovenantViolation",
+    "get_covenant",
+    "reset_covenant",
 ]

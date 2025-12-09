@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pheromone Signal",
+  "description": "Schema for pheromone signals in Ara's hive coordination system",
+  "type": "object",
+  "required": ["topic", "intensity", "scope", "ttl_ms"],
+  "properties": {
+    "topic": {
+      "type": "string",
+      "description": "Signal topic/category (e.g., 'success/publishing', 'alarm/rate_limit')"
+    },
+    "intensity": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Signal strength (0.0 = negligible, 1.0 = critical)"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["local", "cluster", "remote"],
+      "description": "Signal propagation scope"
+    },
+    "ttl_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Time-to-live in milliseconds"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Optional structured payload"
+    },
+    "emitter": {
+      "type": "string",
+      "description": "ID of the agent/component that emitted this signal"
+    },
+    "created_ts": {
+      "type": "number",
+      "description": "Unix timestamp when signal was created"
+    }
+  },
+  "examples": [
+    {
+      "topic": "success/publishing",
+      "intensity": 0.7,
+      "scope": "local",
+      "ttl_ms": 30000,
+      "payload": {"domain": "kdp", "action": "draft_created"},
+      "emitter": "publishing_agent_01"
+    },
+    {
+      "topic": "alarm/rate_limit",
+      "intensity": 1.0,
+      "scope": "cluster",
+      "ttl_ms": 60000,
+      "payload": {"service": "github", "retry_after_sec": 60},
+      "emitter": "github_agent_02"
+    }
+  ]
+}

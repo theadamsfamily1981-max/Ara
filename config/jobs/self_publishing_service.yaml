@@ -1,0 +1,84 @@
+# Self-Publishing Service Job Configuration
+# ==========================================
+#
+# Usage:
+#   python -m ara.jobs.publishing_service --config config/jobs/self_publishing_service.yaml
+#
+# Or:
+#   from ara.jobs.publishing_service import SelfPublishingService
+#   service = SelfPublishingService()
+#   result = service.execute_from_yaml("config/jobs/self_publishing_service.yaml")
+
+job_id: "self_publishing_service_v1"
+name: "Self Automated Publishing Service"
+pipeline: "research_prototype_production_ship"
+priority: "high"
+
+inputs:
+  # The topic to generate content about
+  # Override with --topic on CLI
+  topic: "${TOPIC_PLACEHOLDER}"
+
+  # GitHub target repository
+  repo_owner: "theadamsfamily1981-max"
+  repo_name: "Ara"
+  default_branch: "main"
+
+# Where to ship content
+# Options: local, github, twitter (TODO), email (TODO)
+targets:
+  - "local"
+  # - "github"  # Uncomment when GITHUB_TOKEN is set
+
+# Output directories
+artifacts_dir: "artifacts"
+
+# Pipeline options
+auto_ship: false          # If true, ships without human review
+skip_production: false    # If true, skips polish stage (for testing)
+
+# Pipeline stages (for reference / advanced customization)
+stages:
+  1_research:
+    module: "ara.enterprise.publishing.ContentSynthesizer"
+    function: "generate_research"
+    description: "Generate research brief from topic"
+    outputs:
+      - "artifacts/research/research_brief.md"
+
+  2_prototype:
+    module: "ara.enterprise.publishing.PublishingFactory"
+    function: "build_prototypes"
+    description: "Build prototype content assets"
+    outputs:
+      - "artifacts/prototypes/twitter_thread.txt"
+      - "artifacts/prototypes/newsletter.md"
+      - "artifacts/prototypes/blog.md"
+
+  3_production:
+    module: "ara.enterprise.publishing.PublishingFactory"
+    function: "productionize"
+    description: "Polish and validate content"
+    outputs:
+      - "artifacts/production/*"
+
+  4_ship:
+    module: "ara.enterprise.shipping.PublishingDispatcher"
+    function: "ship_content"
+    description: "Ship to configured platforms"
+    outputs:
+      - "artifacts/shipped/*"
+      - "artifacts/shipped/shipping_report.json"
+
+# Triggers (future use)
+triggers:
+  - type: "manual"
+  - type: "cron"
+    schedule: "0 9 * * *"   # Daily at 09:00 (disabled by default)
+    enabled: false
+
+# Resource hints (future use - for distributed execution)
+resources:
+  preferred_workers:
+    - "cathedral"
+    - "home"

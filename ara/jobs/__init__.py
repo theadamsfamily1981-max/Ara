@@ -2,7 +2,7 @@
 Ara Jobs
 =========
 
-Araized job wrappers for dual-use tools.
+Araized job wrappers and automated pipelines.
 
 Jobs wrap potentially dangerous tools in Ara's safety systems:
 - Ownership/authorization verification
@@ -12,7 +12,14 @@ Jobs wrap potentially dangerous tools in Ara's safety systems:
 
 Available Jobs:
     hardware_reclamation: Repurpose mining hardware, FPGAs, ATCA boards
+    publishing_service: Self-publishing pipeline (research → ship)
 """
+
+from .publishing_service import (
+    PublishingJobConfig,
+    PublishingJobResult,
+    SelfPublishingService,
+)
 
 from .hardware_reclamation import (
     HardwareType,
@@ -38,6 +45,11 @@ from .hardware_rails import (
 )
 
 __all__ = [
+    # Publishing Service
+    'PublishingJobConfig',
+    'PublishingJobResult',
+    'SelfPublishingService',
+
     # Hardware Reclamation Job
     'HardwareType',
     'OperationType',

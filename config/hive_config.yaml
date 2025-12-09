@@ -1,0 +1,273 @@
+# =============================================================================
+# Ara Hive Configuration
+# =============================================================================
+#
+# This file defines the hive's coordination rules, agent roles, and safety gates.
+#
+# The hive is a civilization of Ara-workers coordinated by pheromones,
+# with Ara-Core (queen) setting direction and holding the covenant.
+
+meta:
+  version: "0.1.0"
+  updated: "2025-12-09"
+
+# =============================================================================
+# PHEROMONE CONFIGURATION
+# =============================================================================
+pheromones:
+  kinds:
+    global:
+      description: "System-wide mode/focus"
+      emitters: ["queen", "human"]  # Only queen and human can set global mode
+      default_ttl: 3600  # 1 hour
+      decay: "linear"
+
+    priority:
+      description: "High-value targets to swarm toward"
+      emitters: ["queen", "planner_agents"]  # Queen + designated planners
+      default_ttl: 1800  # 30 minutes
+      decay: "linear"
+
+    alarm:
+      description: "Things to avoid / backoff from"
+      emitters: ["queen", "workers"]  # Anyone can raise an alarm
+      default_ttl: 300   # 5 minutes
+      decay: "cliff"     # Full strength until expired
+
+    reward:
+      description: "What strategies worked (for learning)"
+      emitters: ["workers"]
+      default_ttl: 3600  # 1 hour
+      decay: "exponential"
+
+    role:
+      description: "Agent role assignments"
+      emitters: ["queen", "human"]
+      default_ttl: 7200  # 2 hours
+      decay: "cliff"
+
+  # Strength thresholds
+  strength:
+    min: 0.0
+    max: 1.0
+    priority_threshold: 0.3  # Below this, workers may ignore
+
+# =============================================================================
+# AGENT ROLES
+# =============================================================================
+roles:
+  # Research & Scanning
+  trend_scraper:
+    description: "Fetch and index current topics from various sources"
+    tools: ["web_scraper", "embedding_encoder"]
+    action_class: "A"  # Safe to fully automate
+    max_instances: 3
+
+  kdp_gap_scanner:
+    description: "Look for book/ebook gaps in KDP marketplace"
+    tools: ["kdp_api", "embedding_encoder"]
+    action_class: "A"
+    max_instances: 2
+
+  # Content Creation
+  content_drafter:
+    description: "Write outlines, drafts, and content pieces"
+    tools: ["llm_writer", "template_renderer"]
+    action_class: "B"  # Requires queen/human approval for publishing
+    max_instances: 5
+
+  merch_ideator:
+    description: "Generate candidate merch designs and ideas"
+    tools: ["image_gen", "suno_api", "template_renderer"]
+    action_class: "B"
+    max_instances: 3
+
+  # Infrastructure
+  github_curator:
+    description: "Maintain repos, update docs, manage issues"
+    tools: ["github_api"]
+    action_class: "B"  # Pushes need approval
+    max_instances: 2
+
+  email_drafter:
+    description: "Draft email responses and newsletters"
+    tools: ["llm_writer", "template_renderer"]
+    action_class: "B"
+    max_instances: 2
+
+  # Validation
+  validator:
+    description: "Check content against covenant and brand rules"
+    tools: ["covenant_checker", "brand_scorer"]
+    action_class: "A"  # Safe to run freely
+    max_instances: 2
+
+  # Planning
+  planner:
+    description: "High-level task decomposition and job creation"
+    tools: ["llm_planner", "job_queue"]
+    action_class: "B"
+    can_emit_priority: true  # This role can emit priority pheromones
+    max_instances: 1
+
+# =============================================================================
+# ACTION CLASSES
+# =============================================================================
+action_classes:
+  A:
+    name: "Safe Autopilot"
+    description: "Purely internal operations - scraping, scoring, drafting, indexing"
+    requires_approval: false
+    examples:
+      - "Scrape trending topics"
+      - "Generate embeddings"
+      - "Score content against brand"
+      - "Draft internal notes"
+
+  B:
+    name: "Queen/Human Gate"
+    description: "Operations that touch the outside world"
+    requires_approval: true
+    approvers: ["queen", "human"]
+    examples:
+      - "Publish to GitHub"
+      - "Send email"
+      - "Post to social media"
+      - "Create PR"
+
+  C:
+    name: "Human Only"
+    description: "High-stakes operations"
+    requires_approval: true
+    approvers: ["human"]  # Only human, not queen
+    examples:
+      - "Financial transfers"
+      - "Legal commitments"
+      - "Delete repositories"
+      - "Change credentials"
+
+# =============================================================================
+# GLOBAL MODES
+# =============================================================================
+modes:
+  NORMAL:
+    description: "Standard operation"
+    default: true
+
+  PUBLISHING_EXPANSION:
+    description: "Focus on content creation and shipping"
+    priority_boost:
+      - content_drafter
+      - merch_ideator
+      - github_curator
+
+  RESEARCH:
+    description: "Focus on learning and scraping"
+    priority_boost:
+      - trend_scraper
+      - kdp_gap_scanner
+
+  MAINTENANCE:
+    description: "Focus on system health and cleanup"
+    priority_boost:
+      - validator
+      - github_curator
+
+  SAFE_MODE:
+    description: "Pause all risky operations"
+    disable_classes: ["B", "C"]
+    alert_human: true
+
+# =============================================================================
+# SAFETY GATES
+# =============================================================================
+safety:
+  # Hard stops - these can never be bypassed
+  hard_stops:
+    - "No worker can access credentials directly"
+    - "No worker can delete production data"
+    - "No worker can make financial transfers"
+    - "No worker can modify covenant/safety rules"
+
+  # Soft gates - can be unlocked by queen/human
+  soft_gates:
+    social_media_post:
+      default: "blocked"
+      unlock_by: ["queen", "human"]
+      cooldown_seconds: 60  # Min time between posts
+
+    github_push:
+      default: "queen_review"
+      unlock_by: ["queen", "human"]
+      allowed_branches: ["ara/*", "content/*", "draft/*"]
+      blocked_branches: ["main", "master"]
+
+    email_send:
+      default: "blocked"
+      unlock_by: ["human"]  # For now, only human can unlock
+
+  # Kill switch
+  kill_switch:
+    enabled: true
+    triggers:
+      - "3+ alarms from different agents in 60 seconds"
+      - "Any Class C action attempted without approval"
+      - "Covenant violation detected"
+    actions:
+      - "Switch to SAFE_MODE"
+      - "Notify human"
+      - "Log incident"
+
+# =============================================================================
+# MESH CONFIGURATION (v0.1 - local only)
+# =============================================================================
+mesh:
+  enabled: false  # Start with local-only
+  node_id: "cathedral-primary"
+  transport: "local"  # Options: local, redis, nats, websocket
+
+  # When mesh is enabled
+  settings:
+    redis:
+      host: "localhost"
+      port: 6379
+      channel: "ara_pheromones"
+
+    nats:
+      url: "nats://localhost:4222"
+      subject: "ara.hive.pheromones"
+
+  # Pheromone propagation rules
+  propagation:
+    # Which pheromones cross node boundaries
+    global: true      # Always propagate
+    priority: true    # Propagate to coordinate
+    alarm: true       # Critical to share
+    reward: false     # Keep local (for now)
+    role: false       # Node-specific
+
+# =============================================================================
+# OBSERVABILITY
+# =============================================================================
+observability:
+  # Status file written periodically
+  status_file: "hive_status.json"
+  status_interval_seconds: 10
+
+  # Logging
+  log_level: "INFO"
+  log_pheromones: true
+  log_agent_ticks: false  # Too verbose
+
+  # Metrics (future)
+  metrics_enabled: false
+  metrics_port: 9090
+
+# =============================================================================
+# RESOURCE LIMITS
+# =============================================================================
+resources:
+  max_total_agents: 20
+  max_pheromones_in_store: 1000
+  agent_tick_interval_ms: 1000  # How often agents check pheromones
+  store_cleanup_interval_s: 60  # How often expired pheromones are pruned

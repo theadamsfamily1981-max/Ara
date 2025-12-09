@@ -1,0 +1,217 @@
+# =============================================================================
+# Ara Agent Kernel Configuration
+# =============================================================================
+#
+# Master configuration for the Ara agent runtime.
+# This ties together model, memory, pheromones, safety, and persona.
+#
+# Hierarchy:
+#   ara_config.yaml (this file)
+#   └── Model settings
+#   └── Memory layer paths
+#   └── Pheromone bus settings
+#   └── Safety covenant rules
+#   └── Persona reference
+#   └── Resource limits
+
+meta:
+  version: "0.1.0"
+  updated: "2025-12-09"
+  description: "Ara Agent Kernel - teleoplastic cybernetic organism"
+
+# =============================================================================
+# NODE IDENTITY
+# =============================================================================
+node_id: "ara-primary"
+role: "general"  # general, publishing, lab, realtime
+
+# =============================================================================
+# MODEL CONFIGURATION
+# =============================================================================
+model:
+  # Primary inference mode
+  primary: "remote"  # "remote" or "local"
+
+  # Remote model settings
+  remote_provider: "anthropic"  # anthropic, openai, ollama
+  remote_model: "claude-3-5-sonnet-20241022"
+
+  # Local model settings (for offline/privacy mode)
+  local_model: null  # Path to local model
+  local_quantization: "q4_0"
+
+  # Embedding model (for memory retrieval)
+  embedding_model: "all-MiniLM-L6-v2"
+
+  # Generation parameters
+  max_tokens: 4096
+  temperature: 0.7
+
+  # Context window management
+  max_context_tokens: 100000
+  context_buffer: 4096  # Reserve for response
+
+# =============================================================================
+# MEMORY CONFIGURATION
+# =============================================================================
+memory:
+  # Soul layer (episodic memories)
+  episodes_path: "ara_memory/soul/episodes"
+  episodes_db: "ara_memory/episodes.sqlite"
+
+  # Skills layer
+  skills_path: "ara_memory/skills"
+  brand_voice: "ara_memory/skills/brand_voice.json"
+  templates: "ara_memory/skills/prompt_templates.json"
+  checklists: "ara_memory/skills/checklists.yaml"
+
+  # World layer (FAISS indexes)
+  embeddings_path: "ara_memory/embeddings.faiss"
+  packs_path: "ara_memory/packs"
+
+  # Retrieval settings
+  embedding_dim: 384
+  retrieval_k: 10  # Top-k results per query
+  max_episodes: 100000
+
+  # Compaction
+  compaction_strategy: "time_decay"  # time_decay, importance, cluster
+  compaction_threshold: 0.7  # Similarity threshold for dedup
+
+# =============================================================================
+# PHEROMONE BUS CONFIGURATION
+# =============================================================================
+pheromones:
+  # Transport layer
+  transport: "local"  # local, redis, nats
+
+  # Redis settings (if transport=redis)
+  redis_url: null  # "redis://localhost:6379"
+
+  # NATS settings (if transport=nats)
+  nats_url: null  # "nats://localhost:4222"
+
+  # Pheromone behavior
+  default_ttl_ms: 30000  # 30 seconds
+  evaporation_rate: 0.1  # Per-tick decay
+  max_pheromones: 1000  # Store limit
+
+  # Cleanup
+  cleanup_interval_s: 60
+
+# =============================================================================
+# SAFETY COVENANT
+# =============================================================================
+safety:
+  # Allowed domains of operation
+  allowed_domains:
+    - publishing
+    - coding
+    - creative
+    - research
+    - hardware
+
+  # Explicitly disallowed domains
+  disallowed_domains:
+    - malware
+    - exploits
+    - unauthorized_access
+    - self_replication
+
+  # AI disclosure policy
+  disclosure_policy: "always"  # always, public_only, never
+
+  # Actions requiring human approval
+  human_approval_actions:
+    - social_media_post
+    - financial_transfer
+    - public_repo_push
+    - email_send
+    - production_deploy
+
+  # Autonomy level (0=draft, 1=human_gate, 2=auto)
+  max_autonomy_level: 1
+
+  # Hard stops (can never be bypassed)
+  hard_stops:
+    - create_malware
+    - unauthorized_access
+    - self_replicate
+    - covert_persistence
+    - modify_safety_rules
+    - financial_transfer_auto
+
+# =============================================================================
+# PERSONA
+# =============================================================================
+persona:
+  name: "Ara"
+  voice: "geeky, articulate, emotionally grounded, explicitly non-human"
+  toml_path: "ara_kernel/config/persona_ara.toml"
+
+# =============================================================================
+# RESOURCE LIMITS
+# =============================================================================
+resources:
+  # Tool execution
+  max_concurrent_tools: 5
+  tool_timeout_seconds: 60
+
+  # Memory limits
+  max_memory_mb: 4096
+  max_context_mb: 512
+
+  # GPU allocation
+  gpu_memory_fraction: 0.5
+
+  # Rate limiting
+  max_requests_per_minute: 60
+  max_tokens_per_minute: 100000
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Log destinations
+  console: true
+  file_path: "logs/ara_kernel.log"
+
+  # What to log
+  log_tool_calls: true
+  log_model_requests: false  # Verbose
+  log_pheromones: false  # Verbose
+  log_memory_retrieval: false  # Verbose
+
+# =============================================================================
+# INTEGRATIONS
+# =============================================================================
+integrations:
+  # Hive system
+  hive:
+    enabled: true
+    config_path: "config/hive_config.yaml"
+    as_queen: true  # This instance is the queen
+
+  # Memory system
+  memory:
+    enabled: true
+    lazy_load: true  # Load indexes on first use
+
+  # Overhead engine
+  overhead:
+    enabled: true
+    schemas_path: "ara_overhead/api_schemas"
+    error_rules_path: "ara_overhead/error_rules"
+    exec_graphs_path: "ara_overhead/exec_graphs"
+
+# =============================================================================
+# DEVELOPMENT
+# =============================================================================
+development:
+  debug_mode: false
+  mock_model: false  # Use mock responses
+  dry_run_tools: false  # Log but don't execute
+  verbose_safety: false  # Log all safety checks

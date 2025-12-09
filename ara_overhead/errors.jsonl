@@ -1,0 +1,10 @@
+{"service": "github", "status": 403, "message_contains": "rate limit", "rule_id": "wait_and_retry"}
+{"service": "github", "status": 429, "rule_id": "retry_with_backoff", "params": {"delay_ms": 1000, "max_retries": 3}}
+{"service": "github", "status": 409, "message_contains": "sha", "rule_id": "fetch_sha_and_retry"}
+{"service": "github", "status": 401, "rule_id": "refresh_token"}
+{"service": "printful", "status": 429, "rule_id": "retry_with_backoff", "params": {"delay_ms": 1200, "max_retries": 5}}
+{"service": "printful", "status": 401, "rule_id": "refresh_token"}
+{"service": "twitter", "status": 429, "rule_id": "retry_with_backoff", "params": {"delay_ms": 15000, "max_retries": 3}}
+{"service": "twitter", "status": 403, "message_contains": "duplicate", "rule_id": "log_and_skip"}
+{"service": "kdp", "status": 409, "message_contains": "ISBN", "rule_id": "generate_new_isbn"}
+{"service": "suno", "status": 429, "rule_id": "retry_with_backoff", "params": {"delay_ms": 5000, "max_retries": 3}}
