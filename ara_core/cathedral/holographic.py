@@ -41,25 +41,53 @@ class ResourceType(str, Enum):
 
 @dataclass
 class CathedralEvent:
-    """A single event in the cathedral - the atomic unit for embedding."""
-    timestamp: datetime
-    event_type: str  # "job_start", "job_end", "stress", "morph", etc.
+    """
+    A single event in the cathedral - the atomic unit for embedding.
 
-    # Spatial coordinates (where in the cathedral graph)
-    module_id: str        # Which module/agent
+    Encoding formula:
+        H_e = bind(time(t), bind(module(module_id), bind(location(location_id), pack(metrics))))
+    """
+    # Time
+    t: int                    # Discrete time bin (tick index)
+    timestamp: datetime       # Wall clock time
+    event_type: str           # "job_start", "job_end", "stress", "morph", etc.
+
+    # Spatial coordinates
+    module_id: str            # Which organ (ara_voice, k10_fpga_2, gpu_0, swarm_agent_17)
+    location_id: str          # Physical/logical slot (rack_A/node_3/FPGA2/VRM_bank_1)
     resource_type: ResourceType
-    layer: int           # Swarm layer (0-3)
+    layer: int                # Intelligence layer (0-3)
 
-    # Metrics at this event
-    T_s: float           # Topology stability
-    H_s: float           # Homeostasis
-    sigma: float         # Current stress level
-    cost: float          # Resource cost
-    latency_ms: float
-
-    # Context
+    # Job context
     job_id: Optional[str] = None
+    job_type: Optional[str] = None
     pattern_id: Optional[str] = None
+
+    # Core metrics
+    stress_sigma: float = 0.0    # Current perturbation level
+    T_s_local: float = 0.99      # Local topology stability
+    A_g_local: float = 0.0       # Local antifragility gain
+    power_w: float = 0.0         # Power consumption
+    latency_ms: float = 0.0      # Latency
+    success_flag: int = 1        # 0/1 success indicator
+
+    # Legacy compatibility
+    @property
+    def T_s(self) -> float:
+        return self.T_s_local
+
+    @property
+    def H_s(self) -> float:
+        return 0.977  # Default homeostasis
+
+    @property
+    def sigma(self) -> float:
+        return self.stress_sigma
+
+    @property
+    def cost(self) -> float:
+        return self.power_w
+
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_feature_vector(self) -> np.ndarray:
@@ -416,6 +444,224 @@ class QuantumControlPlane:
         """Apply a control field."""
         self.active_fields.append(field)
         # In real impl, this would modify scheduler/stress params
+
+
+# =============================================================================
+# LEARNED CONTROLLER WITH J OBJECTIVE
+# =============================================================================
+
+@dataclass
+class ControlAction:
+    """A candidate control action for the next chunk."""
+    name: str
+    sigma_deltas: Dict[str, float]  # module_group → σ change
+    power_caps: Dict[str, float]    # hardware_group → power limit
+    scheduling_bias: Dict[str, float]  # module → bias weight
+
+    def to_vector(self) -> np.ndarray:
+        """Flatten action to vector for model input."""
+        # Simplified: just pack the key values
+        sigma_vals = list(self.sigma_deltas.values()) or [0.0]
+        power_vals = list(self.power_caps.values()) or [1.0]
+        bias_vals = list(self.scheduling_bias.values()) or [0.0]
+        return np.array(sigma_vals + power_vals + bias_vals, dtype=np.float32)
+
+
+@dataclass
+class ChunkSummary:
+    """Summary of a chunk for controller training."""
+    chunk_id: str
+    t_start: int
+    t_end: int
+    H_chunk: np.ndarray          # 16kD hypervector
+    mean_T_s: float
+    mean_A_g: float
+    mean_power_norm: float       # actual / budget
+    yield_per_dollar: float
+    action_taken: Optional[ControlAction] = None
+
+
+class LearnedController:
+    """
+    Learned controller that predicts J and selects optimal actions.
+
+    Objective:
+        J = α·T̄_s + β·Ā_g - γ·P̄_norm
+
+    Where:
+        T̄_s: average topology stability (0-1)
+        Ā_g: average antifragility gain (can be negative)
+        P̄_norm: normalized power (actual / budget)
+    """
+
+    def __init__(
+        self,
+        alpha: float = 0.5,
+        beta: float = 0.4,
+        gamma: float = 0.1,
+        hv_dim: int = 16384,
+        hidden_dim: int = 128,
+        learning_rate: float = 0.01,
+    ):
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        self.hv_dim = hv_dim
+        self.hidden_dim = hidden_dim
+        self.lr = learning_rate
+
+        # Simple MLP weights: HV + action → J
+        # Input: compressed HV (64D via random projection) + action (8D) = 72D
+        self.compress_dim = 64
+        self.action_dim = 8
+
+        # Random projection for HV compression
+        self.projection = np.random.randn(self.compress_dim, hv_dim).astype(np.float32)
+        self.projection /= np.linalg.norm(self.projection, axis=1, keepdims=True)
+
+        # MLP weights (input → hidden → output)
+        input_dim = self.compress_dim + self.action_dim
+        self.W1 = np.random.randn(hidden_dim, input_dim).astype(np.float32) * 0.1
+        self.b1 = np.zeros(hidden_dim, dtype=np.float32)
+        self.W2 = np.random.randn(1, hidden_dim).astype(np.float32) * 0.1
+        self.b2 = np.zeros(1, dtype=np.float32)
+
+        # Training history
+        self.history: List[Tuple[np.ndarray, float]] = []
+
+    def compute_J(self, chunk: ChunkSummary) -> float:
+        """Compute the true objective J for a chunk."""
+        return (
+            self.alpha * chunk.mean_T_s +
+            self.beta * chunk.mean_A_g -
+            self.gamma * chunk.mean_power_norm
+        )
+
+    def compress_hv(self, H_chunk: np.ndarray) -> np.ndarray:
+        """Compress 16kD HV to 64D via random projection."""
+        return self.projection @ H_chunk
+
+    def predict_J(self, H_chunk: np.ndarray, action: ControlAction) -> float:
+        """Predict J for a given chunk HV and action."""
+        # Compress HV
+        h_compressed = self.compress_hv(H_chunk)
+
+        # Pad action to fixed size
+        action_vec = action.to_vector()
+        if len(action_vec) < self.action_dim:
+            action_vec = np.pad(action_vec, (0, self.action_dim - len(action_vec)))
+        else:
+            action_vec = action_vec[:self.action_dim]
+
+        # Concatenate
+        x = np.concatenate([h_compressed, action_vec])
+
+        # Forward pass
+        h = np.tanh(self.W1 @ x + self.b1)
+        J_pred = float(self.W2 @ h + self.b2)
+
+        return J_pred
+
+    def generate_candidate_actions(self) -> List[ControlAction]:
+        """Generate a set of candidate actions to evaluate."""
+        candidates = [
+            # Baseline: no change
+            ControlAction("hold", {}, {}, {}),
+            # Increase stress on FPGAs
+            ControlAction("stress_fpga", {"fpga": 0.02}, {}, {}),
+            # Decrease stress everywhere
+            ControlAction("relax", {"all": -0.02}, {}, {}),
+            # Power conservation
+            ControlAction("power_save", {}, {"gpu": 0.8, "fpga": 0.9}, {}),
+            # Full power
+            ControlAction("power_full", {}, {"gpu": 1.0, "fpga": 1.0}, {}),
+            # Bias toward L2 agents
+            ControlAction("prefer_l2", {}, {}, {"L2": 0.5}),
+            # Night mode: low power + stress FPGAs
+            ControlAction("night", {"fpga": 0.01}, {"gpu": 0.7}, {}),
+            # Day mode: balanced
+            ControlAction("day", {}, {"gpu": 1.0}, {}),
+        ]
+        return candidates
+
+    def select_action(
+        self,
+        H_chunk: np.ndarray,
+        safety_constraints: Optional[Dict[str, float]] = None,
+    ) -> Tuple[ControlAction, float]:
+        """Select the best action for the current chunk state."""
+        candidates = self.generate_candidate_actions()
+
+        best_action = candidates[0]
+        best_J = float('-inf')
+
+        for action in candidates:
+            # Check safety constraints
+            if safety_constraints:
+                skip = False
+                for group, sigma in action.sigma_deltas.items():
+                    max_sigma = safety_constraints.get(f"max_sigma_{group}", 0.2)
+                    if sigma > max_sigma:
+                        skip = True
+                        break
+                if skip:
+                    continue
+
+            # Predict J
+            J_pred = self.predict_J(H_chunk, action)
+
+            if J_pred > best_J:
+                best_J = J_pred
+                best_action = action
+
+        return best_action, best_J
+
+    def update(self, H_chunk: np.ndarray, action: ControlAction, true_J: float):
+        """Update model with observed (state, action, J) tuple."""
+        # Compute prediction
+        J_pred = self.predict_J(H_chunk, action)
+        error = J_pred - true_J
+
+        # Simple gradient descent on MSE
+        # (In practice, use proper backprop; this is simplified)
+        h_compressed = self.compress_hv(H_chunk)
+        action_vec = action.to_vector()
+        if len(action_vec) < self.action_dim:
+            action_vec = np.pad(action_vec, (0, self.action_dim - len(action_vec)))
+        else:
+            action_vec = action_vec[:self.action_dim]
+
+        x = np.concatenate([h_compressed, action_vec])
+
+        # Forward
+        z1 = self.W1 @ x + self.b1
+        h = np.tanh(z1)
+
+        # Backward (simplified)
+        dL_dJ = 2 * error
+        dJ_dh = self.W2.T.flatten() * dL_dJ
+        dh_dz1 = (1 - h**2) * dJ_dh
+
+        # Update W2, b2
+        self.W2 -= self.lr * dL_dJ * h.reshape(1, -1)
+        self.b2 -= self.lr * dL_dJ
+
+        # Update W1, b1
+        self.W1 -= self.lr * np.outer(dh_dz1, x)
+        self.b1 -= self.lr * dh_dz1
+
+        # Store in history
+        self.history.append((x.copy(), true_J))
+
+    def status(self) -> Dict[str, Any]:
+        """Get controller status."""
+        return {
+            "alpha": self.alpha,
+            "beta": self.beta,
+            "gamma": self.gamma,
+            "training_samples": len(self.history),
+            "objectives": "J = α·T̄_s + β·Ā_g - γ·P̄_norm",
+        }
 
 
 # =============================================================================
