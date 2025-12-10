@@ -76,6 +76,7 @@ class CathedralMode:
             "red_dwarf": "🐱",
             "time_lord": "👨‍⚕️",
             "colonial_fleet": "⚔️",
+            "k10_toaster": "🧈",
         }
         return icons.get(self.name, "🏛️")
 

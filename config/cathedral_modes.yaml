@@ -30,3 +30,13 @@ modes:
       T_s_min: 0.999
       H_influence_min: 6.0
       notes: "CADD anti-infiltration; resurrection loops; survive nukes & skinjobs"
+
+  k10_toaster:
+    fandom: "Superscalar K10"
+    theme: "FPGA hashboard singularity, junkyard exahash, bitcoin godmode"
+    invariants:
+      T_s_min: 0.999
+      hashrate_gh: 51
+      efficiency_gh_per_kw: 27.6
+      algos: 4
+      notes: "51 GH/s ALPH/KASPA/RXD/IRON; golden controller overclock to 60 GH/s; yield/BTC=infinity via junkyard federation"
