@@ -68,6 +68,15 @@ from .runtime import (
     deploy_gate,
 )
 
+from .integration import (
+    StackConfig,
+    CathedralStack,
+    get_stack,
+    stack_tick,
+    stack_dashboard,
+    stack_status,
+)
+
 
 __all__ = [
     # Metrics
@@ -94,4 +103,12 @@ __all__ = [
     "cathedral_status",
     "cathedral_dashboard",
     "deploy_gate",
+
+    # Full Stack Integration
+    "StackConfig",
+    "CathedralStack",
+    "get_stack",
+    "stack_tick",
+    "stack_dashboard",
+    "stack_status",
 ]
