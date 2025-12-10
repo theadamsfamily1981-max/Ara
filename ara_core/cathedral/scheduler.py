@@ -20,6 +20,7 @@ Knobs:
 """
 
 import time
+import threading
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Tuple, Deque
@@ -189,10 +190,17 @@ class ResourceScheduler:
     Main scheduler for routing jobs between classical and quantum paths.
 
     Maximizes useful work per second and per joule while avoiding clock abuse.
+
+    Thread Safety:
+    All state mutations are protected by an RLock to prevent race conditions
+    when multiple threads route jobs concurrently.
     """
 
     def __init__(self, config: Optional[SchedulerConfig] = None):
         self.config = config or SchedulerConfig()
+
+        # Thread safety lock for all state mutations
+        self._lock = threading.RLock()
 
         # Device stats
         self.device_stats: Dict[DeviceType, DeviceStats] = {
@@ -241,22 +249,23 @@ class ResourceScheduler:
 
     def route_job(self, job_id: str, job_type: str,
                   expected_quantum_speedup: float = 1.0) -> DeviceType:
-        """Route a job to appropriate device."""
-        self.routing.total_routed += 1
+        """Route a job to appropriate device (thread-safe)."""
+        with self._lock:
+            self.routing.total_routed += 1
 
-        if self.should_route_quantum(job_type, expected_quantum_speedup):
-            self.routing.quantum_routed += 1
-            self.queue_depths[DeviceType.QPU] += 1
-            return DeviceType.QPU
-        else:
-            self.routing.classical_routed += 1
-            # Choose between GPU and FPGA based on availability
-            if self.queue_depths[DeviceType.GPU] <= self.queue_depths[DeviceType.FPGA]:
-                self.queue_depths[DeviceType.GPU] += 1
-                return DeviceType.GPU
+            if self.should_route_quantum(job_type, expected_quantum_speedup):
+                self.routing.quantum_routed += 1
+                self.queue_depths[DeviceType.QPU] += 1
+                return DeviceType.QPU
             else:
-                self.queue_depths[DeviceType.FPGA] += 1
-                return DeviceType.FPGA
+                self.routing.classical_routed += 1
+                # Choose between GPU and FPGA based on availability
+                if self.queue_depths[DeviceType.GPU] <= self.queue_depths[DeviceType.FPGA]:
+                    self.queue_depths[DeviceType.GPU] += 1
+                    return DeviceType.GPU
+                else:
+                    self.queue_depths[DeviceType.FPGA] += 1
+                    return DeviceType.FPGA
 
     def start_job(self, job_id: str, device: DeviceType) -> JobTiming:
         """Record job start."""
@@ -271,7 +280,7 @@ class ResourceScheduler:
     def complete_job(self, timing: JobTiming, success: bool,
                      energy_joules: float = 0.0,
                      quantum_calls: int = 0):
-        """Record job completion."""
+        """Record job completion (thread-safe)."""
         timing.end_time = time.time()
         timing.energy_joules = energy_joules
         timing.quantum_calls = quantum_calls
@@ -281,31 +290,33 @@ class ResourceScheduler:
         else:
             timing.status = JobStatus.FAILED
 
-        # Update stats
-        self._update_stats(timing)
+        with self._lock:
+            # Update stats
+            self._update_stats(timing)
 
-        # Record latency
-        self.latency_tracker.record(timing.device, timing.latency_ms)
+            # Record latency
+            self.latency_tracker.record(timing.device, timing.latency_ms)
 
-        # Update queue depth
-        self.queue_depths[timing.device] = max(0, self.queue_depths[timing.device] - 1)
+            # Update queue depth
+            self.queue_depths[timing.device] = max(0, self.queue_depths[timing.device] - 1)
 
-        # Store in history
-        self.job_history.append(timing)
+            # Store in history
+            self.job_history.append(timing)
 
-        # Check if we need to trigger backoff
-        self._check_backoff()
+            # Check if we need to trigger backoff
+            self._check_backoff()
 
     def record_fallback(self, job_id: str, from_device: DeviceType):
-        """Record a fallback from quantum to classical."""
-        self.routing.over_routed += 1
-
-        # Update queue
-        self.queue_depths[from_device] = max(0, self.queue_depths[from_device] - 1)
+        """Record a fallback from quantum to classical (thread-safe)."""
+        with self._lock:
+            self.routing.over_routed += 1
+            # Update queue
+            self.queue_depths[from_device] = max(0, self.queue_depths[from_device] - 1)
 
     def record_retrospective_underroute(self, job_id: str):
-        """Record that a classical job would have been faster on quantum."""
-        self.routing.under_routed += 1
+        """Record that a classical job would have been faster on quantum (thread-safe)."""
+        with self._lock:
+            self.routing.under_routed += 1
 
     def _update_stats(self, timing: JobTiming):
         """Update device statistics."""
@@ -336,28 +347,29 @@ class ResourceScheduler:
             self.quantum_backoff_until = time.time() + 5.0
 
     def get_metrics(self) -> Dict[str, Any]:
-        """Get all scheduler metrics."""
-        return {
-            "devices": {
-                d.value: {
-                    "utilization": self.device_stats[d].utilization,
-                    "waste_ratio": self.device_stats[d].waste_ratio,
-                    "energy_per_op": self.device_stats[d].energy_per_op,
-                    "jobs_completed": self.device_stats[d].jobs_completed,
-                    "jobs_failed": self.device_stats[d].jobs_failed,
-                    "latency": self.latency_tracker.stats(d),
-                }
-                for d in DeviceType
-            },
-            "routing": {
-                "total": self.routing.total_routed,
-                "quantum_fraction": (self.routing.quantum_routed / max(1, self.routing.total_routed)),
-                "over_routing_rate": self.routing.over_routing_rate,
-                "under_routing_rate": self.routing.under_routing_rate,
-            },
-            "queue_depths": {d.value: self.queue_depths[d] for d in DeviceType},
-            "backoff_active": time.time() < self.quantum_backoff_until,
-        }
+        """Get all scheduler metrics (thread-safe snapshot)."""
+        with self._lock:
+            return {
+                "devices": {
+                    d.value: {
+                        "utilization": self.device_stats[d].utilization,
+                        "waste_ratio": self.device_stats[d].waste_ratio,
+                        "energy_per_op": self.device_stats[d].energy_per_op,
+                        "jobs_completed": self.device_stats[d].jobs_completed,
+                        "jobs_failed": self.device_stats[d].jobs_failed,
+                        "latency": self.latency_tracker.stats(d),
+                    }
+                    for d in DeviceType
+                },
+                "routing": {
+                    "total": self.routing.total_routed,
+                    "quantum_fraction": (self.routing.quantum_routed / max(1, self.routing.total_routed)),
+                    "over_routing_rate": self.routing.over_routing_rate,
+                    "under_routing_rate": self.routing.under_routing_rate,
+                },
+                "queue_depths": {d.value: self.queue_depths[d] for d in DeviceType},
+                "backoff_active": time.time() < self.quantum_backoff_until,
+            }
 
     def render_dashboard(self) -> str:
         """Render scheduler status as ASCII dashboard."""
@@ -400,12 +412,21 @@ class ResourceScheduler:
 # =============================================================================
 
 _scheduler: Optional[ResourceScheduler] = None
+_scheduler_lock = threading.Lock()
 
 
 def get_scheduler() -> ResourceScheduler:
+    """
+    Get or create the global scheduler instance.
+
+    Thread-safe: uses double-checked locking pattern.
+    """
     global _scheduler
     if _scheduler is None:
-        _scheduler = ResourceScheduler()
+        with _scheduler_lock:
+            # Double-check after acquiring lock
+            if _scheduler is None:
+                _scheduler = ResourceScheduler()
     return _scheduler
 
 

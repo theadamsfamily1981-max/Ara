@@ -7,6 +7,11 @@ Background tasks for maintaining hive health:
 - Stale node detection
 - Congestion cooling
 - Task cleanup
+
+Thread Safety:
+All maintenance jobs use threading.Event for stop signals, ensuring
+reliable shutdown semantics. The WaggleBoard they access is now
+thread-safe (uses RLock + WAL mode).
 """
 
 from __future__ import annotations
@@ -22,12 +27,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# Default timeouts for graceful shutdown
+SHUTDOWN_TIMEOUT_SEC = 5.0
+
+
 class EvaporationJob:
     """
     Periodically decays site intensities.
 
     This implements pheromone evaporation - without new activity,
     sites gradually become less attractive.
+
+    Thread Safety:
+    Uses threading.Event for stop signal, ensuring reliable shutdown.
     """
 
     def __init__(
@@ -42,16 +54,16 @@ class EvaporationJob:
         self.decay_factor = decay_factor
         self.min_intensity = min_intensity
 
-        self._running = False
+        self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
         """Start evaporation in background thread."""
-        if self._running:
+        if self._thread is not None and self._thread.is_alive():
             return
 
-        self._running = True
-        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._loop, daemon=True, name="EvaporationJob")
         self._thread.start()
         logger.info(
             f"EvaporationJob started (interval={self.interval_sec}s, "
@@ -60,9 +72,11 @@ class EvaporationJob:
 
     def stop(self) -> None:
         """Stop the evaporation job."""
-        self._running = False
-        if self._thread:
-            self._thread.join(timeout=5.0)
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=SHUTDOWN_TIMEOUT_SEC)
+            if self._thread.is_alive():
+                logger.warning("EvaporationJob did not stop cleanly")
         logger.info("EvaporationJob stopped")
 
     def run_once(self) -> int:
@@ -76,21 +90,22 @@ class EvaporationJob:
 
     def _loop(self) -> None:
         """Main evaporation loop."""
-        while self._running:
+        while not self._stop_event.is_set():
             try:
                 self.run_once()
             except Exception as e:
                 logger.exception(f"Evaporation error: {e}")
 
-            # Sleep in chunks for faster shutdown
-            sleep_end = time.time() + self.interval_sec
-            while self._running and time.time() < sleep_end:
-                time.sleep(1.0)
+            # Use Event.wait() for interruptible sleep
+            self._stop_event.wait(timeout=self.interval_sec)
 
 
 class StaleNodeDetector:
     """
     Marks nodes with stale heartbeats as offline.
+
+    Thread Safety:
+    Uses threading.Event for stop signal, ensuring reliable shutdown.
     """
 
     def __init__(
@@ -103,24 +118,26 @@ class StaleNodeDetector:
         self.interval_sec = interval_sec
         self.timeout_sec = timeout_sec
 
-        self._running = False
+        self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
         """Start detection in background thread."""
-        if self._running:
+        if self._thread is not None and self._thread.is_alive():
             return
 
-        self._running = True
-        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._loop, daemon=True, name="StaleNodeDetector")
         self._thread.start()
         logger.info(f"StaleNodeDetector started (timeout={self.timeout_sec}s)")
 
     def stop(self) -> None:
         """Stop the detector."""
-        self._running = False
-        if self._thread:
-            self._thread.join(timeout=5.0)
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=SHUTDOWN_TIMEOUT_SEC)
+            if self._thread.is_alive():
+                logger.warning("StaleNodeDetector did not stop cleanly")
         logger.info("StaleNodeDetector stopped")
 
     def run_once(self) -> int:
@@ -132,20 +149,22 @@ class StaleNodeDetector:
 
     def _loop(self) -> None:
         """Main detection loop."""
-        while self._running:
+        while not self._stop_event.is_set():
             try:
                 self.run_once()
             except Exception as e:
                 logger.exception(f"Stale node detection error: {e}")
 
-            sleep_end = time.time() + self.interval_sec
-            while self._running and time.time() < sleep_end:
-                time.sleep(1.0)
+            # Use Event.wait() for interruptible sleep
+            self._stop_event.wait(timeout=self.interval_sec)
 
 
 class CongestionCooler:
     """
     Monitors node load and applies cooling pheromones to overloaded nodes.
+
+    Thread Safety:
+    Uses threading.Event for stop signal, ensuring reliable shutdown.
     """
 
     def __init__(
@@ -160,24 +179,26 @@ class CongestionCooler:
         self.cpu_threshold = cpu_threshold
         self.cooling_factor = cooling_factor
 
-        self._running = False
+        self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
         """Start cooling in background thread."""
-        if self._running:
+        if self._thread is not None and self._thread.is_alive():
             return
 
-        self._running = True
-        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._loop, daemon=True, name="CongestionCooler")
         self._thread.start()
         logger.info(f"CongestionCooler started (threshold={self.cpu_threshold})")
 
     def stop(self) -> None:
         """Stop the cooler."""
-        self._running = False
-        if self._thread:
-            self._thread.join(timeout=5.0)
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=SHUTDOWN_TIMEOUT_SEC)
+            if self._thread.is_alive():
+                logger.warning("CongestionCooler did not stop cleanly")
         logger.info("CongestionCooler stopped")
 
     def run_once(self) -> int:
@@ -202,15 +223,14 @@ class CongestionCooler:
 
     def _loop(self) -> None:
         """Main cooling loop."""
-        while self._running:
+        while not self._stop_event.is_set():
             try:
                 self.run_once()
             except Exception as e:
                 logger.exception(f"Congestion cooling error: {e}")
 
-            sleep_end = time.time() + self.interval_sec
-            while self._running and time.time() < sleep_end:
-                time.sleep(1.0)
+            # Use Event.wait() for interruptible sleep
+            self._stop_event.wait(timeout=self.interval_sec)
 
 
 class HiveMaintainer:

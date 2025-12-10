@@ -9,10 +9,15 @@ Tiny wrapper that feeds "heartbeat" events into the kernel:
 - Background maintenance
 
 This is the "always-on" agent that keeps Ara responsive.
+
+Thread Safety:
+- Uses persistent event loop per thread (not created per-heartbeat)
+- Uses threading.Event for stop signal with proper wait semantics
 """
 
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 import logging
@@ -33,6 +38,9 @@ class RealtimeBreathAgent:
     - Memory compaction triggers
     - Drift detection
     - Idle-time background tasks
+
+    Thread Safety:
+    Uses a persistent event loop for the thread lifetime.
     """
 
     def __init__(
@@ -48,6 +56,7 @@ class RealtimeBreathAgent:
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._heartbeat_count = 0
+        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
 
     def start(self) -> None:
         """Start the heartbeat loop."""
@@ -56,7 +65,9 @@ class RealtimeBreathAgent:
             return
 
         self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread = threading.Thread(
+            target=self._run_loop, daemon=True, name="RealtimeBreathAgent"
+        )
         self._thread.start()
         logger.info(f"RealtimeBreathAgent started (interval={self.interval_sec}s)")
 
@@ -73,13 +84,26 @@ class RealtimeBreathAgent:
         """Check if the agent is running."""
         return self._thread is not None and self._thread.is_alive()
 
-    def _loop(self) -> None:
-        """Main heartbeat loop."""
-        while not self._stop.wait(timeout=self.interval_sec):
-            self._heartbeat()
+    def _run_loop(self) -> None:
+        """Main heartbeat loop with persistent event loop."""
+        # Create persistent event loop for this thread
+        self._event_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._event_loop)
+
+        try:
+            while not self._stop.wait(timeout=self.interval_sec):
+                self._heartbeat()
+        finally:
+            # Clean up the event loop
+            try:
+                self._event_loop.run_until_complete(self._event_loop.shutdown_asyncgens())
+            except Exception:
+                pass
+            self._event_loop.close()
+            self._event_loop = None
 
     def _heartbeat(self) -> None:
-        """Execute a single heartbeat."""
+        """Execute a single heartbeat using the persistent event loop."""
         self._heartbeat_count += 1
         event: Dict[str, Any] = {
             "type": "heartbeat",
@@ -90,21 +114,17 @@ class RealtimeBreathAgent:
         }
 
         try:
-            # Use synchronous call since we're in a thread
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result = loop.run_until_complete(
-                    self.kernel.process_input(
-                        user_input=event["text"],
-                        mode="private",
-                        metadata=event,
-                    )
+            if self._event_loop is None:
+                raise RuntimeError("Event loop not initialized")
+
+            result = self._event_loop.run_until_complete(
+                self.kernel.process_input(
+                    user_input=event["text"],
+                    mode="private",
+                    metadata=event,
                 )
-                logger.debug(f"Heartbeat #{self._heartbeat_count} completed: {result.get('text', '')[:100]}")
-            finally:
-                loop.close()
+            )
+            logger.debug(f"Heartbeat #{self._heartbeat_count} completed: {result.get('text', '')[:100]}")
 
         except Exception as e:
             logger.exception(f"Heartbeat #{self._heartbeat_count} failed: {e}")

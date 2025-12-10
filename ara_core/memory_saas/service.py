@@ -21,6 +21,7 @@ import time
 import json
 import hashlib
 import struct
+import threading
 import numpy as np
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional, Tuple, Union
@@ -557,13 +558,21 @@ class MemoryService:
 # =============================================================================
 
 _service: Optional[MemoryService] = None
+_service_lock = threading.Lock()
 
 
 def get_memory_service() -> MemoryService:
-    """Get the global memory service instance."""
+    """
+    Get the global memory service instance.
+
+    Thread-safe: uses double-checked locking pattern.
+    """
     global _service
     if _service is None:
-        _service = MemoryService()
+        with _service_lock:
+            # Double-check after acquiring lock
+            if _service is None:
+                _service = MemoryService()
     return _service
 
 

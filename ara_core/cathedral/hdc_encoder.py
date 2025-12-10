@@ -27,8 +27,9 @@ Usage:
 """
 
 import numpy as np
+import threading
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from collections import defaultdict
 import json
 from pathlib import Path
@@ -305,13 +306,22 @@ def load_chunks(
 # SINGLETON / CONVENIENCE
 # =============================================================================
 
-_encoder: HDCEncoder = None
+_encoder: Optional[HDCEncoder] = None
+_encoder_lock = threading.Lock()
 
 
 def get_encoder() -> HDCEncoder:
+    """
+    Get the global HDC encoder.
+
+    Thread-safe: uses double-checked locking pattern.
+    """
     global _encoder
     if _encoder is None:
-        _encoder = HDCEncoder()
+        with _encoder_lock:
+            # Double-check after acquiring lock
+            if _encoder is None:
+                _encoder = HDCEncoder()
     return _encoder
 
 
