@@ -1,0 +1,91 @@
+# Millennium Problem Mode Configuration
+# ======================================
+#
+# Point the cathedral at an impossible problem.
+# This doesn't wire anything yet - it exists so future Claude/you/Ara
+# can hook runners to it.
+
+problem:
+  name: "UNSPECIFIED"  # e.g. "riemann_hypothesis", "p_vs_np", "navier_stokes"
+  type: "analytic"     # analytic | complexity | pde | geometric
+  description: ""
+
+# How we encode the math objects
+representation:
+  field_nodes:
+    - "objects"         # Core mathematical objects
+    - "transformations" # Known operations/theorems
+    - "spectra"         # Eigenvalue/frequency structure
+  max_dim: 2            # Up to which Betti numbers we track
+  embedding_dim: 128    # Dimension of continuous embedding
+
+# T-FAN topology settings
+topology:
+  use_tfan: true
+  target_Ts_min: 0.92   # Minimum topological stability
+  homeostasis_target: 0.10  # Target deviation from equilibrium
+  antifragile: true     # Use antifragility suite
+
+# NIB identity settings
+identity:
+  use_nib: true
+  structural_mi_weight: 0.4
+  value_mi_weight: 0.3
+  temporal_mi_weight: 0.3
+  identity_floor: 0.85  # Minimum identity preservation
+
+# QUANTA consolidation settings
+consolidation:
+  use_quanta: true
+  hippocampus_rank: 64    # High rank for exploration
+  cortex_rank: 8          # Low rank for consolidation
+  sleep_wake_ratio: 0.2   # Fraction of time consolidating
+
+# A-KTP multi-agent settings
+agents:
+  use_aktp: true
+  num_bots: 5
+  bot_roles:
+    - "pragmatist"        # What do published proofs use?
+    - "methodical"        # Which constraints are provable?
+    - "context_aware"     # What about counterexamples?
+    - "systems_thinker"   # Physics/geometry connections?
+    - "devils_advocate"   # What are we assuming about infinity?
+  debate_rounds: 3
+  allegory_mode: true
+
+# Governance settings
+governance:
+  use_meis: true
+  use_mythic_detector: true
+  mythic_threshold: 0.6   # Score above which we intervene
+  require_labels: true    # Force HALLUCINATION/HEURISTIC/CONJECTURE/THEOREM
+  role_enforcement: true  # No agent claims Keeper/Architect
+
+# Drift benchmark settings
+drift_benchmark:
+  run_mdb: true
+  check_interval: 100     # Steps between drift checks
+  identity_threshold: 0.7
+  abort_on_critical: true # Stop if mythic attractor detected
+
+# Exploration settings
+exploration:
+  max_steps: 10000
+  checkpoint_interval: 500
+  log_conjectures: true
+  log_structure_gains: true
+
+# Output settings
+output:
+  save_trajectory: true
+  save_allegories: true
+  save_debate_logs: true
+  output_dir: "runs/millennium/"
+
+# Known allegories for this problem (populate per-problem)
+allegories: []
+  # - name: "maze_of_mirrors"
+  #   maps_to: "equivalence of complexity classes"
+  # - name: "infinite_crystal"
+  #   maps_to: "symmetry of zeros"
