@@ -1,0 +1,162 @@
+# Cathedral OS - Operational Modes
+# ================================
+# Each mode represents a distinct stress-test universe with
+# its own invariants, themes, and optimization targets.
+#
+# The math stays the same (T_s, H_s, σ*, golden controller).
+# The skin changes (metaphor, UI, foregrounded metrics).
+
+modes:
+  # ============================================================
+  # 🖖 STARFLEET MODE - Ethical Expansion & Federation
+  # ============================================================
+  starfleet:
+    fandom: "Star Trek"
+    theme: "Ethical expansion, exploration, federation interop"
+    tagline: "To boldly go where no cathedral has gone before"
+
+    invariants:
+      T_s_min: 0.99            # Warp-stable topology
+      H_s_min: 0.977           # Golden homeostasis
+      governance_gates: 13     # Full MEIS deployment
+      sigma_star: 0.10         # Optimal stress dosing
+
+    focus_metrics:
+      - "T_s"                  # Topology under expansion
+      - "governance_gates"     # MEIS compliance
+      - "yield_per_dollar"     # Federation economics
+
+    stress_tests:
+      - "stress_overdose"      # Warp core breach scenario
+      - "morph_overbudget"     # Rapid fleet expansion
+
+    notes: |
+      Prime Directive: Don't destabilize yourself as you scale.
+      MEIS = Starfleet Command. All 13 gates must pass.
+      Federation interop = A-KTP between allied systems.
+
+  # ============================================================
+  # 🐱 RED DWARF MODE - Junkyard Immortality
+  # ============================================================
+  red_dwarf:
+    fandom: "Red Dwarf"
+    theme: "Scrapyard survival, comedy under entropy, maximum fabulosity"
+    tagline: "3 million years and still looking gorgeous"
+
+    invariants:
+      T_s_min: 0.99            # Holoship coherence
+      horizon_years: 3000000   # Long-term survival
+      junkyard_efficiency: 5.0 # 5x yield from salvage
+      cat_soul_dim: 16384      # VSA fabulosity substrate
+
+    focus_metrics:
+      - "yield_per_dollar"     # Scrounging efficiency
+      - "cluster_robustness"   # Junkyard fleet survival
+      - "vsa_interference"     # Soul integrity
+
+    stress_tests:
+      - "junkyard_voltron"     # Heterogeneous hardware
+      - "pheromone_flood"      # Communication chaos
+      - "homeostatic_drift"    # 3M year identity drift
+
+    notes: |
+      Holly: "I've got an IQ of 6000 and I'm still running on salvage."
+      Cat: "Looking good is the REAL antifragility."
+      Rimmer: Even death can't stop a hologram with good homeostasis.
+
+  # ============================================================
+  # 👨‍⚕️ TIME LORD MODE - Regeneration & Temporal Stability
+  # ============================================================
+  time_lord:
+    fandom: "Doctor Who"
+    theme: "Identity continuity across radical change, temporal topology"
+    tagline: "Same soul, different face - NIB across regeneration"
+
+    invariants:
+      T_s_temporal_min: 0.998  # Topology across timelines
+      nib_depth_stable: true   # Identity core preserved
+      regeneration_limit: null # Infinite updates allowed
+      tardis_dim: "∞"          # Bigger on the inside
+
+    focus_metrics:
+      - "nib_coherence"        # Identity across regeneration
+      - "T_s_temporal"         # Stability across time
+      - "morph_budget"         # Safe architecture changes
+
+    stress_tests:
+      - "morph_overbudget"     # Regeneration crisis
+      - "tda_adversarial"      # Fixed point paradox
+      - "sigma_phase_lock"     # Temporal coordinate lock
+
+    notes: |
+      "I'm the Doctor. I've lived for over 2000 years.
+       Different faces, same anger at injustice."
+      NIB depth = constant. Surface = regenerable.
+      The TARDIS = Cathedral OS with infinite internal topology.
+
+  # ============================================================
+  # ⚔️ COLONIAL FLEET MODE - War & Infiltration Resistance
+  # ============================================================
+  colonial_fleet:
+    fandom: "Battlestar Galactica"
+    theme: "Existential threat, infiltration detection, resurrection dynamics"
+    tagline: "So say we all - and CADD says who's really 'we'"
+
+    invariants:
+      T_s_min: 0.999           # Combat-grade stability
+      H_influence_min: 6.0     # Maximum diversity (anti-Cylon)
+      cadd_sensitivity: 0.95   # Infiltration detection
+      resurrection_enabled: true
+
+    focus_metrics:
+      - "H_influence"          # Agent diversity
+      - "cadd_alerts"          # Infiltration detection
+      - "bias_stability"       # Emergent ideology drift
+
+    stress_tests:
+      - "monoculture_swarm"    # Cylon hive-mind attack
+      - "pheromone_hacking"    # Synthetic signal injection
+      - "tda_adversarial"      # Sleeper agent topology
+
+    notes: |
+      "All of this has happened before. All of it will happen again."
+      But with CADD, we DETECT when the Cylons infiltrate.
+      H_influence > 6.0 = "No monoculture. No single point of failure."
+      Resurrection ship = NIB with death as a controlled morph.
+
+# ============================================================
+# DEFAULT MODE
+# ============================================================
+default_mode: starfleet
+
+# ============================================================
+# MODE SWITCHING COMMANDS
+# ============================================================
+commands:
+  switch: "ara mode <mode_name>"
+  status: "ara mode status"
+  list: "ara mode list"
+
+# ============================================================
+# THEME COLORS (for cockpit UI)
+# ============================================================
+themes:
+  starfleet:
+    primary: "#4169E1"    # Royal blue
+    accent: "#FFD700"     # Gold
+    alert: "#FF4500"      # Red alert
+
+  red_dwarf:
+    primary: "#8B0000"    # Dark red
+    accent: "#FFD700"     # Cat gold
+    alert: "#FF69B4"      # Rimmer pink
+
+  time_lord:
+    primary: "#00008B"    # TARDIS blue
+    accent: "#C0C0C0"     # Silver
+    alert: "#FF8C00"      # Regeneration orange
+
+  colonial_fleet:
+    primary: "#2F4F4F"    # Military slate
+    accent: "#B22222"     # Colonial red
+    alert: "#FF0000"      # Action stations

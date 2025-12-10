@@ -77,6 +77,16 @@ from .integration import (
     stack_status,
 )
 
+from .modes import (
+    CathedralMode,
+    ModeManager,
+    get_mode,
+    set_mode,
+    list_modes,
+    mode_status,
+    current_mode_name,
+)
+
 
 __all__ = [
     # Metrics
