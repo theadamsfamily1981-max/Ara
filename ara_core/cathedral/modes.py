@@ -127,16 +127,22 @@ class ModeManager:
         # Load modes
         for name, mode_data in config.get("modes", {}).items():
             theme_colors = self.themes.get(name, {})
+            invariants = mode_data.get("invariants", {})
+
+            # Extract notes from invariants if present (simplified YAML format)
+            notes = invariants.pop("notes", "") if isinstance(invariants, dict) else ""
+            if not notes:
+                notes = mode_data.get("notes", "")
 
             mode = CathedralMode(
                 name=name,
                 fandom=mode_data.get("fandom", ""),
                 theme=mode_data.get("theme", ""),
-                tagline=mode_data.get("tagline", ""),
-                invariants=mode_data.get("invariants", {}),
+                tagline=mode_data.get("tagline", notes[:50] if notes else ""),
+                invariants=invariants,
                 focus_metrics=mode_data.get("focus_metrics", []),
                 stress_tests=mode_data.get("stress_tests", []),
-                notes=mode_data.get("notes", ""),
+                notes=notes,
                 theme_colors=theme_colors,
             )
             self.modes[name] = mode
