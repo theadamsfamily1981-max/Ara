@@ -120,6 +120,15 @@ from .architect import (
     architect_vision,
 )
 
+from .causal_miner import (
+    CausalPatternMiner,
+    CausalEstimate,
+    ToolOutcome,
+    ToolStats,
+    get_causal_miner,
+    hash_context,
+)
+
 __all__ = [
     # Schemas
     "ToolCall",
@@ -194,4 +203,11 @@ __all__ = [
     "Architect",
     "get_architect",
     "architect_vision",
+    # Causal Miner (Beyond correlation)
+    "CausalPatternMiner",
+    "CausalEstimate",
+    "ToolOutcome",
+    "ToolStats",
+    "get_causal_miner",
+    "hash_context",
 ]

@@ -46,6 +46,37 @@ from .students.codegen_lite import (
     analyze_and_generate_templates,
 )
 
+from .dojo import (
+    Dojo,
+    Shadow,
+    SkillSpec as DojoSkillSpec,
+    StressCase,
+    HardeningReport,
+    HardeningResult,
+    StressCaseType,
+    get_dojo,
+    harden_skill,
+)
+
+from .pipeline import (
+    SkillPipeline,
+    SkillCandidate,
+    PipelineResult,
+    PipelineStage,
+    RejectionReason,
+    get_pipeline,
+    run_pipeline,
+    discover_skills,
+)
+
+from .skills.architect import (
+    Architect,
+    Episode,
+    SkillSpec,
+    get_architect,
+    generalize_episodes,
+)
+
 __all__ = [
     # Skills
     "LearnedSkill",
@@ -76,4 +107,29 @@ __all__ = [
     "SkillTemplate",
     "get_codegen_lite",
     "analyze_and_generate_templates",
+    # Dojo
+    "Dojo",
+    "Shadow",
+    "DojoSkillSpec",
+    "StressCase",
+    "HardeningReport",
+    "HardeningResult",
+    "StressCaseType",
+    "get_dojo",
+    "harden_skill",
+    # Pipeline
+    "SkillPipeline",
+    "SkillCandidate",
+    "PipelineResult",
+    "PipelineStage",
+    "RejectionReason",
+    "get_pipeline",
+    "run_pipeline",
+    "discover_skills",
+    # Architect
+    "Architect",
+    "Episode",
+    "SkillSpec",
+    "get_architect",
+    "generalize_episodes",
 ]
