@@ -1,0 +1,106 @@
+# Pheromone Daemon Configuration
+# ================================
+#
+# Controls when Ara speaks vs stays silent.
+# "Stop guessing your mood, just read the digital pheromones."
+
+# Base pheromone dynamics
+dynamics:
+  decay: 0.90              # Memory smoothing (0.85-0.95 = ~30-60s window)
+  update_interval: 3.0     # Seconds between updates
+
+# Interaction policy thresholds
+thresholds:
+  attention:
+    high: 0.70             # Above this = deep focus
+    low: 0.30              # Below this = probably open to help
+  interrupt_cost:
+    high: 0.70             # Above this = don't interrupt
+    low: 0.40              # Below this = safe to suggest
+  helpfulness:
+    high: 0.70             # Above this = confident help would be welcome
+    medium: 0.60           # Above this = maybe a soft nudge
+
+# Learning rate for reinforcement
+learning:
+  rate: 0.10               # How much feedback affects future predictions
+  # "Learn slowly" = 0.05
+  # "Learn fast" = 0.20
+
+# Preset modes
+modes:
+  default:
+    description: "Balanced - suggest when probably helpful"
+    interrupt_cost_offset: 0.0
+
+  deep-work:
+    description: "Only emergencies - very protective"
+    interrupt_cost_offset: 0.30
+    attention_high: 0.60
+
+  brainstorm:
+    description: "Talk to me a lot - open to suggestions"
+    interrupt_cost_offset: -0.20
+    helpfulness_medium: 0.40
+
+  only-emergencies:
+    description: "Almost never interrupt"
+    interrupt_cost_offset: 0.50
+    helpfulness_high: 0.90
+
+# Apps where interruption is almost always bad
+high_cost_apps:
+  - zoom
+  - teams
+  - slack
+  - obs
+  - obs-studio
+  - vlc
+  - mpv
+  - totem
+  - steam
+  - lutris
+
+# Apps where being stuck might want help
+hard_context_apps:
+  - code
+  - code-oss
+  - vscodium
+  - gnome-terminal
+  - alacritty
+  - kitty
+  - tilix
+  - emacs
+  - vim
+  - nvim
+  - neovim
+  - pycharm
+  - intellij
+  - webstorm
+
+# Signal collection settings
+signals:
+  # Typing rate thresholds (keys per minute)
+  typing:
+    active: 150            # Above = definitely typing
+    light: 50              # Above = occasional typing
+
+  # Idle time thresholds (seconds)
+  idle:
+    short: 30              # Start decreasing attention
+    long: 60               # Definitely idle
+    stuck: 300             # Probably stuck if in hard context
+
+  # Error count thresholds
+  errors:
+    few: 1                 # Slightly boost helpfulness
+    many: 2                # Strongly boost helpfulness
+
+# Notification settings
+notifications:
+  soft_nudge:
+    urgency: low
+    expire_ms: 5000
+  full_suggest:
+    urgency: normal
+    expire_ms: 10000
