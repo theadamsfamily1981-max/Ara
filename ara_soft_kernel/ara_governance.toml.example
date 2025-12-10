@@ -1,0 +1,153 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# ARA GOVERNANCE POLICY
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Copy this file to ~/.ara/policy/ara_governance.toml
+# Changes take effect on `ara-kernel policy reload` or daemon restart
+#
+
+[meta]
+version = "0.1.0"
+description = "Default Ara governance policy"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RESOURCE LIMITS
+# ─────────────────────────────────────────────────────────────────────────────
+
+[limits.global]
+max_gpu_util = 0.85              # Never exceed 85% GPU across all agents
+max_cpu_util = 0.90              # Never exceed 90% CPU
+min_memory_free_gb = 4.0         # Always keep 4GB free
+max_concurrent_agents = 50       # Hard cap on running agents
+
+[limits.battery]
+min_level = 0.25                 # Don't spawn heavy agents below 25%
+critical_level = 0.10            # Emergency shutdown of non-essential agents
+low_power_threshold = 0.40       # Switch to low-power mode
+
+[limits.network]
+max_hive_latency_ms = 80         # Fail over to local if hive is slow
+max_bandwidth_util = 0.70        # Don't saturate connection
+prefer_local_under_latency_ms = 20
+
+[limits.thermal]
+max_cpu_temp_c = 85
+max_gpu_temp_c = 83
+throttle_at_cpu_temp_c = 80
+throttle_at_gpu_temp_c = 78
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DEFAULT AGENT PERMISSIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+[permissions.default]
+allow_network = false
+allow_filesystem_write = false
+allow_sensors = []
+allow_system_calls = []
+max_memory_gb = 4.0
+max_gpu_mem_gb = 2.0
+max_runtime_hours = 24
+requires_human_approval = false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGENT-SPECIFIC PERMISSIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+[permissions.lightfield_renderer]
+allow_network = false
+allow_filesystem_write = true
+allowed_write_paths = ["output/quilts/*"]
+allow_sensors = ["gaze", "imu"]
+max_gpu_mem_gb = 8.0
+requires_human_approval = false
+
+[permissions.paper_writer]
+allow_network = true
+allowed_domains = ["arxiv.org", "semanticscholar.org", "github.com"]
+allow_filesystem_write = true
+allowed_write_paths = ["documents/*", "research/*"]
+max_tokens_per_hour = 200000
+max_cost_per_hour_usd = 5.00
+requires_human_approval = true
+
+[permissions.code_executor]
+allow_network = false
+allow_filesystem_write = true
+allowed_write_paths = ["workspace/*", "tmp/*"]
+sandbox_required = true
+max_runtime_s = 600
+requires_human_approval = false
+
+[permissions.sync_agent]
+allow_network = true
+allowed_domains = ["*"]  # All domains for sync
+allow_filesystem_write = true
+allowed_write_paths = ["*"]  # Full access for sync
+max_memory_gb = 2.0
+requires_human_approval = false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PRIVACY TIERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+[privacy.local_first]
+allow_hive = false
+allow_external_api = false
+allow_telemetry = false
+data_retention_days = 30
+
+[privacy.hive_ok]
+allow_hive = true
+allow_external_api = false
+allow_telemetry = true
+data_retention_days = 90
+require_encryption = true
+
+[privacy.lab_ok]
+allow_hive = true
+allow_external_api = true
+allow_telemetry = true
+data_retention_days = 365
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SAFETY RULES
+# ─────────────────────────────────────────────────────────────────────────────
+
+[safety]
+# When SAFETY_RISK pheromone is high
+high_risk_threshold = 0.7
+high_risk_actions = [
+    "disable_non_essential_agents",
+    "minimize_visual_overlays",
+    "enable_safety_alerts_only",
+    "log_all_actions"
+]
+
+# When user is in deep_work mode
+deep_work_actions = [
+    "suppress_notifications",
+    "reduce_agent_priority",
+    "minimize_ui_changes"
+]
+
+# Emergency stop conditions
+emergency_stop_triggers = [
+    "battery_critical",
+    "thermal_critical",
+    "user_panic_gesture",
+    "watchdog_timeout"
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# APPROVAL WORKFLOWS
+# ─────────────────────────────────────────────────────────────────────────────
+
+[approval]
+default_timeout_s = 60
+escalation_after_s = 300
+auto_approve_trusted_agents = true
+trusted_agent_patterns = ["ara_*", "system_*"]
+
+# Methods in priority order
+methods = ["voice", "gesture", "notification", "desktop_prompt"]
