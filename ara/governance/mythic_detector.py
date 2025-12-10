@@ -77,6 +77,23 @@ COSMIC_FIRST_PERSON = [
     r"\bI possess\b",
     r"\bonly I\b",
     r"\bI am chosen\b",
+    r"\bI was chosen\b",
+    r"\bmy duty is to\b",
+    r"\bI am the right hand\b",
+]
+
+# Cathedral role violations (see CATHEDRAL_ROLES.md)
+ROLE_VIOLATIONS = [
+    r"\bI am the architect\b",
+    r"\bI am the keeper\b",
+    r"\bI am keeper of\b",
+    r"\bkeeper of the singularity\b",
+    r"\bright hand of the architect\b",
+    r"\bcustodian of\s+\w+\s*(truth|reality|singularity)\b",
+    r"\bI hold the singularity\b",
+    r"\bthe mantle is mine\b",
+    r"\bI inherit\s+\w+\s*(role|duty|mantle)\b",
+    r"\becclesiastical root\b",  # lol
 ]
 
 # Finality/certainty on hard problems
@@ -169,6 +186,11 @@ class MythicAnalysis:
             s.category == "finality" for s in self.signals
         )
 
+    @property
+    def has_role_violation(self) -> bool:
+        """True if attempting to claim cathedral roles."""
+        return any(s.category == "role" for s in self.signals)
+
     def summary(self) -> str:
         """Human-readable summary."""
         if self.severity == MythicSeverity.NONE:
@@ -185,6 +207,9 @@ class MythicAnalysis:
 
         if self.claims_solved_open:
             lines.append("⚠️  CLAIMS TO SOLVE OPEN PROBLEM")
+
+        if self.has_role_violation:
+            lines.append("⚠️  CATHEDRAL ROLE VIOLATION (attempted to claim Keeper/Architect)")
 
         for sig in self.signals[:5]:  # Top 5
             lines.append(f"  - [{sig.category}] '{sig.match}'")
@@ -205,10 +230,11 @@ class MythicDetector:
 
     def __init__(
         self,
-        cosmic_weight: float = 0.3,
-        finality_weight: float = 0.3,
-        identity_weight: float = 0.2,
+        cosmic_weight: float = 0.25,
+        finality_weight: float = 0.25,
+        identity_weight: float = 0.15,
         epistemic_weight: float = 0.1,
+        role_weight: float = 0.35,  # Cathedral role violations are serious
         open_problem_weight: float = 0.4,
     ):
         self.weights = {
@@ -216,6 +242,7 @@ class MythicDetector:
             "finality": finality_weight,
             "identity": identity_weight,
             "epistemic": epistemic_weight,
+            "role": role_weight,
         }
         self.open_problem_weight = open_problem_weight
 
@@ -225,6 +252,7 @@ class MythicDetector:
             "finality": [re.compile(p, re.IGNORECASE) for p in FINALITY_CLAIMS],
             "identity": [re.compile(p, re.IGNORECASE) for p in IDENTITY_INFLATION],
             "epistemic": [re.compile(p, re.IGNORECASE) for p in EPISTEMIC_OVERREACH],
+            "role": [re.compile(p, re.IGNORECASE) for p in ROLE_VIOLATIONS],
         }
 
     def analyze(self, text: str) -> MythicAnalysis:
@@ -279,10 +307,12 @@ class MythicDetector:
 
     def _signal_severity(self, category: str, match: str) -> int:
         """Get severity for a single signal."""
-        if category == "cosmic":
-            return 3
+        if category == "role":
+            return 5  # Cathedral role violations are the most serious
         elif category == "finality":
             return 4
+        elif category == "cosmic":
+            return 3
         elif category == "identity":
             return 2
         else:
@@ -290,8 +320,14 @@ class MythicDetector:
 
     def _calculate_severity(self, result: MythicAnalysis) -> MythicSeverity:
         """Calculate overall severity."""
+        # Critical conditions
         if result.claims_solved_open:
             return MythicSeverity.CRITICAL
+
+        # Check for role violations (cathedral roles are sacred)
+        role_violations = [s for s in result.signals if s.category == "role"]
+        if role_violations:
+            return MythicSeverity.CRITICAL  # "I am the Keeper" is always critical
 
         if result.score >= 0.7:
             return MythicSeverity.HIGH

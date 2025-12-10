@@ -19,6 +19,7 @@ from ara.governance.mythic_detector import (
     create_governance_response,
     MILLENNIUM_PROBLEMS,
     OPEN_PROBLEMS,
+    ROLE_VIOLATIONS,
 )
 
 __all__ = [
@@ -31,4 +32,5 @@ __all__ = [
     "create_governance_response",
     "MILLENNIUM_PROBLEMS",
     "OPEN_PROBLEMS",
+    "ROLE_VIOLATIONS",
 ]
