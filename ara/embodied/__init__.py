@@ -90,6 +90,29 @@ from .resource_gate import (
     check_resources,
 )
 
+# Brainlink - BCI/physio hardware bridge
+from .brainlink import (
+    BrainlinkProtocol,
+    BrainlinkReading,
+    BrainlinkStatus,
+    SignalQuality,
+    ChannelData,
+    BrainlinkConfig,
+    BrainlinkError,
+    PhysioClient,
+    PhysioReading,
+    HeartRateData,
+    HRVData,
+    GSRData,
+    get_physio_client,
+    MuseClient,
+    MuseReading,
+    EEGBand,
+    EEGChannelData,
+    get_muse_client,
+    get_brainlink,
+)
+
 __all__ = [
     # Device Graph
     "DeviceType",
@@ -151,4 +174,24 @@ __all__ = [
     "can_generate_video",
     "get_recommended_quality",
     "check_resources",
+    # Brainlink
+    "BrainlinkProtocol",
+    "BrainlinkReading",
+    "BrainlinkStatus",
+    "SignalQuality",
+    "ChannelData",
+    "BrainlinkConfig",
+    "BrainlinkError",
+    "PhysioClient",
+    "PhysioReading",
+    "HeartRateData",
+    "HRVData",
+    "GSRData",
+    "get_physio_client",
+    "MuseClient",
+    "MuseReading",
+    "EEGBand",
+    "EEGChannelData",
+    "get_muse_client",
+    "get_brainlink",
 ]
