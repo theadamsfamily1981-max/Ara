@@ -52,6 +52,13 @@ from .organism import (
     run_organism,
 )
 
+from .daemon import (
+    AraDaemon,
+    DaemonConfig,
+    AraCtl,
+    run_daemon,
+)
+
 __version__ = "1.0.0"
 
 __all__ = [
@@ -77,4 +84,9 @@ __all__ = [
     'SoulLoop',
     'MobileBridge',
     'run_organism',
+    # Daemon
+    'AraDaemon',
+    'DaemonConfig',
+    'AraCtl',
+    'run_daemon',
 ]
