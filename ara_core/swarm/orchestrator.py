@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime
 import logging
+import threading
 import time
 
 from .schema import (
@@ -330,13 +331,21 @@ class Orchestrator:
 # =============================================================================
 
 _orchestrator: Optional[Orchestrator] = None
+_orchestrator_lock = threading.Lock()
 
 
 def get_orchestrator() -> Orchestrator:
-    """Get the global orchestrator."""
+    """
+    Get the global orchestrator.
+
+    Thread-safe: uses double-checked locking pattern.
+    """
     global _orchestrator
     if _orchestrator is None:
-        _orchestrator = Orchestrator()
+        with _orchestrator_lock:
+            # Double-check after acquiring lock
+            if _orchestrator is None:
+                _orchestrator = Orchestrator()
     return _orchestrator
 
 

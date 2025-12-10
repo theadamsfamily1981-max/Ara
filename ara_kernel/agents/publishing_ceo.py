@@ -13,6 +13,7 @@ Handles:
 
 from __future__ import annotations
 
+import asyncio
 import queue
 import threading
 import time
@@ -50,6 +51,11 @@ class PublishingCEOAgent:
     - Drafting: Create content outlines and drafts
     - Review: Quality check against brand guidelines
     - Publishing: Final approval workflow
+
+    Thread Safety:
+    - Uses a persistent event loop per thread (not created per-task)
+    - Uses threading.Event for stop signal
+    - Task queue is inherently thread-safe (PriorityQueue)
     """
 
     def __init__(
@@ -64,6 +70,7 @@ class PublishingCEOAgent:
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._tasks_processed = 0
+        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
 
     def submit_task(self, task: PublishingTask) -> None:
         """Submit a task to the publishing queue."""
@@ -78,7 +85,9 @@ class PublishingCEOAgent:
             return
 
         self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread = threading.Thread(
+            target=self._run_loop, daemon=True, name="PublishingCEOAgent"
+        )
         self._thread.start()
         logger.info("PublishingCEOAgent started")
 
@@ -97,21 +106,34 @@ class PublishingCEOAgent:
         """Number of pending tasks."""
         return self._task_queue.qsize()
 
-    def _loop(self) -> None:
+    def _run_loop(self) -> None:
         """Main processing loop."""
-        while not self._stop.is_set():
+        # Create persistent event loop for this thread
+        self._event_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._event_loop)
+
+        try:
+            while not self._stop.is_set():
+                try:
+                    # Non-blocking get with timeout
+                    _, task = self._task_queue.get(timeout=1.0)
+                    self._process_task(task)
+                    self._task_queue.task_done()
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    logger.exception(f"Error processing publishing task: {e}")
+        finally:
+            # Clean up the event loop
             try:
-                # Non-blocking get with timeout
-                _, task = self._task_queue.get(timeout=1.0)
-                self._process_task(task)
-                self._task_queue.task_done()
-            except queue.Empty:
-                continue
-            except Exception as e:
-                logger.exception(f"Error processing publishing task: {e}")
+                self._event_loop.run_until_complete(self._event_loop.shutdown_asyncgens())
+            except Exception:
+                pass
+            self._event_loop.close()
+            self._event_loop = None
 
     def _process_task(self, task: PublishingTask) -> None:
-        """Process a single publishing task."""
+        """Process a single publishing task using the persistent event loop."""
         self._tasks_processed += 1
         logger.info(f"Processing task {task.task_id}: {task.task_type} ({task.content_type})")
 
@@ -119,26 +141,24 @@ class PublishingCEOAgent:
         prompt = self._build_prompt(task)
 
         try:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result = loop.run_until_complete(
-                    self.kernel.process_input(
-                        user_input=prompt,
-                        mode="private",
-                        metadata={
-                            "domain": self.domain,
-                            "task_id": task.task_id,
-                            "task_type": task.task_type,
-                            "content_type": task.content_type,
-                        },
-                    )
+            # Use the persistent event loop (created in _run_loop)
+            if self._event_loop is None:
+                raise RuntimeError("Event loop not initialized")
+
+            result = self._event_loop.run_until_complete(
+                self.kernel.process_input(
+                    user_input=prompt,
+                    mode="private",
+                    metadata={
+                        "domain": self.domain,
+                        "task_id": task.task_id,
+                        "task_type": task.task_type,
+                        "content_type": task.content_type,
+                    },
                 )
-                logger.info(f"Task {task.task_id} completed")
-                logger.debug(f"Result: {result.get('text', '')[:200]}")
-            finally:
-                loop.close()
+            )
+            logger.info(f"Task {task.task_id} completed")
+            logger.debug(f"Result: {result.get('text', '')[:200]}")
 
         except Exception as e:
             logger.exception(f"Task {task.task_id} failed: {e}")
