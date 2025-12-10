@@ -730,6 +730,147 @@ class Architect:
 
         return improvements
 
+    # =========================================================================
+    # Refactoring (The Surgeon's Knife)
+    # =========================================================================
+
+    def refactor_skill(self, original_code: str, failure_report: str) -> str:
+        """
+        The Surgeon's Knife - Rebuild broken code into antifragile code.
+
+        Takes broken code and a detailed report of EXACTLY how it broke,
+        then rewrites it to survive those failure modes.
+
+        This is used by the Ouroboros evolution engine to harden skills.
+
+        Args:
+            original_code: The code that failed in the Dojo
+            failure_report: Detailed failure context from HardeningReport
+
+        Returns:
+            Refactored code that should survive the failure modes
+        """
+        logger.info("Architect: Initiating surgical refactor")
+
+        # Build the refactoring prompt
+        prompt = f"""You are the Architect in 'Refactor Mode'.
+Your goal is Antifragility. You act as a Senior Distinguished Engineer.
+
+INPUT CODE:
+```python
+{original_code}
+```
+
+DIAGNOSIS (DOJO FAILURE REPORT):
+{failure_report}
+
+REQUIREMENTS:
+1. Fix ALL identified bugs and failure patterns.
+2. Add 'Guard Clauses' for EVERY edge case mentioned:
+   - Empty/None inputs
+   - Invalid types
+   - Missing keys in dicts
+   - Resource unavailability
+3. Add type hints to all function signatures.
+4. Add docstrings explaining the function's purpose and parameters.
+5. Ensure graceful degradation:
+   - NEVER crash on bad input
+   - Return clear error messages or fallback values
+   - Log warnings for unexpected states
+6. Preserve the original intent and API contract.
+
+CONSTRAINTS:
+- Keep the same function name and signature (add types, don't change params)
+- Don't add unnecessary complexity
+- Don't over-engineer - just fix what's broken
+
+OUTPUT:
+Return ONLY the complete, runnable Python code block.
+Start with ```python and end with ```.
+"""
+
+        # Generate refactored code
+        if self.llm:
+            try:
+                response = self.llm.generate(prompt)
+                # Extract code from response
+                code = self._extract_code_block(response)
+                if code:
+                    logger.info("Architect: Generated refactored code (%d chars)", len(code))
+                    return code
+            except Exception as e:
+                logger.error("Architect: LLM generation failed: %s", e)
+
+        # Fallback: Apply basic hardening patterns if no LLM
+        return self._apply_basic_hardening(original_code, failure_report)
+
+    def _extract_code_block(self, response: str) -> str:
+        """Extract code block from LLM response."""
+        # Look for ```python ... ``` blocks
+        import re
+        pattern = r'```python\s*(.*?)\s*```'
+        matches = re.findall(pattern, response, re.DOTALL)
+        if matches:
+            return matches[0].strip()
+
+        # Fallback: look for ``` ... ``` blocks
+        pattern = r'```\s*(.*?)\s*```'
+        matches = re.findall(pattern, response, re.DOTALL)
+        if matches:
+            return matches[0].strip()
+
+        # Last resort: return the whole response if it looks like code
+        if 'def ' in response or 'class ' in response:
+            return response.strip()
+
+        return ""
+
+    def _apply_basic_hardening(self, original_code: str, failure_report: str) -> str:
+        """
+        Apply basic hardening patterns without LLM.
+
+        This is a fallback that adds common defensive patterns.
+        """
+        lines = original_code.split('\n')
+        hardened_lines = []
+
+        # Track if we're inside a function
+        in_function = False
+        function_indent = 0
+
+        for line in lines:
+            stripped = line.lstrip()
+
+            # Detect function definition
+            if stripped.startswith('def '):
+                in_function = True
+                function_indent = len(line) - len(stripped)
+                hardened_lines.append(line)
+
+                # Add basic input validation after function def
+                # Find the colon and add validation on next line
+                if ':' in line:
+                    indent = ' ' * (function_indent + 4)
+                    # Add a try-except wrapper comment
+                    hardened_lines.append(f'{indent}# Hardened by Architect')
+                continue
+
+            # Add basic type checking for common patterns
+            if in_function and '= context' in stripped:
+                # Add None check before context access
+                indent = ' ' * (len(line) - len(stripped))
+                hardened_lines.append(f'{indent}if context is None:')
+                hardened_lines.append(f'{indent}    context = {{}}')
+
+            hardened_lines.append(line)
+
+        # Add import for logging if not present
+        code = '\n'.join(hardened_lines)
+        if 'import logging' not in code:
+            code = 'import logging\n\n' + code
+
+        return code
+
 
 # =============================================================================
 # Convenience Functions

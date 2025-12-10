@@ -637,6 +637,62 @@ class VisionAwareInternalization:
                 f"({result['classification']})"
             )
 
+    def should_internalize_detailed(self, proposal: Any) -> tuple[bool, float, Optional[str]]:
+        """
+        Detailed interface for pipeline: should we internalize this skill?
+
+        This interface is used by the SkillPipeline and triggers priority
+        evolution for high-value skills.
+
+        Args:
+            proposal: A SkillProposal or similar object with name, pattern, etc.
+
+        Returns:
+            (should_internalize, score, rejection_reason or None)
+        """
+        # Extract candidate info from proposal
+        pattern = getattr(proposal, 'pattern', None)
+        candidate = SkillCandidate(
+            name=getattr(proposal, 'name', 'unknown'),
+            description=getattr(proposal, 'description', ''),
+            frequency_per_week=getattr(proposal, 'frequency', 0.0),
+            success_rate=getattr(proposal, 'success_rate', 0.0),
+            tags={tag: 1.0 for tag in (getattr(pattern, 'tags', []) if pattern else [])},
+            intent=getattr(pattern, 'intent', '') if pattern else '',
+        )
+
+        result = self.compute_score(candidate)
+        should = result["should_internalize"]
+        score = result["final_score"]
+        reason = result["avoidance_reason"]
+
+        # CRITICAL: If this is a high-value skill (sovereign/strategic),
+        # trigger immediate hardening via the Ouroboros evolution engine
+        if should and result["classification"] in ("sovereign", "strategic"):
+            self._trigger_priority_evolution(candidate.name, result)
+
+        return should, score, reason
+
+    def _trigger_priority_evolution(self, skill_name: str, result: Dict[str, Any]) -> None:
+        """
+        Trigger priority evolution for high-value skills.
+
+        When a sovereign or strategic skill is identified for internalization,
+        we don't want to wait for the nightly batch - it should be hardened
+        immediately by the Ouroboros.
+        """
+        try:
+            from ara.meta.evolution import get_evolution_engine
+            engine = get_evolution_engine()
+            engine.schedule_priority_evolution(skill_name)
+            logger.info(
+                "Triggered priority evolution for high-value skill '%s' (%s)",
+                skill_name, result["classification"]
+            )
+        except Exception as e:
+            # Don't let evolution trigger failures block internalization
+            logger.warning("Could not trigger priority evolution for '%s': %s", skill_name, e)
+
     def rank_candidates(
         self,
         candidates: List[SkillCandidate],

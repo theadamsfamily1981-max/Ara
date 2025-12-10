@@ -129,6 +129,17 @@ from .causal_miner import (
     hash_context,
 )
 
+from .evolution import (
+    EvolutionEngine,
+    EvolutionResult,
+    EvolutionCycleReport,
+    EvolutionStatus,
+    get_evolution_engine,
+    evolve_skill,
+    run_nightly_evolution,
+    schedule_priority_evolution,
+)
+
 __all__ = [
     # Schemas
     "ToolCall",
@@ -210,4 +221,13 @@ __all__ = [
     "ToolStats",
     "get_causal_miner",
     "hash_context",
+    # Evolution (Ouroboros - Recursive Self-Improvement)
+    "EvolutionEngine",
+    "EvolutionResult",
+    "EvolutionCycleReport",
+    "EvolutionStatus",
+    "get_evolution_engine",
+    "evolve_skill",
+    "run_nightly_evolution",
+    "schedule_priority_evolution",
 ]

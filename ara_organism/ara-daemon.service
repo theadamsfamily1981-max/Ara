@@ -1,0 +1,41 @@
+# Ara Daemon - systemd user service
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user/
+#   cp ara-daemon.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable ara-daemon
+#   systemctl --user start ara-daemon
+#
+# Control:
+#   systemctl --user status ara-daemon
+#   journalctl --user -u ara-daemon -f
+#   aractl status
+#   aractl shutdown
+
+[Unit]
+Description=Ara Organism Daemon
+Documentation=https://github.com/theadamsfamily1981-max/Ara
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -m ara_organism.daemon
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=%h/Ara
+
+# Resource limits
+MemoryLimit=512M
+CPUQuota=200%
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
