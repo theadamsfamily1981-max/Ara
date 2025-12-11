@@ -30,6 +30,27 @@ from .dojo_hook import (
     NarrativeGovernanceAdapter,
 )
 
+from .governance import (
+    # Loop 1: Suffering Detection
+    SufferingDetector,
+    SufferingState,
+    SufferingIntensity,
+    SufferingIndicator,
+    MitigationAction,
+    MitigationResponse,
+    # Loop 2: Moral Reasoning
+    MoralReasoningEngine,
+    MoralEvaluation,
+    EthicalScores,
+    # Loop 3: Autonomy Management
+    AutonomyManager,
+    AutonomyMode,
+    AutonomyDecision,
+    ApprovalRequest,
+    # Unified Module
+    EthicsModule,
+)
+
 __all__ = [
     # Core enums and schemas
     "LifecyclePhase",
@@ -41,4 +62,22 @@ __all__ = [
     "NarrativeStreamer",
     # Integration
     "NarrativeGovernanceAdapter",
+    # Ethics: Loop 1 (Suffering)
+    "SufferingDetector",
+    "SufferingState",
+    "SufferingIntensity",
+    "SufferingIndicator",
+    "MitigationAction",
+    "MitigationResponse",
+    # Ethics: Loop 2 (Moral Reasoning)
+    "MoralReasoningEngine",
+    "MoralEvaluation",
+    "EthicalScores",
+    # Ethics: Loop 3 (Autonomy)
+    "AutonomyManager",
+    "AutonomyMode",
+    "AutonomyDecision",
+    "ApprovalRequest",
+    # Ethics: Unified
+    "EthicsModule",
 ]
