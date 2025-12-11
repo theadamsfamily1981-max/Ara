@@ -43,6 +43,24 @@ from .arena_core import (
     PlannerAgent,
     VecArena,
 )
+from .multi_scale_planner import (
+    MultiScalePlanner,
+    MultiScaleConfig,
+    MultiScalePlan,
+    FusionMode,
+    ScaleConfig,
+)
+from .calibrated_world_model import (
+    CalibratedWorldModel,
+    CalibrationConfig,
+    PredictionResult,
+    RolloutResult,
+)
+from .species import (
+    AraSpeciesV3,
+    DecisionContext,
+    create_ara_v3,
+)
 
 __all__ = [
     # Encoder
@@ -89,4 +107,19 @@ __all__ = [
     "LatentEncoder",
     "PlannerAgent",
     "VecArena",
+    # Multi-Scale Planner (ω-mode)
+    "MultiScalePlanner",
+    "MultiScaleConfig",
+    "MultiScalePlan",
+    "FusionMode",
+    "ScaleConfig",
+    # Calibrated World Model (ω-mode)
+    "CalibratedWorldModel",
+    "CalibrationConfig",
+    "PredictionResult",
+    "RolloutResult",
+    # AraSpeciesV3 (ω-mode cognitive upgrade)
+    "AraSpeciesV3",
+    "DecisionContext",
+    "create_ara_v3",
 ]
