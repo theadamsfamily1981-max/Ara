@@ -48,6 +48,12 @@ from .oracle_bridge import (
     create_accelerated_oracle,
 )
 
+from .cathedral_organism_integration import (
+    CathedralAraController,
+    IntegrationConfig,
+    IntegrationMetrics,
+)
+
 __all__ = [
     # Orchestrator
     "CathedralOrchestrator",
@@ -71,4 +77,8 @@ __all__ = [
     "CathedralOracleBridge",
     "AcceleratedConsultation",
     "create_accelerated_oracle",
+    # Body-Mind Integration
+    "CathedralAraController",
+    "IntegrationConfig",
+    "IntegrationMetrics",
 ]
