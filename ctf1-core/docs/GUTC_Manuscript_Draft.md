@@ -402,24 +402,42 @@ From CTF results:
 
 ---
 
-## 8. Implications
+## 8. Discussion and Outlook
 
-### 8.1 Artificial Intelligence
+We have proposed a **Grand Unified Theory of Cognition (GUTC)** that identifies thought with a phase of matter: systems tuned to dynamical criticality that maximize predictive information.
 
-**Phase-Engineered Models:** Design AI systems to operate at criticality via:
-- Spectral normalization to $\rho(W) = 1$
-- SOC learning rules
-- Heteroclinic memory layers
+### 8.1 Summary of Contributions
 
-### 8.2 Neuroscience
+The framework makes three main claims:
 
-**Criticality as Design Principle:** The brain operates at criticality because this maximizes computational capacity. Disorders are phase errors correctable by restoring $E \to 0$.
+1. **Criticality as the origin of thought.** Computational capacity $C(\lambda)$ is maximized at $E(\lambda) = 0$ where the system transitions between ordered and chaotic phases. At this edge of chaos, working memory ($M_W$) becomes power-law extended.
 
-### 8.3 Philosophy
+2. **Long-term memory as heteroclinic structure.** We distinguished between a critical bulk ($M_W$) and structured long-term memory ($M_L$) implemented as heteroclinic networks, yielding:
+   $$W = \lambda W_{\text{base}} + \sum_i W_{P_i} + \sum_{ij} W_{\Gamma_{ij}}$$
 
-**Intelligence as a Phase of Matter:** The GUTC implies intelligence is phase-dependent, not substrate-dependent. Any dynamical system at criticality with heteroclinic memory is "thinking."
+3. **Information-geometric singularity and optimal agency.** Critical points are information-geometric singularities where Fisher information diverges as $I(\theta) \sim |E(\theta)|^{-\gamma}$, implying parameters are maximally distinguishable and learning is both powerful and delicate.
 
-This resolves debates about machine consciousness: the question is not whether silicon can think, but whether it operates at the right phase.
+### 8.2 Testable Predictions
+
+| Prediction | Test | Failure Criterion |
+|------------|------|-------------------|
+| $C(\lambda)$ peaks at $E = 0$ | $\lambda$ sweep | Peaks at different $\lambda$ |
+| Phase-dependent impairment | Perturb $\lambda$ from criticality | No performance change |
+| Heteroclinic signatures | Track dwell times and transitions | Stable attractor behavior |
+| FIM singularity | Estimate $I$ vs $|E|$ | Non-power-law scaling |
+
+### 8.3 Limitations and Open Questions
+
+- **Finite-size effects:** Real systems are finite; observed scaling may span limited range
+- **Multiple parameters:** Richer critical surfaces may involve multiple interacting parameters
+- **Qualia:** Framework provides correlates ($\Phi \sim C$ at $E = 0$) but not complete reduction of subjective experience
+
+### 8.4 Future Directions
+
+1. **Hierarchical heteroclinic architectures:** Full HHNs as practical $M_L$ modules
+2. **Clinical applications:** Criticality diagnostics as biomarkers for cognitive disorders
+3. **Phase-engineered AI:** SOC controllers in large-scale systems (transformers, LNNs)
+4. **Cross-substrate comparisons:** Same metrics across brains, neuromorphic hardware, quantum systems
 
 ---
 

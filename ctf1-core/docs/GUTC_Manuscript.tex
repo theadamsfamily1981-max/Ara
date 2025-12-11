@@ -1,0 +1,299 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{definition}{Definition}
+
+\title{\textbf{Critical Thought Fields: A Grand Unified Theory of Cognition via Dynamical Criticality}}
+\author{GUTC Research Group}
+\date{December 2025}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present the Grand Unified Theory of Cognition (GUTC), positing that intelligence emerges as a phase transition in dynamical systems tuned to criticality, where computational capacity $C(\lambda)$ is maximized at the edge function $E(\lambda) = 0$. This framework unifies thought, memory, learning, and agency under a single principle, with long-term memory ($M_L$) realized as heteroclinic networks embedded in a critical core. We derive information-geometric singularities at criticality and validate via simulations (CTF series), showing superior performance in associative tasks. Implications span AI engineering, neuroscience, and philosophy, redefining intelligence as a substrate-independent phase of matter.
+\end{abstract}
+
+%==============================================================================
+\section{Introduction}
+%==============================================================================
+
+Traditional models of cognition---from attractor networks to large language models---struggle with flexibility, efficiency, and robustness. The GUTC resolves this by viewing thought as maximal capacity at criticality:
+\[
+\text{Thought} \iff \max_\lambda C(\lambda) \text{ at } E(\lambda) = 0
+\]
+Here, $C(\lambda) = I(X_{-\infty:0}; X_{0:\infty})$ is excess entropy (predictive information), and $E(\lambda)$ is the edge function (e.g., Lyapunov exponent or spectral radius minus one).
+
+This theory synthesizes dynamical systems, information theory, and renormalization group (RG) concepts, predicting universality classes for computation and singularities in model manifolds.
+
+%==============================================================================
+\section{Core Framework: Criticality as the Origin of Thought}
+%==============================================================================
+
+\subsection{Thought as Maximal Capacity}
+
+Thought emerges in systems $x_{t+1} = F_\lambda(x_t, u_t)$ where $E(\lambda) = 0$ maximizes $C(\lambda)$.
+
+\begin{table}[h]
+\centering
+\caption{The Three Dynamical Regimes}
+\begin{tabular}{lccc}
+\toprule
+Regime & $E(\lambda)$ & Behavior & Capacity $C(\lambda)$ \\
+\midrule
+Subcritical (Ordered) & $< 0$ & Perturbations decay & Low, short memory \\
+\textbf{Critical} & $= 0$ & \textbf{Edge of chaos} & \textbf{Peak}, power-law \\
+Supercritical (Chaotic) & $> 0$ & Perturbations explode & Low, noise dominates \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%--- Figure 1 placeholder ---
+\begin{figure}[h]
+\centering
+\fbox{\parbox{0.8\textwidth}{\centering\vspace{2cm}\textbf{Figure 1: Phase Diagram}\\ Capacity $C(\lambda)$ peaks at $E(\lambda) = 0$\vspace{2cm}}}
+\caption{\textbf{The Capacity--Criticality Principle.} Computational capacity $C(\lambda)$ and edge function $E(\lambda)$ vs.\ control parameter $\lambda$. Capacity peaks precisely where $E(\lambda) = 0$ (critical surface), defining the optimal operating phase for thought.}
+\label{fig:phase-diagram}
+\end{figure}
+
+\subsection{Learning via Self-Organized Criticality (SOC)}
+
+Systems self-tune to criticality via the unified learning rule:
+\[
+\frac{d\theta}{dt} = \eta_{\text{task}} \nabla_\theta \mathcal{L}_{\text{Task}} - \eta_{\text{soc}} \nabla_\theta |E(\theta)|^2 + \eta_{\text{mem}} \nabla_\theta \mathcal{L}_{\text{Mem}}
+\]
+
+\subsection{Memory: Working ($M_W$) and Long-Term ($M_L$)}
+
+\begin{itemize}
+\item \textbf{$M_W$ (Working Memory):} Power-law temporal correlations at criticality
+\item \textbf{$M_L$ (Long-Term Memory):} Heteroclinic networks (Section~\ref{sec:heteroclinic})
+\end{itemize}
+
+%==============================================================================
+\section{Long-Term Memory as Critical Heteroclinic Networks}
+\label{sec:heteroclinic}
+%==============================================================================
+
+\subsection{Mathematical Structure}
+
+Dynamics: $\dot{x} = -x + W\sigma(x) + u$, with weight decomposition:
+\[
+W = \lambda W_{\text{base}} + W_{\text{het}}
+\]
+
+\begin{definition}[Saddle Equilibrium]
+Pattern $P_i$ is a saddle if $F_\theta(P_i) = 0$ and the Jacobian eigenvalues satisfy $\Re \sigma_k^{(i)} \in [-\epsilon, +\delta]$ with $0 < \delta \leq \epsilon \ll 1$.
+\end{definition}
+
+\begin{definition}[Heteroclinic Connection]
+$\Gamma_{ij} = W^u(P_i) \cap W^s(P_j)$ connects saddles via intersecting manifolds.
+\end{definition}
+
+%--- Figure 2 placeholder ---
+\begin{figure}[h]
+\centering
+\fbox{\parbox{0.8\textwidth}{\centering\vspace{2cm}\textbf{Figure 2: Heteroclinic Network}\\ Saddles $P_1, P_2, P_3$ with connections $\Gamma_{ij}$\vspace{2cm}}}
+\caption{\textbf{Critical Heteroclinic Memory Core.} Each pattern ($P_1, P_2, P_3$) is a saddle equilibrium. Orbits ($\Gamma_{ij}$) connect saddles, enabling itinerant dynamics $P_1 \to P_2 \to P_3$ compatible with global criticality.}
+\label{fig:heteroclinic}
+\end{figure}
+
+\subsection{The $M_L$ Condition}
+
+Long-term memory is encoded in the local eigenvalue band:
+\[
+\boxed{M_L \text{ Condition: } \max_{i,k} |\Re \sigma_k^{(i)}| \approx \epsilon, \quad 0 < \epsilon \ll 1}
+\]
+
+\subsection{The Unified Weight Decomposition}
+
+\[
+W = \underbrace{\lambda W_{\text{base}}}_{M_W \text{ (Critical Bulk)}} + \underbrace{\sum_i W_{P_i} + \sum_{i,j} W_{\Gamma_{ij}}}_{M_L \text{ (Heteroclinic Structure)}}
+\]
+
+%--- Box 1: Memory Design ---
+\begin{table}[h]
+\centering
+\caption{Box 1: Classical Attractors vs.\ GUTC Heteroclinic Networks}
+\begin{tabular}{p{3cm}p{5cm}p{5cm}}
+\toprule
+Feature & Classical Attractor (Hopfield) & GUTC Heteroclinic Network \\
+\midrule
+Global Regime & $E(\lambda) \ll 0$ (Subcritical) & $E(\lambda) \approx 0$ (Critical) \\
+Storage Element & Stable fixed point & Saddle equilibrium \\
+Working Memory & Exponential decay & Power-law correlations \\
+Recall & Convergence to attractor & Itinerant traversal \\
+Flexibility & Rigid, catastrophic interference & Metastable, selective modulation \\
+\bottomrule
+\end{tabular}
+\label{tab:memory-design}
+\end{table}
+
+%==============================================================================
+\section{Information-Geometric Singularity at Criticality}
+%==============================================================================
+
+\begin{theorem}[Information-Geometric Singularity]
+Let $\{p_\theta(x_{0:T})\}$ be trajectory distributions with edge function $E(\theta)$. Then the Fisher information diverges as:
+\[
+\lambda_{\max}(g(\theta)) \sim |E(\theta)|^{-\gamma}, \quad \gamma > 0
+\]
+as $\theta \to \mathcal{M}_c = \{\theta : E(\theta) = 0\}$.
+\end{theorem}
+
+%--- Figure 3 placeholder ---
+\begin{figure}[h]
+\centering
+\fbox{\parbox{0.8\textwidth}{\centering\vspace{2cm}\textbf{Figure 3: Fisher Singularity}\\ $I(\lambda) \sim |E|^{-\gamma}$ with $\gamma \approx 1.5$--$2.0$\vspace{2cm}}}
+\caption{\textbf{Information-Geometric Singularity.} Fisher information $I(\lambda)$ diverges as $|E(\lambda)|^{-\gamma}$ near criticality, proving the dynamical critical point is a curvature singularity on the statistical manifold.}
+\label{fig:fisher}
+\end{figure}
+
+\textbf{Learning rate bound:}
+\[
+\eta \lesssim I(\lambda)^{-1} \sim |E(\lambda)|^{\gamma}
+\]
+
+%==============================================================================
+\section{Simulations and Validation (CTF Series)}
+%==============================================================================
+
+\begin{table}[h]
+\centering
+\caption{CTF Experimental Validation}
+\begin{tabular}{llll}
+\toprule
+CTF & Focus & Key Finding & Theorem Supported \\
+\midrule
+CTF-1 & Critical Agent & $\lambda = 1$ optimal on bandits & Capacity--Criticality \\
+CTF-2/3 & SOC vs Non-SOC & SOC achieves highest $C(\lambda)$ & Capacity--Criticality \\
+CTF-3 & Fisher Information & $I \sim |E|^{-\gamma}$, $\gamma \approx 1.5$--$2$ & IG Singularity \\
+CTF-4 & Heteroclinic $M_L$ & Critical + $M_L$ = best recall & Both \\
+CTF-5 & Rigorous Core & Exact saddle conditions verified & Heteroclinic Memory \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%==============================================================================
+\section{Biological Validation: The Critical Brain Hypothesis}
+%==============================================================================
+
+The Critical Brain Hypothesis (CBH) provides biological proof that evolution solved the GUTC optimization.
+
+\begin{table}[h]
+\centering
+\caption{CBH $\leftrightarrow$ GUTC Correspondence}
+\begin{tabular}{ll}
+\toprule
+CBH Observation & GUTC Theory \\
+\midrule
+Power-law avalanches: $P(s) \sim s^{-3/2}$ & Critical surface $E(\lambda) = 0$ \\
+Branching ratio $\sigma \approx 1$ & Edge function $E = \sigma - 1 = 0$ \\
+Maximal dynamic range & Peak capacity $C(\lambda)$ \\
+Synaptic homeostasis & SOC learning rule $-\nabla_\theta |E|^2$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Disorders as phase errors:} Depression (subcritical), mania/epilepsy (supercritical), healthy cognition (critical).
+
+%==============================================================================
+\section{Artificial Critical Systems: The CTF Framework}
+%==============================================================================
+
+The CTF is the engineered instantiation of GUTC, validating substrate independence.
+
+\begin{table}[h]
+\centering
+\caption{CTF Architecture as GUTC Implementation}
+\begin{tabular}{ll}
+\toprule
+GUTC Component & CTF Implementation \\
+\midrule
+Substrate & RNN: $x_{t+1} = \tanh(Wx_t + u_t)$ \\
+Edge Function & $E(\lambda) = \rho(W) - 1$ \\
+SOC Mechanism & $\mathbf{G}_{\text{SOC}} = -\kappa \nabla_\theta |E|^2$ \\
+Memory ($M_L$) & Low-rank heteroclinic core $W_{\text{het}}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%==============================================================================
+\section{Discussion and Outlook}
+%==============================================================================
+
+\subsection{Summary of Contributions}
+
+\begin{enumerate}
+\item \textbf{Criticality as origin of thought:} $C(\lambda)$ maximized at $E(\lambda) = 0$
+\item \textbf{Long-term memory as heteroclinic structure:} $W = \lambda W_{\text{base}} + \sum_i W_{P_i} + \sum_{ij} W_{\Gamma_{ij}}$
+\item \textbf{Information-geometric singularity:} $I(\theta) \sim |E(\theta)|^{-\gamma}$
+\end{enumerate}
+
+\subsection{Testable Predictions}
+
+\begin{itemize}
+\item Capacity--criticality correlation: $C(\lambda)$ peaks at near-critical operation
+\item Phase-dependent impairment: Moving from criticality degrades cognition
+\item Heteroclinic signatures: Dwell times scale as $\tau \propto -\log \epsilon$
+\item FIM singularity: $I \sim |E|^{-\gamma}$ with measurable $\gamma$
+\end{itemize}
+
+\subsection{Limitations}
+
+\begin{itemize}
+\item Finite-size effects in real systems
+\item Multiple interacting control parameters
+\item Qualia not fully reduced to dynamical variables
+\end{itemize}
+
+\subsection{Future Directions}
+
+\begin{enumerate}
+\item Hierarchical heteroclinic architectures (HHNs) in ML
+\item Clinical applications: criticality diagnostics as biomarkers
+\item Phase-engineered AI: SOC controllers in transformers
+\item Cross-substrate comparisons: brains, neuromorphic, quantum
+\end{enumerate}
+
+%==============================================================================
+\section{Conclusion}
+%==============================================================================
+
+The Grand Unified Theory of Cognition identifies thought with the critical phase:
+\[
+\boxed{\text{Thought} \iff E(\lambda) = 0 \iff \max C(\lambda) \iff I(\lambda) \to \infty}
+\]
+
+Long-term memory ($M_L$) is realized as heteroclinic networks embedded in the critical bulk ($M_W$):
+\[
+W = \lambda W_{\text{base}} + \sum_i W_{P_i} + \sum_{ij} W_{\Gamma_{ij}}
+\]
+
+\textbf{Biology (CBH) + Engineering (CTF) = Substrate Independence.}
+
+No neurons. No AI. Just $E(\lambda) = 0$, $\max C(\lambda)$, $I(\lambda) \to \infty$, and $M_W + M_L$.
+
+%==============================================================================
+\section*{References}
+%==============================================================================
+
+\begin{enumerate}
+\item Bialek, W., Nemenman, I., \& Tishby, N. (2001). Predictability, complexity, and learning. \textit{Neural Computation}.
+\item Mora, T., \& Bialek, W. (2011). Are biological systems poised at criticality? \textit{J.\ Stat.\ Phys.}
+\item Boedecker, J., et al.\ (2012). Information processing in echo state networks at the edge of chaos. \textit{Theory Biosci.}
+\item Tsuda, I. (2001). Chaotic itinerancy and dynamic neural activity. \textit{Behavioral and Brain Sciences}.
+\item Rabinovich, M.I., et al.\ (2008). Transient cognitive dynamics. \textit{PLoS Comput.\ Biol.}
+\item Muñoz, M.A. (2018). Criticality and dynamical scaling in living systems. \textit{Rev.\ Mod.\ Phys.}
+\item Friston, K. (2010). The free-energy principle. \textit{Nature Reviews Neuroscience}.
+\item Ruppeiner, G. (1995). Riemannian geometry in thermodynamics. \textit{Rev.\ Mod.\ Phys.}
+\end{enumerate}
+
+\end{document}
