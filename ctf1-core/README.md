@@ -98,6 +98,7 @@ ctf1-core/
 ├── ctf3_fisher_geometry.py   # Extended IG validation
 ├── ctf3_fisher_singularity.py # ★ Canonical IG singularity test with power-law fit
 ├── ctf4_heteroclinic_memory.py # ★★ Final synthesis: M_W + M_L validation
+├── ctf5_heteroclinic_core.py  # ★★★ Rigorous M_L with exact saddle conditions
 ├── plots/
 └── README.md
 ```
