@@ -88,6 +88,8 @@ ctf1-core/
 │   ├── soc_learner.py        # Self-organized criticality learning
 │   ├── memory_metrics.py     # M_W, avalanche statistics
 │   └── agency.py             # Simple RL at different λ
+├── docs/
+│   └── GUTC_Memory_Design.md # ★★★ Manuscript box: Attractors vs Heteroclinic
 ├── experiments/
 │   ├── 01_lambda_sweep_memory.py
 │   ├── 02_soc_vs_nosoc.py
