@@ -2187,15 +2187,18 @@ S002,4.0,7.2,6.0
 
 ### B.9 Usage Summary
 
+The standalone `phase_diagram.py` CLI tool is located at `ctf1-core/phase_diagram.py`.
+
 | Command | Output |
 |---------|--------|
-| `python phase_diagram.py --2d` | Basic 2D manifold |
-| `python phase_diagram.py --2d --csv subjects.csv` | 2D with subject overlay |
-| `python phase_diagram.py --3d` | 3D $(\lambda, \Pi_s, \Pi_p)$ manifold |
-| `python phase_diagram.py --demo` | Demo with synthetic data |
-| `python phase_diagram.py --animate traj.csv` | Animated trajectories |
-| `python phase_diagram.py --all --csv data.csv` | Full suite |
+| `python phase_diagram.py -o manifold.png` | Basic 2D manifold with capacity contours |
+| `python phase_diagram.py -i subjects.csv --lambda-col lambda_hat --pi-col Pi_hat -o fig.pdf` | With subject overlay |
+| `python phase_diagram.py --no-capacity -o simple.png` | Without capacity contours |
+| `python phase_diagram.py -i data.csv --group-col group --label-col id -o grouped.png` | With group coloring |
+| `python phase_diagram.py --sigma 2.0 -o wide_ridge.png` | Custom ridge width |
 | `pdflatex lambda_pi_manifold.tex` | TikZ version (Section 16.4) |
+
+**Sample data:** `ctf1-core/data/sample_subjects.csv` provides example subject coordinates.
 
 ### B.10 Integration with Analysis Pipeline
 

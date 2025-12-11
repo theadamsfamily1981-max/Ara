@@ -1,0 +1,16 @@
+id,lambda_hat,Pi_hat,group
+HC01,4.9,3.2,Healthy
+HC02,5.1,3.0,Healthy
+HC03,4.8,3.4,Healthy
+HC04,5.0,2.8,Healthy
+HC05,5.2,3.1,Healthy
+ASD01,3.2,5.8,ASD
+ASD02,2.9,6.1,ASD
+ASD03,3.5,5.5,ASD
+ASD04,3.0,5.9,ASD
+PSY01,7.1,5.9,Psychotic
+PSY02,6.8,6.2,Psychotic
+PSY03,7.3,5.7,Psychotic
+DEP01,3.0,1.5,Depressive
+DEP02,2.8,1.8,Depressive
+DEP03,3.2,1.2,Depressive
