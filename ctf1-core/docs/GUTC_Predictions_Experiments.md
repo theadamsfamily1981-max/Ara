@@ -454,6 +454,208 @@ def gutc_phase_diagnostic(neural_recording):
 | Schizophrenia | Variable | Variable | Variable | Aberrant precision |
 | Healthy | $\approx 1.0$ | $\approx 1.5$ | $\approx 0.7$ | Critical |
 
+### 6.6 Refined Estimation Methods
+
+**Least-Squares Branching Ratio Estimator:**
+
+```python
+import numpy as np
+
+def estimate_branching_ratio_ls(A):
+    """
+    Least-squares estimator for branching ratio from event counts.
+
+    A: 1D array of nonnegative event counts A_t.
+    Returns: lambda_hat, E_hat = lambda_hat - 1
+
+    More stable than ratio-based estimators for sparse data.
+    """
+    A = np.asarray(A, dtype=float)
+    # Only use bins where A_t > 0
+    mask = A[:-1] > 0
+    At  = A[:-1][mask]
+    At1 = A[1:][mask]
+    # Least-squares: E[A_{t+1} | A_t] ≈ λ A_t
+    num = np.sum(At * At1)
+    den = np.sum(At * At)
+    lambda_hat = num / den if den > 0 else np.nan
+    E_hat = lambda_hat - 1.0
+    return lambda_hat, E_hat
+```
+
+**Avalanche Extraction and Power-Law Fitting:**
+
+```python
+def extract_avalanches(A):
+    """
+    Extract avalanche sizes and durations from event count series.
+    Avalanche = consecutive bins with A_t > 0 bounded by A_t == 0.
+    """
+    A = np.asarray(A, dtype=float)
+    sizes, durations = [], []
+    in_avalanche = False
+    current_size, current_dur = 0.0, 0
+
+    for a in A:
+        if a > 0:
+            in_avalanche = True
+            current_size += a
+            current_dur += 1
+        elif in_avalanche:
+            sizes.append(current_size)
+            durations.append(current_dur)
+            in_avalanche = False
+            current_size, current_dur = 0.0, 0
+
+    if in_avalanche:  # Catch trailing avalanche
+        sizes.append(current_size)
+        durations.append(current_dur)
+
+    return np.array(sizes), np.array(durations)
+
+def fit_power_law_tail(x, xmin=None):
+    """
+    Rough log-log slope for quick phase assessment.
+    For publication-grade inference, use proper MLE methods.
+    """
+    x = np.asarray(x, dtype=float)
+    if xmin is None:
+        xmin = np.percentile(x, 50)
+    x_tail = x[x >= xmin]
+    if len(x_tail) < 10:
+        return np.nan
+
+    hist, edges = np.histogram(x_tail, bins='auto', density=True)
+    centers = 0.5 * (edges[1:] + edges[:-1])
+    mask = hist > 0
+    slope = np.polyfit(np.log10(centers[mask]), np.log10(hist[mask]), 1)[0]
+    return -slope  # alpha_hat
+```
+
+**Rescaled-Range Hurst Estimator:**
+
+```python
+def hurst_rs(x, chunk_sizes=[8, 16, 32, 64]):
+    """
+    Rescaled-range estimator for Hurst exponent H.
+
+    Returns H where:
+    - H ≈ 0.5: Short memory (Markov-ish)
+    - H > 0.5: Long-range dependence (critical-like)
+    - H < 0.5: Anti-persistent (over-correcting)
+    """
+    x = np.asarray(x, dtype=float)
+    N = len(x)
+    if N < 32:
+        return np.nan
+
+    # Select appropriate chunk size
+    m = max([c for c in chunk_sizes if c * 4 <= N], default=8)
+    Ks = N // m
+    RS_vals = []
+
+    for k in range(Ks):
+        seg = x[k*m:(k+1)*m]
+        seg = seg - seg.mean()
+        Y = np.cumsum(seg)
+        R = Y.max() - Y.min()
+        S = seg.std()
+        if S > 0:
+            RS_vals.append(R / S)
+
+    if len(RS_vals) == 0:
+        return np.nan
+
+    H = np.log2(np.mean(RS_vals)) / np.log2(m)
+    return H
+```
+
+---
+
+## Prediction 7: Clinical Severity Correlations (ASD Research Roadmap)
+
+### 7.1 The Core Hypothesis
+
+**Claim:** ASD clinical severity scores (ADOS, SRS) are macro-level behavioral manifestations of underlying dynamical mis-tuning, quantifiable via $\Delta\lambda$ and $\Delta\Pi$.
+
+### 7.2 Hypothesis 1: Phase Mis-Tuning → Rigidity/Repetitive Behaviors
+
+**Claim:** Restricted/repetitive behaviors (ADOS R.R.B. domain) correlate with subcritical phase shift.
+
+| Parameter | Predicted Correlation with R.R.B. Severity | Mechanistic Rationale |
+|-----------|-------------------------------------------|----------------------|
+| $\alpha$ (avalanche exponent) | **Positive:** Higher severity → steeper $\alpha$ | Subcritical dynamics reduce state space, forcing repetitive cycles |
+| $\lambda$ (branching ratio) | **Negative:** Higher severity → lower $\lambda$ | System is over-damped, suppressing exploratory dynamics |
+| $H$ (Hurst exponent) | **Negative:** Higher severity → lower $H$ | Reduced long-range temporal integration |
+
+### 7.3 Hypothesis 2: Precision Mis-Tuning → Social/Communication Deficits
+
+**Claim:** Social responsiveness deficits (SRS/ADOS S.C.I. domain) correlate with aberrant precision weighting.
+
+| Parameter | Predicted Correlation with S.C.I. Severity | Mechanistic Rationale |
+|-----------|-------------------------------------------|----------------------|
+| $\Pi_{\text{prior}}$ (prior precision) | **Positive:** Higher → rigid internal models resist social updating |
+| $\Pi_{\text{sensory}}$ (sensory precision) | **Positive:** Higher → hyper-attention to detail, sensory overload |
+| $\Pi_{\text{local}}/\Pi_{\text{global}}$ ratio | **Positive:** Higher → weak central coherence |
+
+### 7.4 Combined Dynamical Predictor
+
+**Ultimate Hypothesis:** The combinatorial deviation $(\Delta\lambda, \Delta\Pi)$ provides maximal predictive power for ASD severity.
+
+$$\text{Severity} \sim f(|E(\lambda)|, |\Pi - \Pi_{\text{optimal}}|) = f(|\lambda - 1|, \Delta\Pi)$$
+
+**Research Protocol:**
+
+```python
+def asd_dynamical_assessment(neural_recording, clinical_scores):
+    """
+    Correlate dynamical parameters with clinical severity.
+
+    Args:
+        neural_recording: EEG/MEG time series
+        clinical_scores: Dict with 'ADOS_RRB', 'ADOS_SCI', 'SRS' scores
+
+    Returns:
+        correlations: Parameter-severity correlations
+        combined_model: Regression model for severity prediction
+    """
+    # Extract dynamical parameters
+    lambda_hat, E_hat = estimate_branching_ratio_ls(neural_recording)
+    sizes, durations = extract_avalanches(neural_recording)
+    alpha = fit_power_law_tail(sizes)
+    H = hurst_rs(neural_recording)
+
+    params = {
+        'lambda': lambda_hat,
+        'E': E_hat,
+        'alpha': alpha,
+        'H': H
+    }
+
+    # Compute correlations
+    correlations = {}
+    for param_name, param_val in params.items():
+        for score_name, score_val in clinical_scores.items():
+            r, p = scipy.stats.pearsonr([param_val], [score_val])
+            correlations[f'{param_name}_vs_{score_name}'] = (r, p)
+
+    # Combined model: Severity ~ |E| + |H - 0.7|
+    X = np.array([[abs(E_hat), abs(H - 0.7)]])
+    # ... fit regression model
+
+    return params, correlations
+```
+
+### 7.5 Expected Findings
+
+| Domain | Primary Dynamical Marker | Secondary Marker |
+|--------|-------------------------|------------------|
+| R.R.B. (rigidity) | $\lambda < 1$ (subcritical) | $\alpha > 1.5$ |
+| S.C.I. (social) | $\Pi_{\text{prior}} \uparrow$ | $\Pi_{\text{local}}/\Pi_{\text{global}} \gg 1$ |
+| Combined | $(\lambda, \Pi)$ deviation from $(1, \Pi_{\text{opt}})$ | — |
+
+**Key insight:** This framework diagnoses *phase state*, not identity. The same analysis applies to any system (brain, AI agent, behavioral sequence).
+
 ---
 
 ## Summary: Falsifiable Predictions
@@ -466,6 +668,7 @@ def gutc_phase_diagnostic(neural_recording):
 | 4 | $I \sim |E|^{-\gamma}$ | Fisher estimation | $\gamma$ not in [1, 3] range |
 | 5 | Level-dependent dwell | HHN measurement | No level hierarchy in $\tau$ |
 | 6 | Dynamical > correlational | Phase diagnostic | No $\sigma$, $H$ disorder difference |
+| 7 | ASD severity ~ $(\Delta\lambda, \Delta\Pi)$ | Clinical correlation | No parameter-severity correlation |
 
 ---
 
