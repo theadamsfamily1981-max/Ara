@@ -109,38 +109,71 @@ At criticality, precision weighting is optimally balanced for both stability and
 
 ---
 
-## III. Active Inference
+## III. Active Inference and Expected Free Energy
 
-### 3.1 Active Inference Formulation
+### 3.1 Variational Free Energy (VFE)
 
-Actions minimize **expected free energy**:
+**Box: VFE in One Equation**
 
-$$a^* = \arg\min_a \mathbb{E}_{p(s'|s,a)}[\mathcal{F}(s')]$$
+VFE upper-bounds "surprise" ($-\ln p(u)$):
 
-Decomposition:
-$$\mathcal{F}_{\text{expected}} = \underbrace{\text{Extrinsic value}}_{\text{Goal-seeking}} + \underbrace{\text{Epistemic value}}_{\text{Information-seeking}}$$
+$$\mathcal{F}(q, u) = D_{\text{KL}}[q(x) \| p(x|u)] - \mathbb{E}_q[\ln p(u|x)]$$
 
-### 3.2 GUTC ↔ Active Inference Connection
+Equivalently:
+$$\mathcal{F} = \underbrace{\text{Complexity}}_{\text{Minimize}} - \underbrace{\text{Accuracy}}_{\text{Maximize}}$$
+
+Agents seek the simplest internal explanation that accurately predicts observations.
+
+### 3.2 Expected Free Energy (EFE) Derivation
+
+For action selection, agents minimize **expected future free energy**:
+
+$$\mathcal{G}(\pi) = \mathbb{E}_{q(u_{t+1}, x_{t+1}|\pi)}[\mathcal{F}(q, u_{t+1})]$$
+
+**Optimal policy:**
+$$\pi^* = \arg\min_\pi \mathcal{G}(\pi)$$
+
+**Decomposition into extrinsic and intrinsic:**
+
+$$\mathcal{G}(\pi) = \underbrace{\mathbb{E}_{q(u|\pi)}[-\ln p(u)]}_{\text{Extrinsic (pragmatic)}} + \underbrace{\mathbb{E}_{q(u|\pi)}[D_{\text{KL}}[q(x|u) \| p(x|u)]]}_{\text{Intrinsic (epistemic)}}$$
+
+- **Extrinsic:** Maximize reward by aligning with preferred outcomes
+- **Intrinsic:** Maximize information gain (resolve ambiguity)
+
+### 3.3 The Combined GUTC Objective
+
+The complete cognitive system optimizes:
+
+$$\boxed{\min_{\theta, \phi, q} \quad \mathcal{G}(\pi, \theta, q) - \alpha C(\lambda, \theta) + \beta |E(\lambda, \theta)|^2}$$
+
+where:
+- $\mathcal{G}(\pi)$: Expected free energy (agency)
+- $C(\lambda)$: Computational capacity (thought)
+- $|E(\lambda)|^2$: Criticality constraint (SOC)
+
+**Interpretation:**
+- SOC minimizes $|E|^2$ → maintains criticality
+- Criticality maximizes $C$ → optimal inference substrate
+- Optimal substrate makes $\mathcal{G}$ minimization efficient
+
+### 3.4 GUTC ↔ Active Inference Mapping
 
 | Active Inference | GUTC Realization |
 |------------------|------------------|
-| Expected free energy | Thought functional $T(\lambda) = C \cdot \exp(-E^2/\sigma^2)$ |
+| Expected free energy $\mathcal{G}$ | Policy objective over $M_L$ branches |
 | Extrinsic value | Task reward $\mathcal{L}_{\text{Task}}$ |
-| Epistemic value | Capacity $C(\lambda)$ (information about environment) |
-| Policy selection | Heteroclinic branch selection via $M_L$ |
+| Intrinsic value | Capacity $C(\lambda)$ (information about environment) |
+| Policy selection | Heteroclinic branch selection |
+| Precision | Inverse noise $1/\sigma$ (dwell time control) |
 
-### 3.3 The Agency Equation
+### 3.5 The Unified Learning Rule
 
-**Active inference:**
-$$a = \arg\min_a \mathbb{E}[\mathcal{F}]$$
-
-**GUTC unified learning:**
 $$\frac{d\theta}{dt} = \eta_{\text{task}} \nabla_\theta \mathcal{L}_{\text{Task}} - \eta_{\text{soc}} \nabla_\theta |E|^2 + \eta_{\text{mem}} \nabla_\theta \mathcal{L}_{\text{Mem}}$$
 
-**Mapping:**
-- $\mathcal{L}_{\text{Task}}$ → Extrinsic value (goal-directed)
-- $|E|^2$ → Criticality constraint (maintains optimal inference)
-- $\mathcal{L}_{\text{Mem}}$ → Epistemic structure (heteroclinic memory)
+**Mapping to VFE/EFE:**
+- $\nabla_\theta \mathcal{L}_{\text{Task}}$ → Extrinsic gradient (goal-directed)
+- $\nabla_\theta |E|^2$ → Criticality maintenance (optimal inference)
+- $\nabla_\theta \mathcal{L}_{\text{Mem}}$ → Epistemic structure ($M_L$)
 
 ---
 
