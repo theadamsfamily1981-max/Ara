@@ -71,7 +71,8 @@ def capacity_function(lam: np.ndarray, pi: np.ndarray, sigma: float = 1.5) -> np
 
 
 def add_capacity_contours(ax, n_levels: int = 6, sigma: float = 1.5,
-                          show_filled: bool = True):
+                          show_filled: bool = True, colormap: str = 'YlOrRd',
+                          use_imshow: bool = False):
     """
     Add contours of the capacity function C(λ, Π) to the given axes.
 
@@ -80,6 +81,8 @@ def add_capacity_contours(ax, n_levels: int = 6, sigma: float = 1.5,
         n_levels: Number of contour levels
         sigma: Width parameter for the Gaussian ridge
         show_filled: Whether to show filled contours (subtle background)
+        colormap: Matplotlib colormap name ('YlOrRd', 'viridis', etc.)
+        use_imshow: Use imshow for smooth gradient instead of contourf
 
     Returns:
         Legend handle for capacity contours
@@ -92,26 +95,42 @@ def add_capacity_contours(ax, n_levels: int = 6, sigma: float = 1.5,
     # Capacity landscape
     Capacity = capacity_function(Lambda, Pi_grid, sigma)
 
-    # Normalize for cleaner level spacing
-    C_max = Capacity.max()
+    # Normalize to [0, 1] for clean visualization
+    C_min, C_max = Capacity.min(), Capacity.max()
     if C_max <= 0:
         return None
 
-    levels = np.linspace(C_max * 0.15, C_max * 0.95, n_levels)
+    C_norm = (Capacity - C_min) / (C_max - C_min + 1e-12)
 
-    # Optional filled contours (subtle background)
+    levels = np.linspace(0.15, 0.95, n_levels)
+
+    # Background: either imshow (smooth) or contourf (stepped)
     if show_filled:
-        ax.contourf(
-            Lambda, Pi_grid, Capacity,
-            levels=20,
-            cmap='YlOrRd',
-            alpha=0.12,
-            zorder=0
-        )
+        if use_imshow:
+            # Smooth gradient background
+            ax.imshow(
+                C_norm,
+                origin='lower',
+                extent=[lam_vals.min(), lam_vals.max(),
+                        pi_vals.min(), pi_vals.max()],
+                aspect='auto',
+                cmap=colormap,
+                alpha=0.25,
+                zorder=0
+            )
+        else:
+            # Stepped contour fill
+            ax.contourf(
+                Lambda, Pi_grid, C_norm,
+                levels=20,
+                cmap=colormap,
+                alpha=0.15,
+                zorder=0
+            )
 
-    # Line contours
+    # Line contours (on normalized capacity)
     cs = ax.contour(
-        Lambda, Pi_grid, Capacity,
+        Lambda, Pi_grid, C_norm,
         levels=levels,
         colors='darkgoldenrod',
         linestyles='-',
@@ -120,9 +139,9 @@ def add_capacity_contours(ax, n_levels: int = 6, sigma: float = 1.5,
         zorder=1
     )
 
-    # Labels (normalized to [0, 1])
+    # Labels showing normalized capacity
     ax.clabel(cs, inline=True, fontsize=6,
-              fmt=lambda v: f'C={v/C_max:.2f}')
+              fmt=lambda v: f'C={v:.2f}')
 
     # Dummy handle for legend
     cap_handle = plt.Line2D(
@@ -157,7 +176,9 @@ TRAJECTORIES = [
 
 def plot_lambda_pi_manifold(show_capacity: bool = True,
                             show_glow: bool = True,
-                            sigma: float = 1.5):
+                            sigma: float = 1.5,
+                            colormap: str = 'YlOrRd',
+                            use_imshow: bool = False):
     """
     Create the base (λ, Π) manifold figure with regions + trajectories.
 
@@ -165,6 +186,8 @@ def plot_lambda_pi_manifold(show_capacity: bool = True,
         show_capacity: Whether to show capacity contours
         show_glow: Whether to show glow effect on critical line
         sigma: Width parameter for capacity function
+        colormap: Matplotlib colormap for capacity background
+        use_imshow: Use smooth gradient instead of contour fill
 
     Returns:
         fig, ax, cap_handle: Figure, axes, and capacity legend handle
@@ -206,7 +229,8 @@ def plot_lambda_pi_manifold(show_capacity: bool = True,
     # Capacity contours
     cap_handle = None
     if show_capacity:
-        cap_handle = add_capacity_contours(ax, sigma=sigma)
+        cap_handle = add_capacity_contours(ax, sigma=sigma, colormap=colormap,
+                                           use_imshow=use_imshow)
 
     # Trajectories
     for (x1, y1), (x2, y2), label, rotation in TRAJECTORIES:
@@ -396,6 +420,19 @@ Examples:
         help='Width of capacity ridge (default: 1.5)'
     )
     parser.add_argument(
+        '--colormap', type=str, default='YlOrRd',
+        choices=['YlOrRd', 'viridis', 'plasma', 'inferno', 'magma', 'cividis'],
+        help='Colormap for capacity background (default: YlOrRd)'
+    )
+    parser.add_argument(
+        '--smooth', action='store_true',
+        help='Use smooth gradient (imshow) instead of contour fill'
+    )
+    parser.add_argument(
+        '--diagnose', action='store_true',
+        help='Print GUTC diagnosis for each subject point'
+    )
+    parser.add_argument(
         '--show', action='store_true',
         help='Display plot interactively'
     )
@@ -408,7 +445,9 @@ Examples:
     fig, ax, cap_handle = plot_lambda_pi_manifold(
         show_capacity=show_capacity,
         show_glow=show_glow,
-        sigma=args.sigma
+        sigma=args.sigma,
+        colormap=args.colormap,
+        use_imshow=args.smooth
     )
 
     legend_handles = []
@@ -416,6 +455,7 @@ Examples:
         legend_handles.append(cap_handle)
 
     # Load and plot subject data
+    subjects = []
     if args.input is not None and Path(args.input).exists():
         subjects = load_subjects(
             args.input,
@@ -432,6 +472,26 @@ Examples:
             legend_handles.extend(subject_handles)
             print(f"Loaded {len(subjects)} subjects from {args.input}")
 
+    # Diagnostic integration
+    if args.diagnose and subjects:
+        try:
+            from gutc_diagnostic_engine import GUTCDiagnosticEngine
+            engine = GUTCDiagnosticEngine(verbose=False)
+            print("\n" + "=" * 70)
+            print("GUTC DIAGNOSTIC REPORTS")
+            print("=" * 70)
+            for lam, pi, group, label in subjects:
+                diagnosis = engine.diagnose(lam, pi)
+                subj_id = label or group or f"({lam:.1f}, {pi:.1f})"
+                print(f"\n[Subject: {subj_id}]")
+                print(f"  State: {diagnosis.state_name}")
+                print(f"  Capacity: C = {diagnosis.capacity:.3f}")
+                print(f"  Risk: {diagnosis.risk_level}")
+                print(f"  λ-strategy: {diagnosis.repair_vector.lambda_strategy}")
+                print(f"  Π-strategy: {diagnosis.repair_vector.pi_strategy}")
+        except ImportError:
+            print("Warning: gutc_diagnostic_engine.py not found. Skipping diagnosis.")
+
     # Legend
     if legend_handles:
         ax.legend(handles=legend_handles, fontsize=8, loc='upper left',
@@ -442,7 +502,7 @@ Examples:
     # Save
     output_path = Path(args.output)
     fig.savefig(output_path, dpi=args.dpi, bbox_inches='tight')
-    print(f"Saved: {output_path}")
+    print(f"\nSaved: {output_path}")
 
     # Show
     if args.show:
