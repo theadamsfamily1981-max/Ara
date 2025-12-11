@@ -968,7 +968,13 @@ $$\boxed{\text{Estimate } \hat{\lambda} \text{ from avalanches, fit } \hat{\Pi} 
 
 ### 16.4 The $(\lambda, \Pi)$ Phase Diagram
 
-**Figure 1: The GUTC Control Manifold**
+#### Figure 1: The $(\lambda, \Pi)$ Control Manifold — Cognitive Regimes as Dynamical Phases
+
+**Manuscript-Ready Caption:**
+
+> The horizontal axis spans global criticality ($\lambda$), from subcritical ($\lambda < 1$) through the critical line ($\lambda = 1$) to supercritical ($\lambda > 1$). The vertical axis indexes effective precision ($\Pi$), reflecting the relative weighting of sensory evidence ($\Pi_{\text{sensory}}$) vs. hierarchical priors ($\Pi_{\text{prior}}$). Regions correspond to distinct cognitive regimes: healthy cognition clusters near the critical corridor at moderate $\Pi$; autistic-like states occupy subcritical zones with elevated sensory precision; psychotic-like dynamics emerge in supercritical, prior-weighted territory; anesthetic/unconscious states collapse to low-$\lambda$, low-$\Pi$ quiescence; manic/chaotic regimes flare into hypercritical instability. Example trajectories illustrate developmental maturation (subcritical → critical), acute psychotic episodes (excursions into supercritical high-$\Pi_{\text{prior}}$), and pharmacological recovery (return to critical corridor).
+
+**ASCII Layout (Quadrant View):**
 
 ```
                          High Π (Rigid/Hyper-precise)
@@ -998,15 +1004,54 @@ $$\boxed{\text{Estimate } \hat{\lambda} \text{ from avalanches, fit } \hat{\Pi} 
                          Low Π (Chaotic/Hypo-precise)
 ```
 
-**Figure Caption:** *The $(\lambda, \Pi)$ control manifold of GUTC. The horizontal axis represents the criticality parameter $\lambda$, with subcritical dynamics ($\lambda < 1$) on the left and supercritical dynamics ($\lambda > 1$) on the right. The critical line $E(\lambda) = 0$ (where $\lambda = 1$) runs vertically through the center. The vertical axis represents precision $\Pi$, from low/chaotic (bottom) to high/rigid (top). Healthy cognition (★) occupies the near-critical region with context-sensitive, well-calibrated precision. The four quadrants correspond to archetypal psychopathological regimes: (I) ASD-like (subcritical + high $\Pi$), (II) Psychosis (supercritical + low $\Pi$), (III) Depression/Anhedonia (subcritical + low $\Pi$), (IV) Anxiety/Borderline (supercritical + high $\Pi$). Developmental trajectories, acute episodes, and treatment responses can be visualized as paths through this space.*
+**ASCII Layout (Continuous View for Illustrator):**
 
-**Example Trajectories:**
-| Trajectory | Description | Path in $(\lambda, \Pi)$-space |
-|------------|-------------|-------------------------------|
-| **Development** | Healthy maturation | Movement toward $\lambda \approx 1$ with increasing $\Pi$ flexibility |
-| **Acute psychotic episode** | Decompensation | Rightward drift ($\lambda \uparrow$) with $\Pi$ collapse |
-| **Antipsychotic treatment** | Stabilization | Leftward correction with $\Pi$ restoration |
-| **Meditation/mindfulness** | Enhanced flexibility | Fine-tuning toward optimal $(\lambda, \Pi)$ |
+```
+                    ↑  Precision (Π)
+                    │  ↑ High Π_prior (strong priors)
+                    │         Psychotic-like *
+                    │                *
+                    │                   *
+                    │                      *
+                    │
+                    │
+           ---------*--------------------------→  Criticality (λ)
+                    λ < 1          λ = 1          λ > 1
+                (subcritical)       |          (supercritical)
+                    │               |
+                    │               |
+   ↑ High Π_sensory │   Healthy / near-critical
+     (strong input) │      cognitive corridor *
+                    │             *
+                    │          *
+                    │       *
+                    │
+                    │
+    ↓  Low Π (weak precision)
+   Deeply subcritical *         Hypercritical *
+   (anesthetic/unconscious)     (manic/chaotic)
+```
+
+#### Illustrator Blueprint
+
+| Element | Specification |
+|---------|---------------|
+| **Style** | 2D phase diagram with color-coded regions |
+| **Colors** | Blue = healthy, Red = psychotic, Orange = ASD, Gray = anesthetic, Purple = manic |
+| **Axes** | Thick critical line at $\lambda = 1$ (vertical dashed band); gradient shading for $\Pi$ transitions |
+| **Font** | Sans-serif matching manuscript body |
+
+**Trajectory Arrows:**
+| # | Trajectory | Path |
+|---|------------|------|
+| 1 | **Development** | Lower-left → center (subcritical/low-$\Pi$ → critical/moderate-$\Pi$) |
+| 2 | **Psychosis episode** | Center → upper-right → back to center |
+| 3 | **Medication** | Upper-right → center (decreasing $\Pi_{\text{prior}}$) |
+| 4 | **Meditation/mindfulness** | Fine-tuning toward optimal center |
+
+#### Legend Paragraph
+
+This low-dimensional control manifold unifies healthy and pathological cognition as positions and trajectories in a shared dynamical landscape. Criticality ($\lambda$) tunes the brain's dynamical repertoire from rigid order to chaotic divergence, while precision ($\Pi$) gates the balance between bottom-up sensory evidence and top-down priors. Observable via avalanche estimators ($\hat{\lambda}$) and behavioral/neuromodulatory markers ($\hat{\Pi}$), this framework predicts systematic mappings between control parameters, cognitive performance, and clinical states across species and substrates.
 
 ### 16.5 Conclusion
 
