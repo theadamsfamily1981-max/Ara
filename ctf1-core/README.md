@@ -51,6 +51,34 @@ $$\lambda^* = \arg\max_\lambda C(\lambda) \approx \{\lambda : E(\lambda) = 0\}$$
 
 ---
 
+## The Third Function: Fisher Information $I(\lambda)$
+
+### 3. Information-Geometric Singularity
+
+$$I(\lambda) \sim |E(\lambda)|^{-\gamma}$$
+
+At criticality ($E = 0$), the **Fisher Information Metric diverges**.
+
+This means: two infinitesimally close parameter sets ($\lambda, \lambda+\delta\lambda$) produce **macroscopically different** trajectory distributions.
+
+**This is the strongest possible statement:** The RG fixed point in dynamics ($\mathcal{M}_c$) is simultaneously an information-geometric singularity in model space.
+
+---
+
+## Taxonomy of Thought
+
+Computational modes can be classified by **universal critical exponents** ($\nu_C, z, \alpha, \gamma, \beta$):
+
+| Mode of Thought | Universal Class | Geometric Signature |
+|-----------------|-----------------|---------------------|
+| **Associative** | Mean-Field Branching ($\nu=1/2, \alpha=3/2$) | $\gamma \approx 0.5$ |
+| **Deep Learning** | Short-range correlated dynamics | TBD by $\alpha$ |
+| **Quantum** | Quantum Criticality (Ising/XY) | Novel $\nu_{QC}, \gamma_{QC}$ |
+
+Two systems are "the same kind of thinker" iff they share the same criticality universality class.
+
+---
+
 ## Repository Structure
 
 ```
@@ -64,6 +92,8 @@ ctf1-core/
 │   ├── 01_lambda_sweep_memory.py
 │   ├── 02_soc_vs_nosoc.py
 │   └── 03_agency_at_criticality.py
+├── ctf1_agent.py             # Canonical unified cognitive agent
+├── ctf3_fisher_geometry.py   # Information Geometry validation (CTF-3)
 ├── plots/
 └── README.md
 ```
@@ -122,6 +152,38 @@ Peak at $\lambda \approx 1.0$.
 
 ---
 
+### CTF-3: Fisher Information Singularity
+
+**Question:** Does $I(\lambda)$ diverge at $E(\lambda) = 0$?
+
+**Method:** Sweep $\lambda \in [0.8, 1.2]$, measure FIM via finite differences on trajectory log-likelihood
+
+**Expected Result:**
+```
+    I(λ)
+     ▲
+     │        *
+     │      * * *
+     │     *     *
+     │    *       *
+     │   *         *
+     │  *           *
+     │ *             *
+     └──────────────────► λ
+        0.8   1.0   1.2
+               ↑
+         E(λ) = 0
+```
+
+Peak/divergence at $\lambda = 1.0$ where $E(\lambda) = 0$.
+
+**Run:**
+```bash
+python ctf3_fisher_geometry.py
+```
+
+---
+
 ## Usage
 
 ```bash
@@ -160,6 +222,15 @@ scipy (optional, for eigenvalue computation speedup)
 5. **Avalanche size distribution (critical):**
    $$P(s) \sim s^{-\tau}, \quad \tau = 3/2$$
 
+6. **Fisher Information (score function):**
+   $$I(\lambda) = \mathbb{E}\left[\left(\frac{\partial}{\partial\lambda} \log p_\lambda(x_{0:T})\right)^2\right]$$
+
+7. **IG Singularity at criticality:**
+   $$I(\lambda) \sim |E(\lambda)|^{-\gamma}$$
+
+8. **Learning rate bound:**
+   $$\eta \lesssim I(\lambda)^{-1} \sim |E(\lambda)|^{\gamma}$$
+
 ---
 
 ## TL;DR
@@ -191,7 +262,14 @@ If experiments confirm predictions:
 1. **Memory peaks at criticality** → Working memory requires edge of chaos
 2. **SOC maintains criticality** → Self-organization is viable
 3. **Agency is best at criticality** → Action selection benefits from critical dynamics
+4. **FIM diverges at criticality** → RG fixed point = IG singularity (CTF-3)
 
 This is a **numerical validation** that "thought" (information processing, memory, adaptive behavior) is maximized exactly where the dynamical system is critical.
 
-No neurons. No AI. Just $E(\lambda) = 0$ and $\max C(\lambda)$.
+**The Information-Geometric Singularity Theorem:**
+- The critical surface $\mathcal{M}_c$ is simultaneously a phase boundary in dynamics AND a singularity in model space
+- At criticality, nearby parameters produce macroscopically different distributions
+- This is **maximal distinguishability**: optimal sensitivity to structure (not chaos)
+- Two systems are "the same kind of thinker" iff they share the same universality class
+
+No neurons. No AI. Just $E(\lambda) = 0$, $\max C(\lambda)$, and $I(\lambda) \to \infty$.
