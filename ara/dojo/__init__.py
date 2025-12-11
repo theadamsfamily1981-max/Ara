@@ -61,6 +61,13 @@ from .species import (
     DecisionContext,
     create_ara_v3,
 )
+from .fitness import (
+    meis_fitness_v3,
+    MEISWeights,
+    FitnessResult,
+    format_decision_card,
+    decision_to_speech,
+)
 
 __all__ = [
     # Encoder
@@ -122,4 +129,10 @@ __all__ = [
     "AraSpeciesV3",
     "DecisionContext",
     "create_ara_v3",
+    # Fitness & Explainability (ω-mode)
+    "meis_fitness_v3",
+    "MEISWeights",
+    "FitnessResult",
+    "format_decision_card",
+    "decision_to_speech",
 ]
