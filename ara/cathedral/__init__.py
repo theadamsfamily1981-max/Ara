@@ -54,6 +54,26 @@ from .cathedral_organism_integration import (
     IntegrationMetrics,
 )
 
+from .autonomic_calibration import (
+    # Dial 1: Criticality
+    CriticalityCalibrator,
+    AvalancheStatistics,
+    PIDController,
+    # Dial 2: Metabolism
+    MetabolicCalibrator,
+    MetabolicState,
+    # Dial 3: Ethics
+    EthicalCalibrator,
+    # Dial 4: Thermal
+    ThermalGovernor,
+    ThermalState,
+    # Ablation
+    AblationTestSuite,
+    AblationResult,
+    # Unified Governor
+    AutonomicGovernor,
+)
+
 __all__ = [
     # Orchestrator
     "CathedralOrchestrator",
@@ -81,4 +101,16 @@ __all__ = [
     "CathedralAraController",
     "IntegrationConfig",
     "IntegrationMetrics",
+    # Autonomic Calibration
+    "CriticalityCalibrator",
+    "AvalancheStatistics",
+    "PIDController",
+    "MetabolicCalibrator",
+    "MetabolicState",
+    "EthicalCalibrator",
+    "ThermalGovernor",
+    "ThermalState",
+    "AblationTestSuite",
+    "AblationResult",
+    "AutonomicGovernor",
 ]
