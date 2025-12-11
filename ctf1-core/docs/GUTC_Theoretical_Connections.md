@@ -1546,13 +1546,621 @@ HC01,5.0,3.5,0
 | `Pi_hat` | Estimated precision from behavioral fits |
 | `cluster` | Clinical group (0=healthy, 1=ASD, 2=psychosis, 3=other) |
 
-### B.5 Usage Summary
+### B.5 GUTCVisualizer Class: Supreme 2D and 3D Manifolds
+
+The following class provides publication-ready visualizations with gradient backgrounds, glow effects, and full 3D manifold rendering.
+
+```python
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.colors import LinearSegmentedColormap
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.animation as animation
+import numpy as np
+import pandas as pd
+from pathlib import Path
+
+
+class GUTCVisualizer:
+    """
+    Complete GUTC (λ, Π) manifold visualization toolkit.
+
+    Features:
+        - Supreme 2D manifold with gradients and glow effects
+        - 3D manifold with (λ, Π_sensory, Π_prior) axes
+        - Trajectory animation for temporal dynamics
+        - CSV data overlay with automatic clustering
+    """
+
+    # Region definitions: (x, y, width, height, label, color, alpha)
+    REGIONS = [
+        (4.5, 2.0, 1.0, 3.0, 'Healthy', '#2ecc71', 0.4),       # Green corridor
+        (2.0, 4.5, 2.5, 2.5, 'ASD-like', '#e67e22', 0.4),      # Orange
+        (5.5, 4.5, 2.5, 2.5, 'Psychotic', '#e74c3c', 0.4),     # Red
+        (0.0, 0.0, 3.0, 2.0, 'Anesthetic', '#7f8c8d', 0.4),    # Gray
+        (7.0, 0.0, 3.0, 3.0, 'Manic', '#9b59b6', 0.4),         # Purple
+        (2.0, 0.5, 2.0, 2.0, 'Depressive', '#3498db', 0.3),    # Blue
+    ]
+
+    # Trajectory definitions: ((x1,y1), (x2,y2), label, color)
+    TRAJECTORIES = [
+        ((1.5, 0.8), (4.8, 3.0), 'Development', '#2980b9'),
+        ((5.0, 3.5), (7.5, 6.0), 'Psychosis onset', '#c0392b'),
+        ((7.5, 6.0), (5.0, 3.0), 'Recovery', '#27ae60'),
+        ((5.0, 3.5), (3.0, 5.5), 'ASD trajectory', '#d35400'),
+        ((5.0, 3.5), (2.5, 1.5), 'Depression', '#2c3e50'),
+    ]
+
+    def __init__(self, style='publication'):
+        """
+        Initialize visualizer with specified style.
+
+        Args:
+            style: 'publication' (high-res, clean) or 'presentation' (bold, large fonts)
+        """
+        self.style = style
+        if style == 'publication':
+            plt.rcParams.update({
+                'font.size': 10,
+                'axes.labelsize': 12,
+                'axes.titlesize': 14,
+                'figure.dpi': 300
+            })
+        else:
+            plt.rcParams.update({
+                'font.size': 14,
+                'axes.labelsize': 16,
+                'axes.titlesize': 18,
+                'figure.dpi': 150
+            })
+
+    def plot_2d_manifold(self, subjects_csv=None, show_contours=True,
+                          show_glow=True, show_trajectories=True):
+        """
+        Publication-ready 2D manifold with all visual enhancements.
+
+        Args:
+            subjects_csv: Path to CSV with [id, lambda_hat, Pi_hat, cluster]
+            show_contours: Display C(λ) capacity contours
+            show_glow: Add glow effect around critical line
+            show_trajectories: Display archetypal trajectories
+
+        Returns:
+            fig, ax: matplotlib figure and axes
+        """
+        fig, ax = plt.subplots(figsize=(10, 8))
+
+        # --- Background gradient (criticality zones) ---
+        gradient = np.zeros((100, 100, 4))
+        for i in range(100):
+            λ_val = i / 10  # 0 to 10
+            if λ_val < 4:
+                gradient[:, i] = [0.3, 0.3, 0.8, 0.1]  # Subcritical: blue tint
+            elif λ_val > 6:
+                gradient[:, i] = [0.8, 0.3, 0.3, 0.1]  # Supercritical: red tint
+            else:
+                gradient[:, i] = [0.3, 0.8, 0.3, 0.15]  # Critical: green tint
+        ax.imshow(gradient, extent=[0, 10, 0, 8], origin='lower',
+                  aspect='auto', zorder=0)
+
+        # --- Regions with rounded corners effect ---
+        for x, y, w, h, label, color, alpha in self.REGIONS:
+            # Main region
+            rect = mpatches.FancyBboxPatch(
+                (x, y), w, h,
+                boxstyle="round,pad=0.02,rounding_size=0.3",
+                facecolor=color, alpha=alpha, edgecolor=color,
+                linewidth=2, zorder=1
+            )
+            ax.add_patch(rect)
+            # Label
+            ax.text(x + w/2, y + h/2, label, ha='center', va='center',
+                    fontweight='bold', fontsize=11, color='black', zorder=5)
+
+        # --- Critical line with glow effect ---
+        if show_glow:
+            for width, alpha in [(8, 0.05), (6, 0.1), (4, 0.15), (2, 0.3)]:
+                ax.axvline(5, lw=width, color='gold', alpha=alpha, zorder=2)
+        ax.axvline(5, ls='--', lw=2, color='black', label=r'$\lambda = 1$ (critical)', zorder=3)
+
+        # --- Capacity contours C(λ) ---
+        if show_contours:
+            λ_grid = np.linspace(0.5, 9.5, 200)
+            λ_norm = np.clip(λ_grid / 10, 0.01, 0.99)
+            C = -λ_norm * np.log2(λ_norm) - (1 - λ_norm) * np.log2(1 - λ_norm)
+
+            # Draw iso-capacity curves
+            for level, style in [(0.5, ':'), (0.7, '-.'), (0.9, ':')]:
+                mask = np.abs(C - level) < 0.02
+                for idx in np.where(mask)[0]:
+                    ax.axvline(λ_grid[idx], ls=style, lw=1, color='goldenrod',
+                              alpha=0.5, zorder=1)
+            ax.text(3.5, 7.5, r'$C(\lambda)$ contours', fontsize=9,
+                   color='goldenrod', alpha=0.8)
+
+        # --- Trajectories ---
+        if show_trajectories:
+            for (x1, y1), (x2, y2), label, color in self.TRAJECTORIES:
+                ax.annotate('', xy=(x2, y2), xytext=(x1, y1),
+                           arrowprops=dict(arrowstyle='->', lw=2.5,
+                                          color=color, connectionstyle='arc3,rad=0.1'))
+                mid_x, mid_y = (x1 + x2) / 2, (y1 + y2) / 2
+                angle = np.degrees(np.arctan2(y2 - y1, x2 - x1))
+                ax.text(mid_x, mid_y + 0.3, label, fontsize=9, rotation=angle,
+                       ha='center', va='bottom', color=color, fontweight='bold')
+
+        # --- Subject data overlay ---
+        if subjects_csv and Path(subjects_csv).exists():
+            df = pd.read_csv(subjects_csv)
+
+            # Color by cluster
+            cluster_colors = {0: '#2ecc71', 1: '#e67e22', 2: '#e74c3c', 3: '#7f8c8d'}
+            colors = [cluster_colors.get(c, '#333333') for c in df['cluster']]
+
+            scatter = ax.scatter(df['lambda_hat'], df['Pi_hat'],
+                                c=colors, s=80, edgecolors='white',
+                                linewidth=1.5, zorder=10)
+
+            # Labels with smart positioning
+            for _, row in df.iterrows():
+                ax.annotate(row['id'], (row['lambda_hat'], row['Pi_hat']),
+                           xytext=(5, 5), textcoords='offset points',
+                           fontsize=8, fontweight='bold',
+                           bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7))
+
+        # --- Axes ---
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 8)
+        ax.set_xlabel(r'$\lambda$ (Criticality: branching ratio)', fontsize=12)
+        ax.set_ylabel(r'$\Pi$ (Precision weighting)', fontsize=12)
+        ax.set_title('GUTC Control Manifold: The $(\lambda, \Pi)$ Phase Space',
+                    fontsize=14, fontweight='bold')
+
+        # Zone labels on x-axis
+        ax.text(2.0, -0.5, 'Subcritical\n$(\\lambda < 1)$', ha='center',
+               fontsize=9, color='#2c3e50')
+        ax.text(5.0, -0.5, 'Critical\n$(\\lambda \\approx 1)$', ha='center',
+               fontsize=9, color='#27ae60', fontweight='bold')
+        ax.text(8.0, -0.5, 'Supercritical\n$(\\lambda > 1)$', ha='center',
+               fontsize=9, color='#c0392b')
+
+        ax.legend(loc='upper left', framealpha=0.9)
+        plt.tight_layout()
+
+        return fig, ax
+
+    def plot_3d_manifold(self, show_surface=True, show_trajectories=True):
+        """
+        3D manifold with (λ, Π_sensory, Π_prior) axes.
+
+        The third dimension separates bottom-up (sensory) and top-down (prior)
+        precision, revealing the full control space.
+
+        Returns:
+            fig, ax: matplotlib 3D figure and axes
+        """
+        fig = plt.figure(figsize=(12, 9))
+        ax = fig.add_subplot(111, projection='3d')
+
+        # --- Surface: λ-dependent capacity ---
+        if show_surface:
+            λ = np.linspace(0.1, 2, 50)
+            Π_s = np.linspace(0, 5, 50)
+            Λ, Π_S = np.meshgrid(λ, Π_s)
+
+            # Capacity surface: C(λ, Π) = H(λ) * Π / (1 + Π)
+            # H(λ) = -λ*log(λ) - (1-λ)*log(1-λ) for λ in (0,1)
+            λ_clipped = np.clip(Λ, 0.01, 0.99)
+            H = -λ_clipped * np.log(λ_clipped) - (1 - λ_clipped) * np.log(1 - λ_clipped)
+            C = H * Π_S / (1 + Π_S)
+
+            # Map λ from [0.1, 2] to [0, 10] for consistency with 2D
+            Λ_scaled = Λ * 5
+
+            surf = ax.plot_surface(Λ_scaled, Π_S, C, cmap='viridis',
+                                  alpha=0.6, edgecolor='none')
+            fig.colorbar(surf, ax=ax, shrink=0.5, label=r'$C(\lambda, \Pi)$')
+
+        # --- Clinical region markers ---
+        regions_3d = [
+            (5, 3, 2.5, 'Healthy', '#2ecc71'),      # λ=1, moderate Π
+            (3, 5, 1.5, 'ASD-like', '#e67e22'),     # subcritical, high Π_sens
+            (7, 5, 3.5, 'Psychotic', '#e74c3c'),    # supercritical, high Π_prior
+            (1.5, 1, 0.5, 'Anesthetic', '#7f8c8d'), # low everything
+        ]
+        for x, y, z, label, color in regions_3d:
+            ax.scatter([x], [y], [z], c=color, s=200, marker='o',
+                      edgecolors='black', linewidth=1.5, label=label)
+            ax.text(x, y, z + 0.3, label, fontsize=10, ha='center')
+
+        # --- Archetypal trajectories in 3D ---
+        if show_trajectories:
+            # Development: low → critical
+            t = np.linspace(0, 1, 20)
+            dev_λ = 1.5 + 3.5 * t
+            dev_Π_s = 0.8 + 2.2 * t
+            dev_Π_p = 0.5 + 2.0 * t
+            ax.plot(dev_λ, dev_Π_s, dev_Π_p, 'b-', lw=2, label='Development')
+
+            # Psychosis trajectory
+            psy_λ = 5 + 2.5 * t
+            psy_Π_s = 3.5 + 1.5 * t
+            psy_Π_p = 2.5 + 1.0 * np.exp(t) - 1
+            ax.plot(psy_λ, psy_Π_s, psy_Π_p, 'r--', lw=2, label='Psychosis onset')
+
+        # --- Axes ---
+        ax.set_xlabel(r'$\lambda$ (Criticality)', fontsize=11)
+        ax.set_ylabel(r'$\Pi_{\text{sensory}}$', fontsize=11)
+        ax.set_zlabel(r'$\Pi_{\text{prior}}$', fontsize=11)
+        ax.set_title('3D GUTC Manifold: $(\lambda, \Pi_s, \Pi_p)$ Control Space',
+                    fontsize=13, fontweight='bold')
+
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 6)
+        ax.set_zlim(0, 4)
+
+        ax.legend(loc='upper left')
+        ax.view_init(elev=25, azim=45)
+
+        return fig, ax
+
+    def animate_trajectories(self, trajectory_csv, output_path='gutc_animation.gif',
+                             fps=10, duration_sec=5):
+        """
+        Animate subject trajectories across the manifold over time.
+
+        Args:
+            trajectory_csv: CSV with [id, time, lambda_hat, Pi_hat]
+            output_path: Output file (gif or mp4)
+            fps: Frames per second
+            duration_sec: Animation duration
+
+        Returns:
+            animation.FuncAnimation object
+        """
+        # Load data
+        df = pd.read_csv(trajectory_csv)
+        subjects = df['id'].unique()
+        times = sorted(df['time'].unique())
+
+        # Set up figure
+        fig, ax = plt.subplots(figsize=(10, 8))
+        self._setup_base_manifold(ax)
+
+        # Initialize scatter plots for each subject
+        scatters = {}
+        trails = {}
+        for subj in subjects:
+            scatters[subj] = ax.scatter([], [], s=100, label=subj, zorder=10)
+            trails[subj], = ax.plot([], [], '-', alpha=0.5, lw=1)
+
+        ax.legend(loc='upper right')
+
+        def init():
+            for subj in subjects:
+                scatters[subj].set_offsets(np.empty((0, 2)))
+                trails[subj].set_data([], [])
+            return list(scatters.values()) + list(trails.values())
+
+        def update(frame):
+            current_time = times[min(frame, len(times) - 1)]
+
+            for subj in subjects:
+                subj_data = df[(df['id'] == subj) & (df['time'] <= current_time)]
+                if len(subj_data) > 0:
+                    # Current position
+                    latest = subj_data.iloc[-1]
+                    scatters[subj].set_offsets([[latest['lambda_hat'], latest['Pi_hat']]])
+
+                    # Trail
+                    trails[subj].set_data(subj_data['lambda_hat'], subj_data['Pi_hat'])
+
+            ax.set_title(f'GUTC Manifold - Time: {current_time:.1f}', fontweight='bold')
+            return list(scatters.values()) + list(trails.values())
+
+        n_frames = int(fps * duration_sec)
+        anim = animation.FuncAnimation(fig, update, init_func=init,
+                                       frames=n_frames, interval=1000/fps, blit=True)
+
+        # Save
+        if output_path.endswith('.gif'):
+            anim.save(output_path, writer='pillow', fps=fps)
+        else:
+            anim.save(output_path, writer='ffmpeg', fps=fps)
+
+        return anim
+
+    def _setup_base_manifold(self, ax):
+        """Set up base manifold without data."""
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 8)
+        ax.set_xlabel(r'$\lambda$ (Criticality)')
+        ax.set_ylabel(r'$\Pi$ (Precision)')
+
+        # Regions
+        for x, y, w, h, label, color, alpha in self.REGIONS:
+            rect = plt.Rectangle((x, y), w, h, alpha=alpha, color=color)
+            ax.add_patch(rect)
+            ax.text(x + w/2, y + h/2, label, ha='center', va='center',
+                   fontsize=9, fontweight='bold')
+
+        # Critical line
+        ax.axvline(5, ls='--', lw=2, color='black')
+
+        return ax
+
+
+# --- Standalone usage ---
+if __name__ == '__main__':
+    viz = GUTCVisualizer(style='publication')
+
+    # 2D manifold
+    fig2d, ax2d = viz.plot_2d_manifold(show_contours=True, show_glow=True)
+    fig2d.savefig('gutc_2d_supreme.pdf', dpi=300, bbox_inches='tight')
+    fig2d.savefig('gutc_2d_supreme.png', dpi=300, bbox_inches='tight')
+
+    # 3D manifold
+    fig3d, ax3d = viz.plot_3d_manifold()
+    fig3d.savefig('gutc_3d_manifold.pdf', dpi=300, bbox_inches='tight')
+    fig3d.savefig('gutc_3d_manifold.png', dpi=300, bbox_inches='tight')
+
+    print("Generated: gutc_2d_supreme.pdf, gutc_3d_manifold.pdf")
+    plt.show()
+```
+
+### B.6 CLI Tool: `phase_diagram.py`
+
+The following CLI script integrates with data pipelines for automated figure generation.
+
+```python
+#!/usr/bin/env python3
+"""
+phase_diagram.py - GUTC Control Manifold CLI Tool
+
+Generate publication-ready (λ, Π) phase diagrams from empirical data.
+
+Usage:
+    python phase_diagram.py --2d                           # Basic 2D manifold
+    python phase_diagram.py --2d --csv subjects.csv        # With subject overlay
+    python phase_diagram.py --3d                           # 3D manifold
+    python phase_diagram.py --animate trajectory.csv       # Animated trajectories
+    python phase_diagram.py --all --csv data.csv           # Generate everything
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+# Import GUTCVisualizer (assume in same directory or installed)
+try:
+    from gutc_visualizer import GUTCVisualizer
+except ImportError:
+    # Inline definition for standalone use
+    exec(open('gutc_visualizer.py').read())
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='GUTC Control Manifold Visualization Tool',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    %(prog)s --2d --csv subjects.csv --output fig1.pdf
+    %(prog)s --3d --output fig2.png
+    %(prog)s --animate trajectory.csv --fps 15 --output movie.gif
+    %(prog)s --all --csv data.csv --output-dir figures/
+        """
+    )
+
+    # Mode selection
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument('--2d', dest='mode_2d', action='store_true',
+                           help='Generate 2D manifold')
+    mode_group.add_argument('--3d', dest='mode_3d', action='store_true',
+                           help='Generate 3D manifold')
+    mode_group.add_argument('--animate', metavar='CSV', type=str,
+                           help='Animate trajectories from CSV')
+    mode_group.add_argument('--all', action='store_true',
+                           help='Generate all visualizations')
+
+    # Data input
+    parser.add_argument('--csv', type=str, default=None,
+                       help='Subject data CSV [id, lambda_hat, Pi_hat, cluster]')
+
+    # Output options
+    parser.add_argument('--output', '-o', type=str, default=None,
+                       help='Output file path')
+    parser.add_argument('--output-dir', type=str, default='.',
+                       help='Output directory (for --all)')
+    parser.add_argument('--format', choices=['pdf', 'png', 'svg'], default='pdf',
+                       help='Output format (default: pdf)')
+
+    # Style options
+    parser.add_argument('--style', choices=['publication', 'presentation'],
+                       default='publication', help='Visual style')
+    parser.add_argument('--no-contours', action='store_true',
+                       help='Hide capacity contours')
+    parser.add_argument('--no-glow', action='store_true',
+                       help='Hide critical line glow')
+    parser.add_argument('--no-trajectories', action='store_true',
+                       help='Hide archetypal trajectories')
+
+    # Animation options
+    parser.add_argument('--fps', type=int, default=10,
+                       help='Animation FPS (default: 10)')
+    parser.add_argument('--duration', type=float, default=5.0,
+                       help='Animation duration in seconds')
+
+    # Demo mode
+    parser.add_argument('--demo', action='store_true',
+                       help='Generate demo with synthetic data')
+
+    return parser.parse_args()
+
+
+def generate_demo_data(output_path='demo_subjects.csv'):
+    """Generate synthetic subject data for demonstration."""
+    np.random.seed(42)
+
+    # Healthy controls (cluster 0)
+    n_hc = 15
+    hc_λ = np.random.normal(5.0, 0.3, n_hc)
+    hc_Π = np.random.normal(3.0, 0.4, n_hc)
+
+    # ASD-like (cluster 1)
+    n_asd = 10
+    asd_λ = np.random.normal(3.2, 0.5, n_asd)
+    asd_Π = np.random.normal(5.5, 0.6, n_asd)
+
+    # Psychotic (cluster 2)
+    n_psy = 8
+    psy_λ = np.random.normal(7.0, 0.6, n_psy)
+    psy_Π = np.random.normal(6.0, 0.5, n_psy)
+
+    # Depressive (cluster 3)
+    n_dep = 7
+    dep_λ = np.random.normal(3.0, 0.4, n_dep)
+    dep_Π = np.random.normal(1.5, 0.5, n_dep)
+
+    df = pd.DataFrame({
+        'id': [f'HC{i:02d}' for i in range(n_hc)] +
+              [f'ASD{i:02d}' for i in range(n_asd)] +
+              [f'PSY{i:02d}' for i in range(n_psy)] +
+              [f'DEP{i:02d}' for i in range(n_dep)],
+        'lambda_hat': np.concatenate([hc_λ, asd_λ, psy_λ, dep_λ]),
+        'Pi_hat': np.concatenate([hc_Π, asd_Π, psy_Π, dep_Π]),
+        'cluster': [0]*n_hc + [1]*n_asd + [2]*n_psy + [3]*n_dep
+    })
+
+    df.to_csv(output_path, index=False)
+    print(f"Generated demo data: {output_path}")
+    return output_path
+
+
+def main():
+    args = parse_args()
+
+    # Initialize visualizer
+    viz = GUTCVisualizer(style=args.style)
+
+    # Demo mode
+    if args.demo:
+        args.csv = generate_demo_data()
+        if not args.mode_2d and not args.mode_3d and not args.all:
+            args.mode_2d = True
+
+    # Default to 2D if no mode specified
+    if not any([args.mode_2d, args.mode_3d, args.animate, args.all]):
+        args.mode_2d = True
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate visualizations
+    if args.mode_2d or args.all:
+        fig, ax = viz.plot_2d_manifold(
+            subjects_csv=args.csv,
+            show_contours=not args.no_contours,
+            show_glow=not args.no_glow,
+            show_trajectories=not args.no_trajectories
+        )
+        out_path = args.output or output_dir / f'gutc_2d.{args.format}'
+        fig.savefig(out_path, dpi=300, bbox_inches='tight')
+        print(f"Saved: {out_path}")
+        plt.close(fig)
+
+    if args.mode_3d or args.all:
+        fig, ax = viz.plot_3d_manifold(
+            show_trajectories=not args.no_trajectories
+        )
+        out_path = args.output or output_dir / f'gutc_3d.{args.format}'
+        fig.savefig(out_path, dpi=300, bbox_inches='tight')
+        print(f"Saved: {out_path}")
+        plt.close(fig)
+
+    if args.animate:
+        out_path = args.output or output_dir / 'gutc_animation.gif'
+        viz.animate_trajectories(
+            args.animate,
+            output_path=str(out_path),
+            fps=args.fps,
+            duration_sec=args.duration
+        )
+        print(f"Saved: {out_path}")
+
+    print("Done!")
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### B.7 Trajectory CSV Format (for Animation)
+
+```csv
+id,time,lambda_hat,Pi_hat
+S001,0.0,1.5,0.8
+S001,1.0,2.3,1.2
+S001,2.0,3.1,1.8
+S001,3.0,4.0,2.4
+S001,4.0,4.8,3.0
+S002,0.0,5.0,3.5
+S002,1.0,5.5,4.0
+S002,2.0,6.2,4.8
+S002,3.0,6.8,5.5
+S002,4.0,7.2,6.0
+```
+
+| Column | Description |
+|--------|-------------|
+| `id` | Subject identifier |
+| `time` | Time point (arbitrary units; sessions, days, or continuous) |
+| `lambda_hat` | Estimated criticality at this time point |
+| `Pi_hat` | Estimated precision at this time point |
+
+### B.8 Usage Summary
 
 | Command | Output |
 |---------|--------|
-| `python lambda_pi_manifold.py` | Basic manifold PNG/PDF |
-| `python phase_diagram.py` | Full manifold with subjects from CSV |
+| `python phase_diagram.py --2d` | Basic 2D manifold |
+| `python phase_diagram.py --2d --csv subjects.csv` | 2D with subject overlay |
+| `python phase_diagram.py --3d` | 3D $(\lambda, \Pi_s, \Pi_p)$ manifold |
+| `python phase_diagram.py --demo` | Demo with synthetic data |
+| `python phase_diagram.py --animate traj.csv` | Animated trajectories |
+| `python phase_diagram.py --all --csv data.csv` | Full suite |
 | `pdflatex lambda_pi_manifold.tex` | TikZ version (Section 16.4) |
+
+### B.9 Integration with Analysis Pipeline
+
+```bash
+#!/bin/bash
+# Full GUTC analysis pipeline
+
+# 1. Extract avalanche statistics from EEG/MEG
+python extract_avalanches.py --input raw_eeg.fif --output avalanche_stats.csv
+
+# 2. Estimate branching ratio (λ)
+python estimate_lambda.py --input avalanche_stats.csv --output lambda_estimates.csv
+
+# 3. Fit precision (Π) from behavioral data
+python fit_precision.py --input behavioral.csv --output pi_estimates.csv
+
+# 4. Merge into GUTC coordinates
+python merge_coordinates.py --lambda lambda_estimates.csv \
+                            --pi pi_estimates.csv \
+                            --output gutc_coordinates.csv
+
+# 5. Generate publication figure
+python phase_diagram.py --2d --csv gutc_coordinates.csv \
+                        --output figures/fig1_manifold.pdf
+
+# 6. Run statistical tests on coordinates
+python gutc_statistics.py --input gutc_coordinates.csv --output stats_report.txt
+```
 
 This provides a complete **GUTC production pipeline**: dump avalanche/behavioral fits → auto-rendered manifold → publication Figure 1.
 
