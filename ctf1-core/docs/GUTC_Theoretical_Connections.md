@@ -254,28 +254,103 @@ with $F_\lambda$ implementing error-driven updates through heteroclinic dynamics
 
 ---
 
-## VI. Implications
+## VI. Hierarchical Control Architecture: AIF + MPC
 
-### 6.1 For Neuroscience
+### 6.1 Two-Level Loop Structure
+
+A powerful pattern emerges: slow AIF for planning, fast execution for control.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              HIGH LEVEL: AIF PLANNER (5-20 Hz)              │
+│  • Hierarchical generative model over tasks/goals          │
+│  • Minimizes G(π) to select reference trajectories         │
+│  • Maintains beliefs q(x_t) via variational inference      │
+└─────────────────────────────────────────────────────────────┘
+                              ↓ References / Goals
+                              ↑ State estimates / Constraint feedback
+┌─────────────────────────────────────────────────────────────┐
+│             LOW LEVEL: MPC CONTROLLER (100-1000 Hz)         │
+│  • Tracks AIF-proposed references                          │
+│  • Enforces dynamics, safety constraints                   │
+│  • Fast optimization: min ||x - x_ref||² + ||a||²          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 6.2 Mapping to GUTC/HHN Architecture
+
+| AIF-MPC Level | GUTC Component | Timescale |
+|---------------|----------------|-----------|
+| High (AIF planner) | HHN Level L (goals/plans) | Slow ($\tau_L$) |
+| Mid (skills/options) | HHN Level 2 (chunks) | Medium ($\tau_2$) |
+| Low (MPC execution) | HHN Level 1 (primitives) | Fast ($\tau_1$) |
+
+**Key correspondence:**
+- AIF's $\mathcal{G}(\pi)$ minimization → Selection among HHN branches
+- MPC reference tracking → Heteroclinic orbit following
+- Precision weighting → Noise amplitude $\sigma$ (dwell time control)
+
+### 6.3 The Criticality-Agency Bridge
+
+**Why criticality enables optimal agency:**
+
+| Property | Critical State | Agency Benefit |
+|----------|---------------|----------------|
+| High $C(\lambda)$ | Long-range correlations | Long-horizon planning |
+| $I(\lambda) \to \infty$ | Maximal sensitivity | Efficient exploration |
+| Power-law $M_W$ | Extended working memory | Temporal integration |
+| Metastable $M_L$ | Structured priors | Goal-directed behavior |
+
+**The critical phase maximizes causal efficacy:** agents can efficiently pursue both exploitation (extrinsic) and exploration (epistemic) simultaneously.
+
+### 6.4 AIT Interpretation of GUTC Components
+
+| GUTC Component | AIT Interpretation |
+|----------------|-------------------|
+| Thought ($\max C$) | Maximally deep generative model $p(x,u)$ |
+| Learning (SOC) | Structural learning $\Delta\theta$ maintaining optimal boundary |
+| Agency ($a_t$) | Action as inference: select $a_t$ to minimize future $\mathbb{E}[\mathcal{F}]$ |
+| Memory ($M_L$) | Structured priors constraining complexity in $\mathcal{F}$ |
+
+### 6.5 Empirical Validation Directions
+
+| Domain | Active Inference Prediction | GUTC Link |
+|--------|---------------------------|-----------|
+| Perception | Prediction errors in sensory cortex | Error = deviation from heteroclinic orbit |
+| Decision-making | Epistemic foraging matches $\mathcal{G}$ | Branch selection in HHN |
+| Motor control | Precision-weighted trajectory updates | Dwell time modulation |
+| Psychopathology | Disorders = aberrant precision | Phase errors ($E \neq 0$) |
+
+**Key empirical signatures:**
+- Mismatch negativity (auditory) → Precision-weighted error signals
+- Bistable perception → Heteroclinic orbit competition
+- Parkinson's bradykinesia → Dopaminergic precision deficits → SOC failure
+
+---
+
+## VII. Implications
+
+### 7.1 For Neuroscience
 
 - **Predictive coding** is implemented in **critical cortical dynamics**
 - **Precision weighting** corresponds to **noise amplitude** in heteroclinic networks
 - **Hierarchical inference** maps to **HHN level structure**
 
-### 6.2 For AI
+### 7.2 For AI
 
 - Implement **FEP-based agents** with explicit criticality constraints
 - Use **heteroclinic memory** for structured world models
 - Tune $\rho(W) = 1$ for optimal inference efficiency
+- Deploy hierarchical AIF + MPC for embodied systems
 
-### 6.3 For Philosophy
+### 7.3 For Philosophy
 
 All three frameworks (FEP, PC, AI) describe **what** cognition does.
 GUTC describes **how** it's physically realized: critical dynamics.
 
 ---
 
-## VII. Summary Table
+## VIII. Summary Table
 
 | Concept | FEP | Predictive Coding | Active Inference | GUTC |
 |---------|-----|-------------------|------------------|------|
