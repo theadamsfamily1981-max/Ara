@@ -685,6 +685,131 @@ to implement precision-dependent gating. Finally, neuromodulators instantiate ab
 
 ---
 
+## XIII. Formal Model: Biologically Constrained Laminar Neural Mass (Methods)
+
+The microcircuit is modeled as a set of coupled neural-mass units governed by first-order ordinary differential equations (ODEs), which approximates the average activity of specific cell populations. The model integrates constraints across laminar, cellular, and neuromodulatory scales.
+
+### 13.1 Populations and State Variables
+
+For each cortical column (or area), the model includes 16 populations derived from 4 cortical layers ($\ell \in \{\text{L4}, \text{L2/3}, \text{L5}, \text{L6}\}$) and 4 cell types ($c \in \{\text{Pyr}, \text{PV}, \text{SOM}, \text{VIP}\}$).
+
+The state of the system is a vector of mean firing rates $\mathbf{r}(t)$ and total synaptic input currents $\mathbf{u}(t)$:
+
+$$\mathbf{r}(t) = \big(r_{\text{L4,Pyr}}, r_{\text{L4,PV}}, \dots, r_{\text{L6,VIP}}\big)^\top$$
+
+The dynamics for the firing rate $r_{\ell,c}(t)$ of any population $(\ell,c)$ are given by:
+
+$$\tau_{\ell,c} \frac{dr_{\ell,c}}{dt} = - r_{\ell,c}(t) + \phi\big(u_{\ell,c}(t)\big)$$
+
+The input current $u_{\ell,c}(t)$ is defined as the weighted sum of activity from all populations plus external and neuromodulatory inputs:
+
+$$u_{\ell,c}(t) = \sum_{\ell',c'} W_{(\ell,c),(\ell',c')}\, r_{\ell',c'}(t) + I_{\ell,c}^{\text{ext}}(t)$$
+
+### 13.2 Connectivity Matrix $W$ and Intrinsic Constraints
+
+The $16 \times 16$ connectivity matrix $W$ is fixed by three levels of biological constraints:
+
+#### A. Laminar Backbone (Excitatory Connections)
+
+The pyramidal (Pyr) connectivity enforces the canonical cortical backbone, primarily controlling **feedforward (FF) → error** and **feedback (FB) → prediction** loops:
+
+* **FF Drive:** Strong $W_{(\text{L2/3,Pyr}),(\text{L4,Pyr})} = w_{42}$ (L4 → L2/3)
+* **Prediction Loop:** Strong $W_{(\text{L5,Pyr}),(\text{L2/3,Pyr})} = w_{52}$ (Error → Prediction) and $W_{(\text{L2/3,Pyr}),(\text{L5,Pyr})} = w_{25}$ (Prediction → Error)
+* **Recurrence:** Strong $W_{(\ell,\text{Pyr}),(\ell,\text{Pyr})} = w_{\ell\ell}^{\text{EE}}$ for $\ell \in \{\text{L2/3},\text{L5},\text{L6}\}$, with L4 recurrence set near zero
+
+#### B. Inhibitory Subclasses (PV, SOM, VIP)
+
+Inhibitory connectivity reflects cell-type-specific functional motifs:
+
+* **PV (Stability):** Provides broad, fast, perisomatic inhibition, $W_{(\ell,\text{PV}),(\ell,\text{Pyr})} < 0$, ensuring stability and balancing local excitation
+* **VIP (Disinhibition):** Inhibits SOM populations, $W_{(\ell,\text{SOM}),(\ell,\text{VIP})} < 0$, providing a mechanism for contextual disinhibition
+* **SOM (Precision Gating):** Provides dendritic inhibition, modeled as a **gating function** on the top-down/feedback channel $u_{\ell,\text{FB}}$ of the pyramidal input $u_{\ell,\text{Pyr}}$:
+
+$$\mathbf{u}_{\ell,\text{Pyr}} = u_{\ell,\text{FF}} + g_{\ell}^{\text{FB}}(t) \, u_{\ell,\text{FB}} + u_{\ell,\text{rec}} + u_{\ell,\text{inh}}$$
+
+Where the SOM-mediated gain $g_{\ell}^{\text{FB}}$ controls the influence of top-down predictions:
+
+$$g_{\ell}^{\text{FB}}(t) = g_{\ell,0}^{\text{FB}} \cdot \exp\big(-\kappa_{\ell}^{\text{SOM}} \, r_{\ell,\text{SOM}}(t)\big)$$
+
+### 13.3 Criticality ($\lambda$) and Precision ($\Pi$) Mapping
+
+The core GUTC control parameters are integrated as global coupling strength ($\lambda$) and local, neuromodulator-dependent gains ($\Pi$).
+
+#### A. Global Criticality ($\lambda$)
+
+The criticality parameter $\lambda$ sets the global phase of the system by scaling the strength of all recurrent and long-range coupling:
+
+$$u_{\ell,c}(t) = \mathbf{\lambda} \sum_{\ell',c'} W_{(\ell,c),(\ell',c')}^{\text{recurrent}} r_{\ell',c'}(t) + \dots$$
+
+(where $W^{\text{recurrent}}$ includes all $W_{ij}$ elements that represent recurrent or long-range coupling).
+
+#### B. Local Precision ($\Pi$) as Neuromodulatory Gain
+
+The abstract precision parameters $\Pi$ are implemented as multiplicative gains on the intrinsic neuronal gain $a$ of the activation function $\phi(u) = 1 / (1 + \exp(-a(u - \theta)))$.
+
+| Parameter | Neuromodulator | Target Location | Modulated Mechanism |
+|-----------|----------------|-----------------|---------------------|
+| $\Pi_{\text{sensory}}$ | **Acetylcholine (ACh)** | L4/L2/3 (Sensory areas) | Multiplies the intrinsic neuronal gain: $a \to \mathbf{\Pi}_{\text{sensory}} \cdot a$. Also scales thalamic input $I_{\text{L4,Pyr}}^{\text{th}}(t) \to \mathbf{\Pi}_{\text{sensory}} \cdot s_{\text{th}}(t)$ |
+| $\Pi_{\text{prior}}$ | **Dopamine (DA, D2)** | SFC/dACC-like (Frontal areas) | Multiplies the intrinsic neuronal gain: $a \to \mathbf{\Pi}_{\text{prior}} \cdot a$. Also controls SOM-gating strength $\kappa_{\ell}^{\text{SOM}}$ to regulate the L2/3 ↔ L5 loop |
+
+In this model, $\lambda$ determines the available computational capacity, and $\Pi$ determines how that capacity is allocated by weighting prediction errors and predictions.
+
+---
+
+## XIV. Mapping the $(\lambda, \Pi)$ Control Space to Psychopathology
+
+The Global Unified Theory of Cognition (GUTC) posits that many psychiatric phenotypes arise from dysregulation in the joint space defined by the global criticality parameter ($\lambda$) and the local precision parameter ($\Pi$). $\lambda$ controls global system capacity, while $\Pi$ controls information allocation.
+
+### 14.1 Four Archetypal Dynamical Regimes
+
+By combining the two-dimensional control space, we hypothesize four archetypal dynamical regimes, each potentially corresponding to a cluster of clinical symptoms:
+
+| Regime | $\lambda$ (Criticality) | $\Pi$ (Precision) | Dynamics and Capacity | Predicted Clinical Phenotype |
+|--------|-------------------------|-------------------|----------------------|------------------------------|
+| **I** | **Subcritical ($\lambda < 1$)** | **High $\Pi_{\text{prior}}$ (Rigid)** | Low Capacity, Low Variability, **High Signal/Noise**. System is rigid; resists change. PEs are strongly weighted but rapidly self-terminating. | **Autism Spectrum Disorder (ASD):** Restricted, repetitive behaviors; insistence on sameness (rigid priors/dynamics); hyper-focus on local details (high $\Pi_{\text{sensory}}$) |
+| **II** | **Supercritical ($\lambda > 1$)** | **Low $\Pi_{\text{prior}}$ (Chaotic)** | High Capacity, High Variability, **Low Signal/Noise**. System is unstable; prone to cascade and over-generalization. | **Psychosis (Acute Schizophrenia/Mania):** Chaotic thought patterns; loose associations; over-interpretation of noise as signal (low $\Pi_{\text{prior}}$ allows insignificant PEs to drive widespread change) |
+| **III** | **Subcritical ($\lambda < 1$)** | **Low $\Pi_{\text{prior}}$ (Hypo-Plastic)** | Low Capacity, Low Engagement. System is suppressed; learning is blunted because PEs are ignored. | **Apathy/Anhedonia (Severe Depression):** Reduced motivational salience (low $\Pi_{\text{prior}}$ on reward PE); diminished response to environment; cognitive rigidity |
+| **IV** | **Supercritical ($\lambda > 1$)** | **High $\Pi_{\text{prior}}$ (Hyper-Plastic)** | High Capacity, High Instability. Learning is too fast; representations are unstable and constantly overwritten. | **Anxiety/Borderline Features:** Heightened emotional volatility; rapid, unstable social interpretations (hyper-plasticity of emotional priors); difficulty stabilizing identity |
+
+### 14.2 Subcritical + High Precision (Regime I: ASD)
+
+* **Dynamical regime:** $\lambda < 1$ (subcritical), reduced flexibility and fewer transitions between brain states; empirically, autism shows reduced state switching and signs of subcritical or overly stable dynamics in some resting-state and E–I balance measures [35][36][37]
+* **Precision pattern:** High and often inflexible precision on sensory prediction errors and/or low-level priors ($\Pi_{\text{sensory}}$ high), as in aberrant-precision accounts of autism where sensory channels are "turned up" and priors are not flexibly adjusted [38][39]
+* **Phenotypic mapping:** Restricted, repetitive behaviors; insistence on sameness (rigid priors/dynamics); hyper-focus on local details; sensory hypersensitivity [37][40][38]
+
+### 14.3 Supercritical + Low Precision (Regime II: Psychosis)
+
+* **Dynamical regime:** $\lambda > 1$ (supercritical), overly easy propagation and amplification of activity; schizophrenia and psychosis show altered criticality, abnormal complexity, and deviations from healthy critical scaling [41][42][43]
+* **Precision pattern:** Low or misallocated precision on appropriate priors or sensory channels ($\Pi$ too low or assigned to the wrong level), so that random fluctuations are over-interpreted and belief updating is unstable—central to predictive-coding accounts of psychosis [44][45][46]
+* **Phenotypic mapping:** Delusions, hallucinations, and aberrant salience can be modeled as supercritical dynamics plus insufficiently constrained precision, allowing noisy PEs to drive runaway belief updates or giving undue weight to aberrant priors [47][48][46]
+
+### 14.4 Clinical Implications
+
+In GUTC language: **ASD** corresponds primarily to "subcritical + high, rigid $\Pi$" sectors of the $(\lambda,\Pi)$ plane, whereas **psychosis-spectrum disorders** occupy "near-/supercritical + low or misallocated $\Pi$" regions, with healthy cognition near $\lambda \approx 1$ and context-sensitive, well-calibrated precision [43][46][38].
+
+**Therapeutic Target:** Clinical interventions should aim to restore the appropriate **balance** of $(\lambda, \Pi)$ to return the system to the optimal critical-balance point.
+
+### Section XIV References
+
+| Citation | URL |
+|----------|-----|
+| [35] | https://www.nature.com/articles/s41598-020-65500-4 |
+| [36] | https://pmc.ncbi.nlm.nih.gov/articles/PMC5504272/ |
+| [37] | https://direct.mit.edu/netn/article/5/2/295/97536/Atypical-core-periphery-brain-dynamics-in-autism |
+| [38] | https://www.frontiersin.org/journals/human-neuroscience/articles/10.3389/fnhum.2014.00302/full |
+| [39] | https://sandervandecruys.be/pdf/2014-VandeCruysetal-PsychRev-Precise_minds.pdf |
+| [40] | https://journal.psych.ac.cn/xlkxjz/EN/10.3724/SP.J.1042.2024.00813 |
+| [41] | https://pmc.ncbi.nlm.nih.gov/articles/PMC8995790/ |
+| [42] | https://www.sciencedirect.com/science/article/abs/pii/S0920996421003510 |
+| [43] | https://pmc.ncbi.nlm.nih.gov/articles/PMC7479292/ |
+| [44] | https://pmc.ncbi.nlm.nih.gov/articles/PMC5424073/ |
+| [45] | https://www.annualreviews.org/content/journals/10.1146/annurev-neuro-100223-121214 |
+| [46] | https://pmc.ncbi.nlm.nih.gov/articles/PMC6169400/ |
+| [47] | https://www.nature.com/articles/s41537-025-00643-9 |
+| [48] | https://www.frontiersin.org/journals/psychiatry/articles/10.3389/fpsyt.2013.00047/full |
+
+---
+
 ## References
 
 1. Friston, K. (2010). The free-energy principle: a unified brain theory? *Nature Reviews Neuroscience*, 11(2), 127-138.
