@@ -1323,6 +1323,241 @@ $$\boxed{\text{The brain is a point moving on a } (\lambda, \Pi) \text{ manifold
 
 ---
 
+## Appendix B: Python Visualization Code for the $(\lambda, \Pi)$ Manifold
+
+This appendix provides production-ready Python code for rendering the GUTC control manifold, suitable for empirical data visualization and dynamic parameter sweeps.
+
+### B.1 Minimal Matplotlib Version
+
+```python
+import matplotlib.pyplot as plt
+
+def plot_lambda_pi_manifold():
+    """Generate the (λ, Π) control manifold figure."""
+    fig, ax = plt.subplots(figsize=(6, 5))
+
+    # Axis limits
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 8)
+
+    # Axes labels
+    ax.set_xlabel(r'$\lambda$ (Criticality)')
+    ax.set_ylabel(r'$\Pi$ (Precision)')
+
+    # Critical line λ = 1 (at x = 5 in this coordinate system)
+    ax.axvline(x=5, linestyle='--', linewidth=1.5, color='black')
+
+    # --- Regions ---
+    def add_region(x, y, w, h, label, **kwargs):
+        rect = plt.Rectangle((x, y), w, h, alpha=0.3, **kwargs)
+        ax.add_patch(rect)
+        ax.text(x + w/2, y + h/2, label,
+                ha='center', va='center',
+                fontsize=9, fontweight='bold')
+
+    # Healthy (central corridor)
+    add_region(4.5, 2.0, 1.0, 3.0, 'Healthy', color='green')
+
+    # ASD-like (subcritical, high Π_sensory)
+    add_region(2.0, 4.5, 2.5, 2.5, 'ASD-like', color='orange')
+
+    # Psychotic (supercritical, high Π_prior)
+    add_region(5.5, 4.5, 2.5, 2.5, 'Psychotic', color='red')
+
+    # Anesthetic (low λ, low Π)
+    add_region(0.0, 0.0, 3.0, 2.0, 'Anesthetic', color='gray')
+
+    # Manic (high λ, unstable)
+    add_region(7.0, 0.0, 3.0, 3.0, 'Manic', color='purple')
+
+    # --- Trajectories ---
+    ax.annotate('', xy=(4.8, 3.0), xytext=(1.5, 0.8),
+                arrowprops=dict(arrowstyle='->', linewidth=2, color='blue'))
+    ax.text(3.1, 2.2, 'Development', fontsize=8, rotation=25)
+
+    ax.annotate('', xy=(7.5, 6.0), xytext=(5.0, 3.5),
+                arrowprops=dict(arrowstyle='->', linewidth=2, color='blue'))
+    ax.text(6.5, 5.0, 'Psychosis', fontsize=8, rotation=35)
+
+    ax.annotate('', xy=(6.0, 4.0), xytext=(7.5, 6.0),
+                arrowprops=dict(arrowstyle='->', linewidth=2, color='blue'))
+    ax.annotate('', xy=(5.0, 3.0), xytext=(6.0, 4.0),
+                arrowprops=dict(arrowstyle='->', linewidth=2, color='blue'))
+    ax.text(6.0, 4.5, 'Recovery', fontsize=8, rotation=-30)
+
+    # --- Axis annotations ---
+    ax.text(2.5, -0.4, 'Subcritical', ha='center', va='top', fontsize=8)
+    ax.text(5.0, -0.4, 'Critical', ha='center', va='top', fontsize=8)
+    ax.text(7.5, -0.4, 'Supercritical', ha='center', va='top', fontsize=8)
+
+    ax.text(-0.5, 1.5, r'Low $\Pi$', ha='center', va='center', fontsize=8, rotation=90)
+    ax.text(-0.5, 6.0, r'High $\Pi_{\text{prior}}$', ha='center', va='center', fontsize=8, rotation=90)
+
+    plt.tight_layout()
+    return fig, ax
+
+if __name__ == "__main__":
+    fig, ax = plot_lambda_pi_manifold()
+    fig.savefig("lambda_pi_manifold.png", dpi=300)
+    fig.savefig("lambda_pi_manifold.pdf")
+    plt.show()
+```
+
+### B.2 Subject Data Overlay
+
+```python
+def plot_points_on_manifold(points, ax=None, **scatter_kwargs):
+    """
+    Overlay empirical subjects on the manifold.
+
+    Parameters:
+        points: list of (lambda_hat, Pi_hat, label) triples
+        ax: existing axes (creates new if None)
+    """
+    if ax is None:
+        fig, ax = plot_lambda_pi_manifold()
+    for lam, Pi, label in points:
+        ax.scatter(lam, Pi, s=30, **scatter_kwargs)
+        if label is not None:
+            ax.text(lam + 0.1, Pi + 0.1, label, fontsize=7)
+    return ax
+
+# Example usage:
+if __name__ == "__main__":
+    fig, ax = plot_lambda_pi_manifold()
+    subjects = [
+        (4.9, 3.2, "S1"),   # near-healthy
+        (3.5, 6.0, "ASD"),  # ASD-like corner
+        (7.0, 6.2, "PSY")   # psychotic cluster
+    ]
+    plot_points_on_manifold(subjects, ax=ax, color='black')
+    fig.savefig("lambda_pi_with_subjects.png", dpi=300)
+    plt.show()
+```
+
+### B.3 Full Production Pipeline with Capacity Contours
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from pathlib import Path
+
+def plot_gutc_manifold(subjects_csv=None, show_contours=True):
+    """
+    Full GUTC control manifold with empirical subjects + capacity contours.
+
+    Parameters:
+        subjects_csv: Path to CSV with columns [id, lambda_hat, Pi_hat, cluster]
+        show_contours: Whether to show C(λ) capacity contours
+    """
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Base manifold
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 8)
+    ax.set_xlabel(r'$\lambda$ (Criticality)')
+    ax.set_ylabel(r'$\Pi$ (Precision)')
+    ax.axvline(5, ls='--', lw=2, c='black', label=r'$\lambda=1$')
+
+    # Regions
+    regions = [
+        (4.5, 2, 1, 3, 'Healthy', 'green'),
+        (2, 4.5, 2.5, 2.5, 'ASD-like', 'orange'),
+        (5.5, 4.5, 2.5, 2.5, 'Psychotic', 'red'),
+        (0, 0, 3, 2, 'Anesthetic', 'gray'),
+        (7, 0, 3, 3, 'Manic', 'purple')
+    ]
+    for x, y, w, h, label, color in regions:
+        rect = plt.Rectangle((x, y), w, h, alpha=0.3, color=color)
+        ax.add_patch(rect)
+        ax.text(x + w/2, y + h/2, label, ha='center', va='center',
+                fontweight='bold', fontsize=10)
+
+    # Capacity contours: C(λ) = -λ*log(λ) + (1-λ)*log(1-λ)
+    if show_contours:
+        λ_grid = np.linspace(0.1, 9.9, 100)
+        λ_norm = λ_grid / 5  # Normalize to [0, 2] range
+        λ_norm = np.clip(λ_norm, 0.01, 0.99)  # Avoid log(0)
+        C = -λ_norm * np.log(λ_norm) - (1 - λ_norm) * np.log(1 - λ_norm)
+        for level in [0.5, 0.6, 0.69]:  # 0.69 ≈ max entropy
+            idx = np.argmin(np.abs(C - level))
+            ax.axvline(λ_grid[idx], ls=':', lw=1, c='gold', alpha=0.7)
+
+    # Load + plot subjects from CSV
+    if subjects_csv and Path(subjects_csv).exists():
+        df = pd.read_csv(subjects_csv)
+        scatter = ax.scatter(df['lambda_hat'], df['Pi_hat'],
+                            c=df['cluster'], s=60, cmap='viridis',
+                            edgecolors='black', linewidth=1, zorder=10)
+        for _, row in df.iterrows():
+            ax.annotate(row['id'], (row['lambda_hat'], row['Pi_hat']),
+                        xytext=(5, 5), textcoords='offset points', fontsize=8)
+        plt.colorbar(scatter, label='Cluster')
+
+    # Trajectories
+    trajs = [
+        ((1.5, 0.8), (4.8, 3), 'Development'),
+        ((5, 3.5), (7.5, 6), 'Psychosis'),
+        ((7.5, 6), (5, 3), 'Recovery')
+    ]
+    for (x1, y1), (x2, y2), label in trajs:
+        ax.annotate('', xy=(x2, y2), xytext=(x1, y1),
+                    arrowprops=dict(arrowstyle='->', lw=2, color='blue'))
+        mid_x, mid_y = (x1 + x2) / 2, (y1 + y2) / 2
+        ax.text(mid_x, mid_y, label, fontsize=9, rotation=30)
+
+    plt.tight_layout()
+    return fig, ax
+
+# Generate demo CSV
+if __name__ == "__main__":
+    demo_data = pd.DataFrame({
+        'id': ['S1', 'S2', 'ASD1', 'PSY1', 'PSY2', 'HC1', 'Anes1'],
+        'lambda_hat': [4.9, 5.1, 3.2, 7.1, 6.8, 5.0, 1.5],
+        'Pi_hat': [3.2, 3.5, 6.2, 5.8, 6.5, 3.0, 0.8],
+        'cluster': [0, 0, 1, 2, 2, 0, 3]
+    })
+    demo_data.to_csv('subjects_gutc.csv', index=False)
+
+    # Render
+    fig, ax = plot_gutc_manifold('subjects_gutc.csv')
+    fig.savefig('gutc_manifold_complete.pdf', dpi=300, bbox_inches='tight')
+    plt.show()
+```
+
+### B.4 CSV Format for Empirical Data
+
+```csv
+id,lambda_hat,Pi_hat,cluster
+S001,4.8,3.1,0
+S002,5.1,3.3,0
+ASD17,3.2,6.0,1
+ASD23,2.9,5.8,1
+PSY01,7.1,5.9,2
+PSY12,6.8,6.2,2
+HC01,5.0,3.5,0
+```
+
+| Column | Description |
+|--------|-------------|
+| `id` | Subject identifier |
+| `lambda_hat` | Estimated criticality from branching ratio |
+| `Pi_hat` | Estimated precision from behavioral fits |
+| `cluster` | Clinical group (0=healthy, 1=ASD, 2=psychosis, 3=other) |
+
+### B.5 Usage Summary
+
+| Command | Output |
+|---------|--------|
+| `python lambda_pi_manifold.py` | Basic manifold PNG/PDF |
+| `python phase_diagram.py` | Full manifold with subjects from CSV |
+| `pdflatex lambda_pi_manifold.tex` | TikZ version (Section 16.4) |
+
+This provides a complete **GUTC production pipeline**: dump avalanche/behavioral fits → auto-rendered manifold → publication Figure 1.
+
+---
+
 ## References
 
 1. Friston, K. (2010). The free-energy principle: a unified brain theory? *Nature Reviews Neuroscience*, 11(2), 127-138.
