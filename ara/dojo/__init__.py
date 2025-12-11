@@ -31,6 +31,18 @@ from .planner import DojoPlanner, DojoPlannerConfig, dream_mode, mpc_plan, Plan,
 from .evolution import evolve_species, MEISFitness, Species, EvolutionConfig
 from .gauntlet import SafetyGridworld, TieredGauntlet, GauntletTier, TestResult
 from .viz import HologramViz, VizConfig, visualize_dreams, visualize_plan
+from .arena_core import (
+    OptimizedArenaCore,
+    ArenaCoreConfig,
+    EvaluationResult,
+    AraSpeciesBase,
+    AraSpeciesV2,
+    SimpleTestArena,
+    HDCEncoder,
+    LatentEncoder,
+    PlannerAgent,
+    VecArena,
+)
 
 __all__ = [
     # Encoder
@@ -65,4 +77,16 @@ __all__ = [
     "VizConfig",
     "visualize_dreams",
     "visualize_plan",
+    # Arena Core (High-Performance Evaluation)
+    "OptimizedArenaCore",
+    "ArenaCoreConfig",
+    "EvaluationResult",
+    "AraSpeciesBase",
+    "AraSpeciesV2",
+    "SimpleTestArena",
+    # Protocols
+    "HDCEncoder",
+    "LatentEncoder",
+    "PlannerAgent",
+    "VecArena",
 ]
