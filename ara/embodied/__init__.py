@@ -90,6 +90,29 @@ from .resource_gate import (
     check_resources,
 )
 
+# Lizard Brain - Always-on low-power cortex
+from .lizard import (
+    LizardBrain,
+    LizardState,
+    LizardConfig,
+    get_lizard_brain,
+    WakeEvent,
+    WakeEventType,
+    WakeCriteria,
+    WakeProtocol,
+    SalienceLevel,
+    PowerState,
+    PowerBudget,
+    ThermalZone,
+    PowerGovernor,
+    get_power_governor,
+    AttractorBasin,
+    BasinType,
+    BasinTransition,
+    AttractorMonitor,
+    get_attractor_monitor,
+)
+
 # Brainlink - BCI/physio hardware bridge
 from .brainlink import (
     BrainlinkProtocol,
@@ -174,6 +197,26 @@ __all__ = [
     "can_generate_video",
     "get_recommended_quality",
     "check_resources",
+    # Lizard Brain
+    "LizardBrain",
+    "LizardState",
+    "LizardConfig",
+    "get_lizard_brain",
+    "WakeEvent",
+    "WakeEventType",
+    "WakeCriteria",
+    "WakeProtocol",
+    "SalienceLevel",
+    "PowerState",
+    "PowerBudget",
+    "ThermalZone",
+    "PowerGovernor",
+    "get_power_governor",
+    "AttractorBasin",
+    "BasinType",
+    "BasinTransition",
+    "AttractorMonitor",
+    "get_attractor_monitor",
     # Brainlink
     "BrainlinkProtocol",
     "BrainlinkReading",
