@@ -199,6 +199,25 @@ $$W = \underbrace{\lambda W_{\text{base}}}_{M_W \text{ (Critical Bulk)}} + \unde
 
 This separates working and long-term memory while preserving global criticality.
 
+### 3.7 Extension: Hierarchical Heteroclinic Networks (HHNs)
+
+For complex cognition requiring **multi-scale temporal organization** (chunking, attention, planning), we extend to Hierarchical Heteroclinic Networks with multiple levels $l \in \{1, \ldots, L\}$:
+
+$$\dot{a}_i^{(l)} = a_i^{(l)} \left( \sigma_i^{(l)} - \sum_j \rho_{ij}^{(l)} a_j^{(l)} \right) + \sum_{k \in l-1} \beta_{ik} a_k^{(l-1)} + \eta_i(t)$$
+
+**Key properties:**
+- **Timescale separation:** Level 1 (fast primitives, $\tau \sim 1$) → Level $L$ (slow goals, $\tau \sim 100$)
+- **Hierarchical compression:** Single Level-$L$ saddle represents entire Level-$(L-1)$ sequence
+- **Preserved criticality:** $\max_{l,i,k} \Re \sigma_k^{(i,l)} \approx 0$ across all levels
+
+| Cognitive Function | HHN Mechanism |
+|--------------------|---------------|
+| **Chunking** | Lower sequences → single higher saddles (explains Miller's 7±2) |
+| **Attention** | Level 1 (salience) fast, Level $L$ (focus) slow |
+| **Decision-making** | Deliberation time = high-level dwell time |
+
+See `docs/GUTC_Hierarchical_HHN.md` for full mathematical treatment.
+
 ---
 
 ## 4. Information-Geometric Singularity at Criticality
