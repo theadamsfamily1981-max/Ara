@@ -133,7 +133,78 @@ With CR as a modular hypothesis, security reductions work for:
 
 ---
 
-## VII. Summary
+## VII. The Trifecta Pattern
+
+Across hash-then-sign signatures, hash-and-reveal commitments, and Merkle structures, a shared design template emerges:
+
+### The Pattern
+
+1. **Public setup** exposes a keyed hash $H_k$
+2. **Verification/binding condition** is a hash equality $H_k(x) = H_k(x')$
+3. **Any non-trivial win** by adversary yields either:
+   - A direct break of a simpler primitive, **or**
+   - Two distinct inputs with same hash: a collision
+
+### Example: Hash-Then-Sign Signatures
+
+**Scheme:** $\text{Sign}(m) = \sigma(\text{sk}, H_k(m))$ where $\sigma$ is a base signature on the hash.
+
+**UF-CMA Game:** Adversary must forge signature on new message $m^*$.
+
+**Reduction:**
+```
+If adversary forges (m*, σ*) where m* not queried:
+  Case 1: H_k(m*) = H_k(m_i) for some queried m_i
+          → Collision found: (m*, m_i)
+  Case 2: H_k(m*) ≠ H_k(m_i) for all queried m_i
+          → Break of base signature scheme σ
+```
+
+### Example: Hash-and-Reveal Commitments
+
+**Scheme:** $\text{Commit}(m) = H_k(m \| r)$ with random $r$; reveal by showing $(m, r)$.
+
+**Binding Game:** Adversary must open commitment to two different values.
+
+**Reduction:**
+```
+If adversary opens c to both (m, r) and (m', r'):
+  Then H_k(m || r) = c = H_k(m' || r')
+  But (m || r) ≠ (m' || r') since m ≠ m'
+  → Collision found: (m || r, m' || r')
+```
+
+### Example: Merkle Tree Membership
+
+**Scheme:** Root $= H_k(H_k(...) \| H_k(...))$; proof is hash path to leaf.
+
+**Membership Forgery Game:** Adversary forges proof for element not in tree.
+
+**Reduction:**
+```
+If adversary produces valid proof for x ∉ tree:
+  Walk proof path vs. honest path
+  At some node: H_k(a) = H_k(b) with a ≠ b
+  → Collision found: (a, b)
+```
+
+### The Unified Template
+
+Security reductions follow this template:
+
+1. **Sample or embed** $k$ (using keyed-family abstraction)
+2. **Run adversary** and wait for win in game (UF-CMA, binding, etc.)
+3. **Extract** either:
+   - A simpler-primitive break, **or**
+   - A collision $(x, x')$ with $H_k(x) = H_k(x')$
+
+This contradicts the formal CR assumption and, via the hardness basis, some underlying problem.
+
+**Conclusion:** Collision resistance is a **modular, consumable resource** that protocol designs deliberately target via the "success ⇒ collision (or base break)" pattern.
+
+---
+
+## VIII. Summary
 
 | Component | Role in Reduction |
 |-----------|-------------------|
