@@ -612,6 +612,79 @@ You can then add neuromodulatory "precision" parameters that scale specific laye
 
 ---
 
+## XII. Formal Model Definition: Biologically Constrained Neural Mass
+
+The network is modeled as a system of coupled differential equations based on a **Neural Mass Model** or a **Rate-Unit Model**, where the state variables represent the average firing rates of defined cell populations. The system is defined by $\mathbf{x} = [x_1, x_2, \dots, x_N]$, where $x_i$ is the firing rate of the $i$-th population, and $N$ is the total number of populations.
+
+### 12.1 Laminar Populations as State Variables
+
+Each lamina ($L_{k} \in \{L2/3, L4, L5, L6\}$) contains at least one Excitatory (E) and one Inhibitory (I) population. The generic dynamics for any population $i$ are:
+
+$$\tau \dot{x}_i = -x_i + f\left(\sum_{j} W_{ij} x_j + I_i^{\text{ext}} + I_i^{\text{mod}}\right)$$
+
+Where:
+* $x_i$: Firing rate/activity of population $i$
+* $\tau$: Time constant
+* $f(\cdot)$: Non-linear activation function (e.g., sigmoid/logistic function, or a thresholded linear function)
+* $W_{ij}$: The intrinsic (intracolumnar) connectivity weight matrix, strictly constrained by anatomical data (e.g., $W_{\text{L4E} \to \text{L2/3E}}$ is strong, $W_{\text{L2/3E} \to \text{L4E}}$ is near zero)
+* $I_i^{\text{ext}}$: External/extrinsic input, comprising feedforward (FF) and feedback (FB) signals, routed through appropriate layers (FF → L4; FB → L1/L6 and apical dendrites)
+* $I_i^{\text{mod}}$: Neuromodulatory input, which acts as the precision gain (constrained in Section 12.3)
+
+### 12.2 Cell Types as Sub-Populations
+
+The generic Inhibitory (I) population in each layer $L_k$ is expanded into three sub-populations, yielding a system of equations for the key cell types:
+
+$$\mathbf{x}_{L_k} = \left[x_{L_k}^{\text{Pyr}}, x_{L_k}^{\text{PV}}, x_{L_k}^{\text{SOM}}, x_{L_k}^{\text{VIP}}\right]$$
+
+The connectivity matrix $W$ is further constrained by interneuron roles:
+* $W$ reflects **PV's** broad inhibition on $x^{\text{Pyr}}$ and $x^{\text{PV}}$ populations for stability
+* $W$ reflects **VIP's** selective inhibition of $x^{\text{SOM}}$ ($\text{VIP} \to \text{SOM}$)
+
+**Precision/Gating Implementation via SOM:**
+
+The crucial role of **SOM** interneurons in gating top-down predictions is implemented by having their activity modulate the effective top-down input to the Pyramidal units (L2/3 and L5). The effective input, $I^{\text{eff}}$, is a function of the total received top-down input, $I^{\text{top-down}}$, and the activity of the SOM population, $x^{\text{SOM}}$:
+
+$$I^{\text{top-down}}_{\text{eff}} = I^{\text{top-down}} - g_{\text{SOM}}(\mathbf{\Pi}) \cdot x^{\text{SOM}}$$
+
+Where the gain $g_{\text{SOM}}(\mathbf{\Pi})$ may itself be modulated by neuromodulators (as detailed below), linking precision to the cell-type specific inhibition.
+
+### 12.3 Neuromodulators as Precision Gains ($\Pi$)
+
+The abstract precision parameter $\mathbf{\Pi}$ is implemented as a set of neuromodulatory-dependent gain factors that modulate the input $I^{\text{mod}}$ or the function $f(\cdot)$ across specific layers.
+
+| Parameter | Neuromodulator | Mechanism | Application (Layer/Circuit) |
+|-----------|----------------|-----------|----------------------------|
+| $\Pi_{\text{sensory}}$ | **Acetylcholine (ACh)** | **Multiplicative Gain:** Scales the input gain or the slope of the activation function $f(\cdot)$ (e.g., $\Pi_{\text{sensory}} \cdot f(\sum W x + I)$) in sensory layers, sharpening the PE signal | **L4/L2/3 PE populations** (Sensory Cortex), and on the SOM/VIP circuits to control their excitability |
+| $\Pi_{\text{prior}}$ | **Dopamine (DA, D2)** | **Multiplicative/Subtractive Gain:** Scales the gain of PE units, potentially by biasing the PV/SOM balance in favor of reduced SOM inhibition (lower precision) | **SFC/dACC** (Frontal/Cingulate), controlling the precision of higher-order priors and volatility estimates |
+
+This formal structure ensures that the system's dynamics (12.1), internal inhibition (12.2), and global modulations (12.3) are all biologically anchored, making the study of the $(\lambda, \Pi)$ control parameters highly interpretable.
+
+### 12.4 Compact Model Definition
+
+The cortical microcircuit is modeled as a set of coupled neural-mass units, one for each excitatory and inhibitory population in layers L2/3, L4, L5, and L6 (and their cell-type-specific subpopulations), with dynamics:
+
+$$\tau \dot{x}_i = -x_i + f\!\left(\sum_j W_{ij} x_j + I_i\right)$$
+
+where the connectivity matrix $W_{ij}$ is constrained by canonical laminar anatomy (strong L4→L2/3, L2/3↔L5, L6→L4; laminar-specific feedforward and feedback projections). Within each layer, inhibitory populations are subdivided into PV, SOM, and VIP interneurons with cell-type-specific connectivity motifs, allowing SOM- and VIP-mediated modulation of effective top-down input to pyramidal cells:
+
+$$I_{\text{top-down}}^{\text{eff}} = g_{\text{SOM}}(\Pi)\,I_{\text{top-down}}$$
+
+to implement precision-dependent gating. Finally, neuromodulators instantiate abstract precision parameters as gain factors on selected populations: acetylcholine defines a sensory precision $\Pi_{\text{sensory}}$ by scaling prediction-error-related inputs and transfer functions in L4/L2/3 and associated interneurons, while dopamine (D2) defines a prior/volatility precision $\Pi_{\text{prior}}$ by scaling PE gain in frontal (SFC/dACC-like) populations and their PV/SOM circuits, in line with pharmacological fMRI evidence for DA-dependent precision weighting [28][29][30][31][32][33][34].
+
+### Section XII References
+
+| Citation | URL |
+|----------|-----|
+| [28] | https://pmc.ncbi.nlm.nih.gov/articles/PMC3777738/ |
+| [29] | https://pmc.ncbi.nlm.nih.gov/articles/PMC3832795/ |
+| [30] | https://pmc.ncbi.nlm.nih.gov/articles/PMC7442488/ |
+| [31] | https://pmc.ncbi.nlm.nih.gov/articles/PMC4469730/ |
+| [32] | https://pmc.ncbi.nlm.nih.gov/articles/PMC10942646/ |
+| [33] | https://www.sciencedirect.com/science/article/pii/S1053811920310752 |
+| [34] | https://pmc.ncbi.nlm.nih.gov/articles/PMC8589669/ |
+
+---
+
 ## References
 
 1. Friston, K. (2010). The free-energy principle: a unified brain theory? *Nature Reviews Neuroscience*, 11(2), 127-138.
