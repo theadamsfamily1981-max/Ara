@@ -88,10 +88,32 @@ Performance J(λ)     Capacity C(λ)     Edge E(λ)
 |----------|-------|----------------------------|--------------------------|
 | Severe Depression | Subcritical | $> 1.5$ (steeper) | Small, finite |
 | Anesthesia | Deep subcritical | $\gg 1.5$ (exponential cutoff) | Very small |
+| **ASD** | **Subcritical** | $> 1.5$ (steeper) | **Reduced, rigid** |
 | ADHD | Mildly supercritical | $< 1.5$ (shallower) | Large, variable |
 | Mania | Supercritical | $< 1.5$ | Large |
 | Epileptic seizure | Highly supercritical | $\ll 1.5$ (activity blow-up) | Diverging |
 | Healthy cognition | **Critical** | $\approx 1.5$ | Maximal |
+
+### 2.2.1 ASD from the GUTC Perspective
+
+**Hypothesis:** Autism Spectrum Disorder exhibits subcritical dynamics with aberrant precision weighting.
+
+| Feature | GUTC Prediction | Mechanism |
+|---------|-----------------|-----------|
+| Sensory hypersensitivity | $\Pi_{\text{sensory}} \uparrow$ | Over-precision on bottom-up signals |
+| Rigid behavior patterns | $E(\lambda) < 0$ | Subcritical → attractor trapping |
+| Predictability preference | $\Pi_{\text{prior}} \uparrow$ | Hyper-precision on predictions |
+| Reduced flexibility | $\xi$ diminished | Short correlation length |
+| Detail focus | Local $\Pi \uparrow$ | High local precision, reduced global |
+
+**Dual Precision Imbalance in ASD:**
+
+$$\frac{\Pi_{\text{local}}}{\Pi_{\text{global}}} \gg 1 \quad \text{(ASD)} \quad \text{vs.} \quad \approx 1 \quad \text{(Neurotypical)}$$
+
+**Testable Prediction:** EEG/MEG recordings in ASD should show:
+- Steeper avalanche exponents ($\alpha > 1.7$)
+- Reduced long-range temporal correlations
+- Branching ratio $\sigma < 1$
 
 ### 2.3 Therapeutic Prediction
 
@@ -267,6 +289,173 @@ where $\delta^{(l)}$ decreases with level (higher = slower).
 
 ---
 
+## Prediction 6: Dynamical Analysis Methods for Clinical Diagnosis
+
+### 6.1 The Core Approach
+
+**Hypothesis:** Dynamical analysis (branching parameter, Hurst exponent, avalanche statistics) provides superior diagnostic specificity compared to correlation-based inference alone.
+
+**Why dynamical > correlational:**
+
+| Approach | Measures | Limitation |
+|----------|----------|------------|
+| Correlation-based | Statistical associations | Confounded by covariates |
+| **Dynamical analysis** | Causal propagation, phase state | Directly measures $E(\lambda)$ |
+
+### 6.2 Branching Parameter Estimation
+
+The branching parameter $\sigma$ directly estimates distance to criticality:
+
+$$\sigma = \left\langle \frac{A_{t+1}}{A_t} \right\rangle, \quad E(\lambda) = \sigma - 1$$
+
+**Protocol:**
+
+```python
+def estimate_branching_parameter(neural_time_series, bin_size_ms=4):
+    """
+    Estimate branching parameter from neural activity.
+
+    Args:
+        neural_time_series: Binned spike counts or LFP power
+        bin_size_ms: Temporal resolution
+
+    Returns:
+        sigma: Branching ratio (critical = 1.0)
+        sigma_geo: Geometric estimator (robust to outliers)
+    """
+    # Detect avalanches
+    avalanches = detect_avalanches(neural_time_series, threshold=0)
+
+    # Conventional estimator
+    ratios = []
+    for avalanche in avalanches:
+        for t in range(len(avalanche) - 1):
+            if avalanche[t] > 0:
+                ratios.append(avalanche[t+1] / avalanche[t])
+    sigma_conv = np.mean(ratios)
+
+    # Geometric estimator (robust)
+    log_ratios = np.log([r for r in ratios if r > 0])
+    sigma_geo = np.exp(np.mean(log_ratios))
+
+    return sigma_conv, sigma_geo
+
+# Interpretation:
+# σ < 0.95 → Subcritical (depression, ASD)
+# 0.95 < σ < 1.05 → Critical (healthy)
+# σ > 1.05 → Supercritical (mania, seizure risk)
+```
+
+### 6.3 Hurst Exponent Analysis
+
+The Hurst exponent $H$ measures long-range temporal correlations:
+
+$$\langle |X(t+\tau) - X(t)|^2 \rangle \sim \tau^{2H}$$
+
+| $H$ Value | Interpretation | GUTC Phase |
+|-----------|----------------|------------|
+| $H < 0.5$ | Anti-persistent (mean-reverting) | Subcritical |
+| $H = 0.5$ | Random walk (no memory) | Random |
+| $H > 0.5$ | Persistent (long-range correlations) | Near-critical |
+| $H \approx 0.7\text{–}0.8$ | **Optimal** | Critical |
+
+**Protocol:**
+
+```python
+def estimate_hurst_exponent(time_series, max_lag=100):
+    """
+    Estimate Hurst exponent via rescaled range (R/S) analysis.
+    """
+    lags = np.logspace(1, np.log10(max_lag), 20).astype(int)
+    rs_values = []
+
+    for lag in lags:
+        # Compute R/S statistic
+        segments = np.array_split(time_series, len(time_series) // lag)
+        rs = []
+        for seg in segments:
+            if len(seg) < 2:
+                continue
+            cumdev = np.cumsum(seg - np.mean(seg))
+            R = np.max(cumdev) - np.min(cumdev)
+            S = np.std(seg)
+            if S > 0:
+                rs.append(R / S)
+        rs_values.append(np.mean(rs))
+
+    # Fit power law: log(R/S) vs log(lag)
+    H, _ = np.polyfit(np.log(lags), np.log(rs_values), 1)
+
+    return H
+
+# Clinical interpretation:
+# H < 0.5 in ASD → Reduced temporal integration
+# H < 0.5 in depression → Diminished persistence
+# H ≈ 0.7-0.8 → Healthy criticality
+```
+
+### 6.4 Combined Diagnostic Protocol
+
+```python
+def gutc_phase_diagnostic(neural_recording):
+    """
+    Comprehensive GUTC-based phase diagnostic.
+
+    Returns:
+        phase: 'subcritical', 'critical', or 'supercritical'
+        confidence: Diagnostic confidence score
+        metrics: Dict of all measured values
+    """
+    # 1. Branching parameter
+    sigma_conv, sigma_geo = estimate_branching_parameter(neural_recording)
+
+    # 2. Avalanche exponent
+    avalanches = detect_avalanches(neural_recording)
+    alpha = fit_power_law_exponent([len(a) for a in avalanches])
+
+    # 3. Hurst exponent
+    H = estimate_hurst_exponent(neural_recording)
+
+    # 4. Correlation length (from spatial data if available)
+    xi = estimate_correlation_length(neural_recording)
+
+    # Combined decision
+    metrics = {
+        'sigma': sigma_geo,
+        'alpha': alpha,
+        'H': H,
+        'xi': xi
+    }
+
+    # Scoring
+    subcritical_score = (sigma_geo < 0.95) + (alpha > 1.6) + (H < 0.5)
+    supercritical_score = (sigma_geo > 1.05) + (alpha < 1.4) + (H > 0.9)
+
+    if subcritical_score >= 2:
+        phase = 'subcritical'
+        confidence = subcritical_score / 3
+    elif supercritical_score >= 2:
+        phase = 'supercritical'
+        confidence = supercritical_score / 3
+    else:
+        phase = 'critical'
+        confidence = 1 - max(subcritical_score, supercritical_score) / 3
+
+    return phase, confidence, metrics
+```
+
+### 6.5 Disorder-Specific Signatures
+
+| Disorder | $\sigma$ | $\alpha$ | $H$ | Pattern |
+|----------|----------|----------|-----|---------|
+| Depression | $< 0.9$ | $> 1.7$ | $< 0.5$ | All subcritical |
+| ASD | $< 0.95$ | $> 1.6$ | $< 0.55$ | Subcritical + rigid |
+| ADHD | $> 1.05$ | $< 1.4$ | Variable | Supercritical |
+| Schizophrenia | Variable | Variable | Variable | Aberrant precision |
+| Healthy | $\approx 1.0$ | $\approx 1.5$ | $\approx 0.7$ | Critical |
+
+---
+
 ## Summary: Falsifiable Predictions
 
 | # | Prediction | Key Test | Failure Criterion |
@@ -276,6 +465,7 @@ where $\delta^{(l)}$ decreases with level (higher = slower).
 | 3 | $\tau \propto -\log \epsilon$ | Noise sweep | Non-logarithmic scaling |
 | 4 | $I \sim |E|^{-\gamma}$ | Fisher estimation | $\gamma$ not in [1, 3] range |
 | 5 | Level-dependent dwell | HHN measurement | No level hierarchy in $\tau$ |
+| 6 | Dynamical > correlational | Phase diagnostic | No $\sigma$, $H$ disorder difference |
 
 ---
 

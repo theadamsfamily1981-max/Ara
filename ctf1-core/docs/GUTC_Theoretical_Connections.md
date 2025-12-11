@@ -362,6 +362,31 @@ $$\Pi \propto \frac{1}{\sigma^2} \implies \tau_{\text{dwell}} \propto -\log \sig
 
 High precision → low noise → long dwell times → stable inference at criticality.
 
+**ASD as Aberrant Precision Weighting:**
+
+| Component | ASD Pattern | Cognitive Consequence |
+|-----------|-------------|----------------------|
+| Sensory precision | $\Pi_{\text{sensory}} \uparrow$ (hyper-precise) | Hypersensitivity, detail focus |
+| Prior precision | $\Pi_{\text{prior}} \uparrow$ (inflexible) | Rigid predictions, routine preference |
+| Global/local ratio | $\Pi_{\text{local}} / \Pi_{\text{global}} \gg 1$ | Weak central coherence |
+| Context precision | $\Pi_{\text{context}} \downarrow$ | Difficulty with social inference |
+
+**ASD vs. Schizophrenia Precision Contrast:**
+
+| Feature | ASD | Schizophrenia |
+|---------|-----|---------------|
+| Sensory precision | $\uparrow$ (too high) | Variable |
+| Prior precision | $\uparrow$ (rigid) | $\uparrow$ (delusional) |
+| Action precision | Normal | $\downarrow$ (agency loss) |
+| Phase state | Subcritical ($E < 0$) | Variable |
+| Primary deficit | Over-precision everywhere | Mis-allocated precision |
+
+**GUTC Dynamical Signatures in ASD:**
+- Branching ratio $\sigma < 1$ (subcritical)
+- Avalanche exponent $\alpha > 1.5$ (steeper, truncated)
+- Hurst exponent $H < 0.5$ (reduced temporal integration)
+- Correlation length $\xi$ diminished (local processing dominant)
+
 ---
 
 ## VII. Implications
