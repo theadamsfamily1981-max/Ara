@@ -425,6 +425,103 @@ GUTC describes **how** it's physically realized: critical dynamics.
 
 ---
 
+## IX. Precision Weighting: Neural Implementation of $\Pi$ and Links to Autism
+
+Predictive coding and active inference models posit that perception, learning, and action are driven by the minimization of prediction errors that are **precision-weighted**—scaled by their estimated reliability (inverse variance). In this framework, precision ($\Pi$) acts as a context-dependent **gain control** on prediction-error units, implementing attentional selection and belief updating. Within GUTC, $\Pi$ is a key dynamical control parameter that modulates how the critical core uses its capacity: it determines which errors the system allows to drive state changes.
+
+### 9.1 Cortical Circuits for Precision-Weighted Prediction Errors
+
+EEG–fMRI and fMRI–pharmacology studies show that **unsigned prediction errors** are precision-weighted in frontal and cingulate regions:
+
+| Region | Function | Precision Role |
+|--------|----------|----------------|
+| **Superior Frontal Cortex (SFC)** | Unsigned PE encoding | Amplitude scales with outcome precision |
+| **dorsal Anterior Cingulate (dACC)** | Unsigned PE encoding | Down-weights noisy outcomes |
+| **Sensory cortices** | Modality-specific PE | Gain modulated by contextual uncertainty |
+
+**Hierarchical Predictive Coding Implementation:**
+- **Lower levels (sensory cortex):** Encode prediction errors; gain reflects locally estimated precision
+- **Higher levels (SFC, dACC, prefrontal):** Encode predictions and set precision via top-down control
+
+In GUTC terms, these circuits implement a hierarchical $\Pi$ field over the critical core:
+- Local $\Pi_{\text{sensory}}$ modulates bottom-up drive
+- Higher-order $\Pi_{\text{prior}}$ modulates confidence of priors and threshold for belief revision
+
+### 9.2 Neuromodulatory Implementation: Dopamine as Precision Gain
+
+Pharmacological manipulations provide causal evidence that **dopamine controls cortical precision weighting**:
+
+| Manipulation | Effect | Implication |
+|--------------|--------|-------------|
+| D2 antagonists | Reduce precision weighting in SFC/dACC | Dopamine regulates PE response magnitude |
+| Individual DA differences | Correlate with learning performance | Precision weighting is behaviorally consequential |
+| Cholinergic modulation | Sensory/attentional precision | Hierarchical differentiation of precision control |
+
+**GUTC Interpretation:** Dopaminergic systems implement dynamic tuning of $\Pi$ that determines how the critical field allocates its finite capacity $C(\lambda)$—they decide which prediction errors "count" and by how much.
+
+### 9.3 Subcortical Circuits: Midbrain, Striatum, and Salience
+
+Meta-analytic work on prediction-error imaging shows consistent activation in:
+
+| Structure | PE Type | Function |
+|-----------|---------|----------|
+| **Midbrain (VTA/SNc)** | Reward/salience PE | Dopaminergic precision signals |
+| **Ventral striatum** | Reward PE | Learning rate adjustment |
+| **Insula** | Interoceptive PE | Uncertainty and salience mapping |
+| **Anterior cingulate** | Global salience | Cross-domain precision coordination |
+
+**The Precision-Control Hub:**
+- Tracks environmental volatility and outcome reliability
+- Adjusts cortical PE gain via neuromodulators
+- Coordinates global shifts in attention, learning rate, and exploration
+
+In GUTC language, this midbrain–striatal–cingulate loop is part of the **SOC controller over $\Pi$**: it keeps the system's effective learning rate near the optimal zone given its critical capacity and environmental statistics.
+
+### 9.4 Precision Weighting and Autism: Evidence for $\Pi$ Dysregulation
+
+Autism spectrum conditions have been interpreted through predictive coding not as a failure to form predictions, but as a failure to appropriately **weight prediction errors**.
+
+**Empirical Findings (EEG/fMRI):**
+
+| Measure | Finding in ASD | Interpretation |
+|---------|---------------|----------------|
+| Mismatch negativity (MMN) | Reduced amplitude | PE signals abnormally modulated |
+| Repetition suppression | Atypical pattern | Altered precision-based adaptation |
+| Contingent negative variation | Reduced cue-validity modulation | Impaired tuning of prediction certainty |
+
+**Precision Patterns in ASD:**
+
+| Precision Type | ASD Pattern | Clinical Manifestation |
+|----------------|-------------|------------------------|
+| $\Pi_{\text{prior}}$ (priors) | Over-precise | Rigid expectations, difficulty updating beliefs |
+| $\Pi_{\text{sensory}}$ (likelihoods) | Over-precise | Hyper-sensitivity to local detail, sensory overload |
+| $\Pi_{\text{context}}$ (social/global) | Under-precise | Difficulty stabilizing global interpretations |
+
+**GUTC Interpretation of ASD:**
+- Subcritical/rigid dynamics ($E < 0$) + **high prior precision** → repetitive, inflexible behavior
+- **Abnormal sensory precision** → heightened sensitivity, atypical responses to change
+- Clinical instruments (ADOS, SRS) = noisy, high-level readouts of underlying $(\lambda, \Pi)$ deviations
+
+### 9.5 Role of Precision in the GUTC Phase Diagram
+
+**The Two Control Parameters:**
+
+$$\boxed{\lambda \text{ sets the phase}; \quad \Pi \text{ decides which errors move the system}}$$
+
+| Parameter | Controls | Biological Substrate |
+|-----------|----------|---------------------|
+| $\lambda$ (via $E(\lambda)$) | Closeness to critical surface | Synaptic weights, network topology |
+| $\Pi$ | Which PEs exploit capacity | Neuromodulators (DA, ACh), cortical gain |
+
+**Key Findings:**
+1. Specific cortical regions (SFC, dACC, sensory) and subcortical neuromodulatory systems instantiate $\Pi$
+2. Precision weighting is behaviorally consequential: individual differences predict learning performance
+3. Clinical alterations in autism are consistent with precision mis-tuning
+
+**Conclusion:** Precision weighting is a central, biologically grounded control knob in GUTC. Many psychiatric phenotypes can be understood as **phase-and-precision errors** in an otherwise critical cognitive field.
+
+---
+
 ## References
 
 1. Friston, K. (2010). The free-energy principle: a unified brain theory? *Nature Reviews Neuroscience*, 11(2), 127-138.
