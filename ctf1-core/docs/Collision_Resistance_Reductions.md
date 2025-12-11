@@ -204,7 +204,53 @@ This contradicts the formal CR assumption and, via the hardness basis, some unde
 
 ---
 
-## VIII. Summary
+## VIII. Binding vs Hiding: Which Property Consumes CR?
+
+For commitment schemes, the two security properties rely on distinct hardness assumptions:
+
+### Binding (Fixity) — Consumes CR
+
+Once commitment $c$ is published, the sender is "bound" to message $m$. Finding a different opening $m' \ne m$ requires finding a collision in $H_k$.
+
+$$\Pr[\text{break binding}] \le \Pr[\text{collision in } H_k] + \text{negl}(\lambda)$$
+
+### Hiding (Secrecy) — Does NOT Consume CR
+
+The commitment $c$ reveals nothing about $m$. This relies on:
+- High entropy of random nonce $r$
+- Preimage resistance or second-preimage resistance of $H_k$
+
+**Key distinction:** CR is consumed **only** by the binding property, not hiding.
+
+---
+
+## IX. Universal CR Consumption Pattern
+
+The hash-based primitives demonstrate a universal pattern where security goals reduce to finding collisions:
+
+| Primitive | Security Goal | Colliding Inputs $(x \ne x')$ |
+|-----------|---------------|-------------------------------|
+| **Commitments** | **Binding:** Cannot open $c$ to both $m$ and $m'$ | $x = (m \| r)$, $x' = (m' \| r')$ |
+| **Signatures** | **Unforgeability:** Cannot forge $\sigma^*$ for new $m^*$ with old hash | $x = m^*$, $x' = m_j$ (queried message) |
+| **Merkle Trees** | **Integrity:** Cannot change leaf/path without changing root | Two inputs to same internal node |
+
+### The Formal Reduction Bound
+
+For each primitive, the reduction establishes:
+
+$$\Pr[\text{break security goal}] \le \Pr[\text{collision in } H_k] + \epsilon_{\text{base}}$$
+
+where $\epsilon_{\text{base}}$ accounts for any probability of breaking a simpler underlying primitive.
+
+### The Crucial Takeaway
+
+The entire framework of provable security relies on scheme designers ensuring that **any winning attack must cause a collision event** defined as computationally infeasible under the CR assumption.
+
+**Collision resistance acts as a formal, consumable resource** that transforms the complex goal of breaking a protocol into the simple task of solving a fixed-size hash problem.
+
+---
+
+## X. Summary
 
 | Component | Role in Reduction |
 |-----------|-------------------|
