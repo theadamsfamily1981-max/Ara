@@ -92,6 +92,7 @@ ctf1-core/
 │   ├── GUTC_Manuscript_Draft.md   # ★★★★ Complete paper with figure placeholders
 │   ├── GUTC_Manuscript_Content.md # ★★★ Theorems, citations, simulation summary
 │   ├── GUTC_Hierarchical_HHN.md   # ★★★ Hierarchical Heteroclinic Networks
+│   ├── GUTC_Noisy_Heteroclinic.md # ★★★ Dwell times, branching, noise scaling
 │   └── GUTC_Memory_Design.md      # ★★★ Manuscript box: Attractors vs Heteroclinic
 ├── experiments/
 │   ├── 01_lambda_sweep_memory.py
