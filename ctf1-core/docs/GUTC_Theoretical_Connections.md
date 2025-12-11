@@ -810,6 +810,113 @@ In GUTC language: **ASD** corresponds primarily to "subcritical + high, rigid $\
 
 ---
 
+## XV. Methods: Estimating the Branching Ratio ($\hat{m}$) from EEG/MEG Avalanches
+
+We estimate the criticality parameter $\lambda$ of the cortical dynamics by calculating the neuronal branching ratio ($\hat{m}$) from EEG/MEG data. This involves converting the continuous signal into binary spatiotemporal "avalanches" and measuring the propagation factor of activity.
+
+### 15.1 Preprocessing and Binarization
+
+Continuous EEG/MEG data are first filtered and segmented into time series for each sensor (or source-localized region).
+
+* **Time Bin Selection ($\Delta t$):** We choose a time bin $\Delta t$ on the order of the dominant oscillatory timescale or the mean inter-event interval.
+* **Binarization:** For each channel ($c$) and time bin ($t$), the signal is thresholded (e.g., amplitude above a Z-score threshold) to obtain a binary activity matrix:
+
+$$B(c,t) \in \{0,1\}$$
+
+where $B(c,t)=1$ denotes an "event" (suprathreshold activation).
+
+* **Activity per Bin:** The total number of active channels per bin is defined as:
+
+$$A_t = \sum_c B(c,t)$$
+
+### 15.2 Neuronal Avalanche Definition
+
+Neuronal avalanches are defined as contiguous runs of non-empty bins ($A_t>0$), bounded immediately before and after by empty bins ($A_t=0$).
+
+* **Activity Vector:** For each avalanche, we record the number of active channels in each bin as a vector of activity $n$:
+
+$$(n_1, n_2, \dots, n_T), \quad n_\tau = A_{t_0+\tau-1}$$
+
+where $t_0$ is the onset bin and $T$ is the avalanche duration in bins.
+
+### 15.3 Branching Ratio Estimators
+
+The branching ratio $\hat{m}$ quantifies the average number of "offspring" events in bin $(t+1)$ arising from "parent" events in bin $(t)$.
+
+#### A. Simple Two-Bin Estimator (Beggs–Plenz Style)
+
+For each avalanche $k$ with duration $T\ge2$, the propagation ratio $r^{(k)}$ is computed as the ratio of activity in the second bin to the first:
+
+$$r^{(k)} = \frac{n^{(k)}_2}{n^{(k)}_1}$$
+
+The branching ratio is then estimated by averaging over all $N_{\text{av}}$ avalanches:
+
+$$\hat{m} = \frac{1}{N_{\text{av}}} \sum_{k=1}^{N_{\text{av}}} r^{(k)}$$
+
+#### B. Geometric / Bin-Wise Estimator
+
+To mitigate bias from the variability of $n_1$ and $n_2$ across avalanches, we also use a bin-wise estimator based on all valid successive bin pairs across all avalanches:
+
+$$R = \left\{ \frac{n_{t+1}}{n_t} \mid n_t>0, \text{ all avalanches and bins} \right\}$$
+
+The geometric mean branching ratio is calculated as:
+
+$$\hat{m}_{\text{geo}} = \exp\left( \frac{1}{|R|} \sum_{r \in R} \ln r \right)$$
+
+**Interpretation:**
+| $\hat{m}$ Value | Dynamical Regime | Interpretation |
+|-----------------|------------------|----------------|
+| $\hat{m} \approx 1$ | **Near-critical** | Optimal computational capacity |
+| $\hat{m} < 1$ | **Subcritical** | Activity tends to die out |
+| $\hat{m} > 1$ | **Supercritical** | Activity tends to grow/cascade |
+
+### 15.4 Practical Considerations
+
+Threshold and bin width are carefully selected by scanning a reasonable range of $\Delta t$ and Z-thresholds to ensure the production of non-trivial avalanche statistics and, ideally, yield scale-free avalanche size distributions over at least 1–2 decades. We report $\hat{m}$ alongside avalanche size exponents and temporal correlation measures for a robust criticality assessment.
+
+### 15.5 Compact Algorithm for Implementation
+
+For direct implementation, the procedure can be summarized as:
+
+**Step 1: Compute Binary Events**
+```
+For each channel c:
+    Bin time into steps of Δt
+    Threshold per bin → B(c,t) ∈ {0,1}
+    Let A_t = Σ_c B(c,t)
+```
+
+**Step 2: Identify Avalanches**
+```
+Scan A_t:
+    Start new avalanche when A_t > 0 AND A_{t-1} = 0
+    End avalanche when A_t = 0
+    For each avalanche, store (n_1, ..., n_T)
+```
+
+**Step 3: Estimate Branching Ratio**
+```
+Simple estimator:
+    m_hat = mean over avalanches of (n_2 / n_1) for T ≥ 2
+
+Geometric estimator:
+    Collect all pairs (n_t, n_{t+1}) with n_t > 0
+    Compute ratios r = n_{t+1} / n_t
+    m_hat_geo = exp(mean(ln(r)))
+```
+
+### 15.6 Bridge to GUTC Parameters
+
+This methodology completes the bridge between empirical EEG/MEG data and the model's criticality parameter:
+
+$$\hat{\lambda} \approx \hat{m}$$
+
+$$E(\lambda) \approx \hat{m} - 1$$
+
+The estimated branching ratio thus directly informs the global capacity $C(\lambda)$ of the GUTC model, enabling empirical validation of the theoretical predictions in Sections XIII and XIV.
+
+---
+
 ## References
 
 1. Friston, K. (2010). The free-energy principle: a unified brain theory? *Nature Reviews Neuroscience*, 11(2), 127-138.
