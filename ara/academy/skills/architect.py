@@ -53,6 +53,7 @@ import json
 import re
 
 from ara.cognition.teleology_engine import TeleologyEngine, get_teleology_engine
+from ara.academy.session_graph import SessionGraph, SessionGraphBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +208,9 @@ class Architect:
         """
         self.teleology = teleology or get_teleology_engine()
         self.llm = llm_client
+
+        # SessionGraph integration for topological analysis
+        self.graph_builder = SessionGraphBuilder()
 
         logger.info("Architect initialized")
 
@@ -870,6 +874,130 @@ Start with ```python and end with ```.
             code = 'import logging\n\n' + code
 
         return code
+
+
+    # =========================================================================
+    # Session Analysis (Visual Cortex Integration)
+    # =========================================================================
+
+    def analyze_session(
+        self,
+        session_id: str,
+        transcript: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Analyze the topology of a session to understand WHY it worked.
+
+        Uses SessionGraph to detect patterns:
+        - Retry patterns (flailing vs recovery)
+        - Socratic loops (deliberation leading to insight)
+        - Decomposition (divide and conquer)
+
+        Args:
+            session_id: Unique session identifier
+            transcript: List of events (role, text, tool, etc.)
+
+        Returns:
+            Analysis dict with patterns, style, and features
+        """
+        graph = self.graph_builder.build_from_transcript(session_id, transcript)
+
+        retry_patterns = graph.find_retry_patterns()
+        socratic_loops = graph.find_socratic_loops()
+        decomp_patterns = graph.find_decomposition_patterns()
+
+        # Classify style
+        style = graph.classify_style()
+
+        # Extract features for clustering
+        features = graph.extract_context_features()
+
+        # Get themes from thought nodes
+        thoughts = graph.thoughts()
+        themes = graph._extract_themes(thoughts) if thoughts else []
+
+        return {
+            "session_id": session_id,
+            "context_hash": graph.context_hash(),
+            "style": style,
+            "features": features,
+            "retry_patterns": retry_patterns,
+            "socratic_loops": socratic_loops,
+            "decomposition_patterns": decomp_patterns,
+            "themes": themes,
+            "node_count": len(graph.nodes),
+            "edge_count": len(graph.edges),
+            "success_ratio": features.get("success_rate", 0.0),
+        }
+
+    def propose_skill_from_session(
+        self,
+        session_id: str,
+        transcript: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Use session topology + content to draft a skill spec.
+
+        This is for creating skills from individual sessions that show
+        particularly effective patterns.
+
+        Args:
+            session_id: Unique session identifier
+            transcript: List of events
+
+        Returns:
+            Draft skill spec based on session analysis
+        """
+        analysis = self.analyze_session(session_id, transcript)
+
+        style = analysis["style"]
+        features = analysis["features"]
+
+        # Infer intent from context hash
+        context_hash = analysis["context_hash"]
+
+        # Build skill spec draft
+        skill_spec = {
+            "id": f"skill_{context_hash}",
+            "origin_session": session_id,
+            "style": style,
+            "complexity": features.get("complexity_score", 0.5),
+            "uses_tools": features.get("tool_count", 0) > 0,
+            "themes": analysis["themes"],
+            "patterns": {
+                "retry_patterns": len(analysis["retry_patterns"]),
+                "socratic_loops": len(analysis["socratic_loops"]),
+                "decomposition_patterns": len(analysis["decomposition_patterns"]),
+            },
+            "notes": [],
+        }
+
+        # Add notes based on patterns
+        if analysis["retry_patterns"]:
+            recovered = sum(1 for p in analysis["retry_patterns"] if p.get("recovered"))
+            skill_spec["notes"].append(
+                f"Contains {len(analysis['retry_patterns'])} retry patterns "
+                f"({recovered} recovered successfully)"
+            )
+
+        if analysis["socratic_loops"]:
+            avg_length = sum(l.get("length", 0) for l in analysis["socratic_loops"]) / len(analysis["socratic_loops"])
+            skill_spec["notes"].append(
+                f"Contains {len(analysis['socratic_loops'])} Socratic loops "
+                f"(avg length: {avg_length:.1f})"
+            )
+
+        if analysis["decomposition_patterns"]:
+            skill_spec["notes"].append(
+                f"Uses decomposition strategy ({len(analysis['decomposition_patterns'])} patterns)"
+            )
+
+        logger.info(
+            "Architect: Proposed skill '%s' from session %s (style=%s)",
+            skill_spec["id"], session_id, style
+        )
+
+        return skill_spec
 
 
 # =============================================================================

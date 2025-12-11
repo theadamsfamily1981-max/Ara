@@ -13,6 +13,8 @@ Jobs wrap potentially dangerous tools in Ara's safety systems:
 Available Jobs:
     hardware_reclamation: Repurpose mining hardware, FPGAs, ATCA boards
     publishing_service: Self-publishing pipeline (research → ship)
+    grant: Grant discovery, qualification, writing, and tracking
+           with fair-trade controls and IP exposure limits
 """
 
 from .publishing_service import (
@@ -44,6 +46,23 @@ from .hardware_rails import (
     process_hardware_request,
 )
 
+from .grant import (
+    GrantStage,
+    IPExposure,
+    GrantMode,
+    FairTradeMetrics,
+    FairTradePolicy,
+    calculate_fair_trade,
+    GrantArtifact,
+    GrantArtifacts,
+    GrantJob,
+    GRANT_SPEC_SCHEMA,
+    load_grant_spec,
+    create_grant_spec,
+    quick_qualify,
+    PROTECTED_IP,
+)
+
 __all__ = [
     # Publishing Service
     'PublishingJobConfig',
@@ -70,4 +89,20 @@ __all__ = [
     'HARDWARE_SAFE_CHANNELS',
     'extend_compromise_engine_for_hardware',
     'process_hardware_request',
+
+    # Grant Job
+    'GrantStage',
+    'IPExposure',
+    'GrantMode',
+    'FairTradeMetrics',
+    'FairTradePolicy',
+    'calculate_fair_trade',
+    'GrantArtifact',
+    'GrantArtifacts',
+    'GrantJob',
+    'GRANT_SPEC_SCHEMA',
+    'load_grant_spec',
+    'create_grant_spec',
+    'quick_qualify',
+    'PROTECTED_IP',
 ]

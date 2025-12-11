@@ -48,6 +48,11 @@ from ara.academy.curriculum.internalization import (
     SkillCandidate,
     get_vision_aware_internalization,
 )
+from ara.academy.session_graph import (
+    SessionGraph,
+    SessionGraphBuilder,
+    SessionStyleClassifier,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -267,6 +272,10 @@ class SkillExtractor:
         self._skill_specs: Dict[str, SkillSpec] = {}  # NEW: Architect-generated specs
         self._next_id = 1
 
+        # SessionGraph integration
+        self.graph_builder = SessionGraphBuilder()
+        self.style_classifier = SessionStyleClassifier(k=3)
+
     def _load_sessions(
         self,
         min_success: bool = True,
@@ -371,6 +380,133 @@ class SkillExtractor:
 
         # Convert to session clusters
         return [[sessions[i] for i in cluster] for cluster in clusters]
+
+    def _build_session_graphs(
+        self,
+        sessions: List[Dict[str, Any]],
+    ) -> List[SessionGraph]:
+        """
+        Build SessionGraphs from session records.
+
+        This enables graph-based pattern detection instead of just regex.
+        """
+        graphs = []
+        for session in sessions:
+            # Convert session record to transcript format
+            transcript = self._session_to_transcript(session)
+            session_id = session.get("id", f"session_{len(graphs)}")
+
+            graph = self.graph_builder.build_from_transcript(session_id, transcript)
+            graphs.append(graph)
+
+        return graphs
+
+    def _session_to_transcript(self, session: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Convert a session record to transcript format for graph building."""
+        transcript = []
+
+        # User query as intent
+        if session.get("query"):
+            transcript.append({
+                "role": "user",
+                "text": session["query"],
+            })
+
+        # Steps as tool calls / thoughts
+        for step in session.get("steps", []):
+            if step.get("tool"):
+                transcript.append({
+                    "role": "assistant",
+                    "text": step.get("description", ""),
+                    "tool": step["tool"],
+                    "success": step.get("success", True),
+                })
+            else:
+                transcript.append({
+                    "role": "assistant",
+                    "text": step.get("description", str(step)),
+                })
+
+        # Final response
+        if session.get("response_summary"):
+            transcript.append({
+                "role": "assistant",
+                "text": session["response_summary"],
+            })
+
+        return transcript
+
+    def _cluster_sessions_by_graph(
+        self,
+        sessions: List[Dict[str, Any]],
+        similarity_threshold: float = 0.7,
+    ) -> List[List[Dict[str, Any]]]:
+        """
+        Cluster sessions by graph topology instead of regex structure.
+
+        This is the NEW way - patterns are graph shapes, not text patterns.
+        """
+        if not sessions:
+            return []
+
+        # Build graphs for each session
+        graphs = self._build_session_graphs(sessions)
+        if not graphs:
+            return []
+
+        # Extract feature vectors
+        features = [g.extract_feature_vector() for g in graphs]
+
+        # Simple greedy clustering by feature distance
+        clusters: List[List[int]] = []
+        assigned = set()
+
+        for i, feat_i in enumerate(features):
+            if i in assigned:
+                continue
+
+            cluster = [i]
+            assigned.add(i)
+
+            for j, feat_j in enumerate(features):
+                if j in assigned:
+                    continue
+
+                # Compute similarity as 1 - normalized distance
+                dist = self._euclidean_distance(feat_i, feat_j)
+                max_dist = 20.0  # Rough max distance for normalization
+                similarity = 1.0 - min(1.0, dist / max_dist)
+
+                if similarity >= similarity_threshold:
+                    cluster.append(j)
+                    assigned.add(j)
+
+            if len(cluster) >= 2:
+                clusters.append(cluster)
+
+        logger.info(
+            f"Graph-based clustering: {len(clusters)} clusters from {len(sessions)} sessions"
+        )
+
+        # Convert to session clusters with graph info
+        result = []
+        for cluster_indices in clusters:
+            cluster_sessions = []
+            for idx in cluster_indices:
+                session = sessions[idx]
+                # Attach graph style for the Architect
+                session["_graph_style"] = graphs[idx].classify_style()
+                session["_graph_features"] = graphs[idx].extract_context_features()
+                cluster_sessions.append(session)
+            result.append(cluster_sessions)
+
+        return result
+
+    def _euclidean_distance(self, a: List[float], b: List[float]) -> float:
+        """Calculate Euclidean distance between two feature vectors."""
+        if len(a) != len(b):
+            return float("inf")
+        return sum((x - y) ** 2 for x, y in zip(a, b)) ** 0.5
 
     def _extract_pattern(
         self,
@@ -753,6 +889,85 @@ class SkillExtractor:
     def get_skill_spec(self, name: str) -> Optional[SkillSpec]:
         """Get the full SkillSpec for an Architect-generated skill."""
         return self._skill_specs.get(name)
+
+    def generate_proposals_with_graphs(
+        self,
+        days: int = 30,
+        min_cluster_size: int = 2,
+    ) -> List[SkillProposal]:
+        """
+        Generate skill proposals using SessionGraph topology.
+
+        This is the NEWEST approach that:
+        - Uses graph-based clustering (not regex)
+        - Detects retry patterns, Socratic loops, decomposition
+        - Combines with Architect for skill generalization
+        - Uses TeleologyEngine for vision alignment
+
+        Patterns are GRAPH SHAPES, not just text patterns.
+        """
+        sessions = self._load_sessions(days=days)
+        logger.info(f"Loaded {len(sessions)} sessions for graph analysis")
+
+        if len(sessions) < min_cluster_size:
+            return []
+
+        # Use graph-based clustering
+        clusters = self._cluster_sessions_by_graph(sessions)
+        logger.info(f"Found {len(clusters)} graph-based clusters")
+
+        proposals = []
+        for cluster in clusters:
+            if len(cluster) < min_cluster_size:
+                continue
+
+            # Get graph style from first session (they should all be similar)
+            graph_style = cluster[0].get("_graph_style", "unknown")
+            graph_features = cluster[0].get("_graph_features", {})
+
+            # Use Architect to generalize
+            skill_spec = self._generalize_cluster_with_architect(cluster)
+            if not skill_spec:
+                continue
+
+            # Check Vision alignment
+            should_prioritize = self._should_prioritize_with_vision(skill_spec)
+
+            # Convert to proposal
+            proposal = self._skillspec_to_proposal(skill_spec)
+
+            # Add graph-based insights
+            proposal.reviewer_notes = f"[GRAPH STYLE: {graph_style}] "
+            if graph_features.get("retry_count", 0) > 0:
+                proposal.reviewer_notes += "Contains retry patterns. "
+            if graph_features.get("success_rate", 0) > 0.8:
+                proposal.reviewer_notes += "High success rate. "
+
+            # Mark priority based on Vision alignment
+            if should_prioritize and skill_spec.classification in ("sovereign", "strategic"):
+                proposal.reviewer_notes += (
+                    f"[VISION-ALIGNED] {skill_spec.classification.upper()} skill - "
+                    f"alignment={skill_spec.alignment_score:.2f}. "
+                )
+
+            proposals.append(proposal)
+            self._proposals.append(proposal)
+
+        # Sort by alignment
+        proposals.sort(
+            key=lambda p: self._skill_specs.get(
+                p.suggested_name, SkillSpec(name="", description="")
+            ).alignment_score,
+            reverse=True,
+        )
+
+        self._save_proposals()
+
+        logger.info(
+            f"Graph-based extraction: {len(proposals)} proposals "
+            f"({sum(1 for p in proposals if 'VISION-ALIGNED' in p.reviewer_notes)} vision-aligned)"
+        )
+        return proposals
 
     def _save_proposals(self) -> None:
         """Save proposals to disk."""

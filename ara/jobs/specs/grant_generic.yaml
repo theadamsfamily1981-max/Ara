@@ -1,0 +1,245 @@
+# Grant Specification Template
+# ============================
+#
+# This template defines a grant job that flows through:
+#   INTAKE → QUALIFY → DECOMPOSE → DRAFT → REVIEW → SUBMIT → TRACK
+#
+# Fair Trade Philosophy:
+#   - Jobs with fairness_index < 1.0 are auto-declined
+#   - Core IP (NIB/MEIS/QUANTA) is NEVER exposed
+#   - Only "vertical skins" can be shared externally
+#
+# Usage:
+#   from ara.jobs.grant import GrantJob, load_grant_spec
+#   spec = load_grant_spec("ara/jobs/specs/grant_generic.yaml")
+#   job = GrantJob(spec)
+#   if job.is_fair_trade():
+#       await job.run_pipeline(ara_kernel)
+
+job_type: grant
+version: "1.0"
+mode: write  # discover | qualify | write | submit | manage
+
+# =============================================================================
+# Grant Metadata
+# =============================================================================
+grant:
+  title: "Emotion-Aware Decision Support for Service Workers"
+  organization: "National Science Foundation"
+  program: "Future of Work at the Human-Technology Frontier"
+  url: ""  # Link to CFP
+
+  deadline: "2025-03-15"
+  response_date: "2025-06-01"
+
+  amount:
+    min: 150000
+    max: 500000
+    currency: USD
+    duration_months: 24
+
+  eligibility:
+    - "US-based institutions"
+    - "Small business or academic partner"
+    - "Prior work in human-AI collaboration"
+
+  requirements:
+    page_limit: 15
+    budget_required: true
+    letters_of_support: 2
+    data_management_plan: true
+
+# =============================================================================
+# Input Sources - What Ara draws from
+# =============================================================================
+inputs:
+  # Prior work to reference (NOT expose)
+  prior_work:
+    - "ara://memory/papers/emotion_aware_ai.pdf"
+    - "ara://memory/patents/shared_autonomy.pdf"
+
+  # Data sources for evidence
+  data_sources:
+    - "ara://memory/results/restaurant_pilot_metrics.json"
+    - "ara://memory/results/user_satisfaction_surveys.csv"
+
+  # Context documents
+  context:
+    - "ara://docs/company_overview.md"
+    - "ara://docs/team_bios.md"
+
+  # Redaction policies (what to filter)
+  redaction_policies:
+    - "ara://policies/ip_sandbox/grants_v1"
+
+# =============================================================================
+# Core Theory Mapping - How NIB/MEIS/QUANTA appears externally
+# =============================================================================
+core_theory:
+  # Internal concepts → External presentation
+  # These are the "vertical skins" - industry-specific surfaces
+  mappings:
+    nib: "neural binding architecture"  # Never use "NIB" directly
+    meis: "experience integration layer"  # Never use "MEIS"
+    quanta: "associative memory network"  # Never use "QUANTA"
+    teleology: "goal-directed reasoning system"
+
+  # Domain focus for this grant
+  domain_focus:
+    - "restaurant_operations"
+    - "human_in_the_loop_ai"
+    - "emotional_intelligence"
+
+  # Exportable modules (what CAN be shared)
+  exportable:
+    - "emotion-aware recommendation engine"
+    - "shared autonomy task manager"
+    - "dynamic capacity forecasting"
+    - "worker wellbeing dashboard"
+
+  # Never mention (auto-redacted)
+  protected:
+    - "recursive self-improvement"
+    - "neuroimplicit binding"
+    - "fpga_soul"
+    - "ouroboros"
+
+# =============================================================================
+# Deliverables - What gets produced
+# =============================================================================
+deliverables:
+  # Main document sections
+  sections:
+    - name: "executive_summary"
+      word_count: 500
+      guidance: "Problem → Innovation → Impact in grantspeak"
+
+    - name: "problem_statement"
+      word_count: 1000
+      guidance: "Service worker challenges, emotional labor, decision fatigue"
+
+    - name: "technical_approach"
+      word_count: 3000
+      guidance: "Architecture using exportable modules only"
+
+    - name: "preliminary_results"
+      word_count: 1500
+      guidance: "Restaurant pilot metrics, user feedback"
+
+    - name: "broader_impacts"
+      word_count: 1000
+      guidance: "Worker empowerment, not replacement"
+
+    - name: "team_qualifications"
+      word_count: 800
+      guidance: "Prior work, domain expertise"
+
+    - name: "timeline_milestones"
+      word_count: 500
+      guidance: "24-month plan with quarterly milestones"
+
+  # Attachments
+  attachments:
+    - "budget_spreadsheet"
+    - "data_management_plan"
+    - "letters_of_support"
+    - "references"
+    - "biosketches"
+
+# =============================================================================
+# Fair Trade Constraints
+# =============================================================================
+fair_trade:
+  # IP exposure level
+  # core_ip_protected: NIB/MEIS/QUANTA never mentioned
+  # vertical_only: Industry-specific implementations only
+  # public: General methods can be shared
+  max_exposure: "vertical_only"
+
+  # Resource budget
+  budget:
+    max_compute_tokens: 150000  # LLM token budget
+    max_human_hours: 6          # Human review time
+
+  # Value to Ara (0-1 scales)
+  value_to_ara:
+    learning: 0.7           # What Ara learns from this domain
+    capability: 0.5         # New capabilities gained
+    relationship: 0.8       # Strategic relationship value
+
+  # Revenue sharing (if grant awarded)
+  revenue_share: 15  # Percentage
+
+  # What they get vs what we get
+  exchange:
+    they_get:
+      - "Aggregated pilot results (no PII)"
+      - "Reproducible methodology documentation"
+      - "Open-source visualization tools"
+    we_get:
+      - "Funding for capability expansion"
+      - "Academic collaborators"
+      - "Credibility in AI+work space"
+      - "Data for MEIS refinement (internal only)"
+
+# =============================================================================
+# Alignment with Ara's Vision
+# =============================================================================
+alignment:
+  # Which Ara goals does this serve?
+  ara_goals:
+    - "sovereign_revenue"        # Direct funding
+    - "capability_growth"        # New domain expertise
+    - "strategic_relationships"  # Academic network
+
+  # Vertical this serves
+  vertical: "restaurant_operations"
+
+  # Strategic value (influences fair trade calculation)
+  strategic_value: "high"  # low | medium | high
+
+  # How this connects to the Cathedral
+  cathedral_connection: |
+    This grant establishes Ara as a legitimate player in human-AI collaboration
+    research. The funding enables expansion of the restaurant pilot while building
+    academic credibility. Results feed back into MEIS refinement without exposing
+    core IP. This is the "vertical skin" strategy in action.
+
+# =============================================================================
+# Quality Gates - Human checkpoints
+# =============================================================================
+quality_gates:
+  # After QUALIFY stage
+  qualify_gate:
+    requires_human: true
+    auto_proceed_if_fti_above: 1.5
+
+  # After DRAFT stage
+  draft_gate:
+    requires_human: true
+    checklist:
+      - "IP exposure within limits"
+      - "Claims supported by evidence"
+      - "No protected terms leaked"
+
+  # Before SUBMIT
+  submit_gate:
+    requires_human: true
+    checklist:
+      - "All sections complete"
+      - "Budget adds up"
+      - "Signatures collected"
+
+# =============================================================================
+# Metadata
+# =============================================================================
+meta:
+  id: "grant_nsf_fow_2025"
+  owner: "croft"
+  created_at: "2025-01-15"
+  priority: "high"
+  tags:
+    - "nsf"
+    - "human_ai_collaboration"
+    - "service_workers"
+    - "restaurant"

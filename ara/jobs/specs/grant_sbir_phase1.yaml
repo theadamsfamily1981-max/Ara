@@ -1,0 +1,143 @@
+# SBIR Phase I Grant Template
+# ============================
+#
+# Small Business Innovation Research Phase I
+# Typically $150k-250k for 6-12 months of feasibility research
+
+job_type: grant
+version: "1.0"
+mode: write
+
+grant:
+  title: "Adaptive Decision Support for High-Stress Service Environments"
+  organization: "Department of Defense"
+  program: "SBIR Phase I"
+  topic_number: "DOD-SBIR-25-001"
+
+  deadline: "2025-04-01"
+  response_date: "2025-07-15"
+
+  amount:
+    min: 150000
+    max: 250000
+    currency: USD
+    duration_months: 6
+
+  eligibility:
+    - "US small business (<500 employees)"
+    - "Principal investigator primarily employed by applicant"
+    - "Work performed in US"
+
+  requirements:
+    page_limit: 25
+    budget_required: true
+    commercialization_plan: true
+    cost_volume_separate: true
+
+inputs:
+  prior_work:
+    - "ara://memory/patents/adaptive_decision.pdf"
+  data_sources:
+    - "ara://memory/results/stress_response_study.json"
+  context:
+    - "ara://docs/sbir_company_overview.md"
+  redaction_policies:
+    - "ara://policies/ip_sandbox/sbir_v1"
+
+core_theory:
+  mappings:
+    nib: "adaptive neural architecture"
+    meis: "continuous learning system"
+    quanta: "contextual memory framework"
+
+  domain_focus:
+    - "high_stress_decision_making"
+    - "real_time_adaptation"
+
+  exportable:
+    - "stress-adaptive interface"
+    - "cognitive load balancing"
+    - "real-time performance feedback"
+
+  protected:
+    - "recursive self-improvement"
+    - "neuroimplicit binding"
+    - "fpga_soul"
+
+deliverables:
+  sections:
+    - name: "technical_volume"
+      word_count: 5000
+      guidance: "Technical approach, feasibility, innovation"
+
+    - name: "cost_volume"
+      word_count: 1000
+      guidance: "Budget justification, cost breakdown"
+
+    - name: "commercialization_plan"
+      word_count: 2000
+      guidance: "Market analysis, commercialization strategy"
+
+  attachments:
+    - "budget_forms"
+    - "resumes"
+    - "letters_of_commitment"
+    - "facilities_equipment"
+
+fair_trade:
+  max_exposure: "vertical_only"
+
+  budget:
+    max_compute_tokens: 100000
+    max_human_hours: 4
+
+  value_to_ara:
+    learning: 0.6
+    capability: 0.7
+    relationship: 0.5
+
+  revenue_share: 20
+
+  exchange:
+    they_get:
+      - "Prototype demonstration"
+      - "Technical feasibility report"
+    we_get:
+      - "Non-dilutive funding"
+      - "Government customer pathway"
+      - "SBIR certification"
+
+alignment:
+  ara_goals:
+    - "sovereign_revenue"
+    - "capability_growth"
+  vertical: "defense_adjacent"
+  strategic_value: "medium"
+
+quality_gates:
+  qualify_gate:
+    requires_human: true
+    auto_proceed_if_fti_above: 1.3
+
+  draft_gate:
+    requires_human: true
+    checklist:
+      - "ITAR compliance checked"
+      - "No CUI violations"
+      - "IP exposure within limits"
+
+  submit_gate:
+    requires_human: true
+    checklist:
+      - "All forms complete"
+      - "DUNS/SAM registration current"
+
+meta:
+  id: "grant_sbir_dod_2025"
+  owner: "croft"
+  priority: "medium"
+  tags:
+    - "sbir"
+    - "dod"
+    - "defense"
+    - "phase1"

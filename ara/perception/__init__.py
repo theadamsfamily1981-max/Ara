@@ -85,6 +85,17 @@ from .context_encoder import (
     DEFAULT_SENSE_WEIGHTS,
 )
 
+# NeuroState - cognitive/physiological state extraction from brainlink
+from .neurostate import (
+    CognitiveState,
+    EmotionalValence,
+    NeuroStateReading,
+    NeuroStateConfig,
+    NeuroState,
+    get_neurostate,
+    get_current_state,
+)
+
 __all__ = [
     # Sensory
     'SenseReading',
@@ -126,4 +137,12 @@ __all__ = [
     'get_time_slot',
     'SENSE_ENCODERS',
     'DEFAULT_SENSE_WEIGHTS',
+    # NeuroState
+    'CognitiveState',
+    'EmotionalValence',
+    'NeuroStateReading',
+    'NeuroStateConfig',
+    'NeuroState',
+    'get_neurostate',
+    'get_current_state',
 ]

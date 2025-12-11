@@ -51,6 +51,15 @@ except ImportError:
     TeleologyEngine = None
     get_teleology_engine = lambda: None
 
+# Import HiveHD for delegated execution
+try:
+    from ara_hive.src.queen import QueenOrchestrator, TaskRequest, TaskKind, get_queen
+except ImportError:
+    QueenOrchestrator = None
+    TaskRequest = None
+    TaskKind = None
+    get_queen = lambda: None
+
 logger = logging.getLogger(__name__)
 
 
@@ -102,6 +111,7 @@ class ChiefOfStaff:
         self,
         covenant: Optional[Covenant] = None,
         teleology: Optional[TeleologyEngine] = None,
+        queen: Optional[QueenOrchestrator] = None,
     ):
         """
         Initialize the Chief of Staff.
@@ -109,14 +119,19 @@ class ChiefOfStaff:
         Args:
             covenant: The relationship covenant
             teleology: Vision/purpose engine for strategic scoring
+            queen: HiveHD Queen for delegated task execution
         """
         self.covenant = covenant or get_covenant()
         self.teleology = teleology or (get_teleology_engine() if get_teleology_engine else None)
+        self.queen = queen or (get_queen() if get_queen else None)
 
         # Track decisions
         self._decision_history: List[CEODecisionResult] = []
         self._active_initiatives: Dict[str, Initiative] = {}
         self._deferred_queue: List[Initiative] = []
+
+        # Track delegated tasks
+        self._delegated_tasks: Dict[str, str] = {}  # initiative_id -> task_request_id
 
         # Daily tracking
         self._daily_cognitive_burn: float = 0.0
@@ -124,7 +139,7 @@ class ChiefOfStaff:
         self._daily_kills: int = 0
         self._last_reset: datetime = datetime.utcnow()
 
-        logger.info("ChiefOfStaff initialized")
+        logger.info("ChiefOfStaff initialized (queen=%s)", self.queen is not None)
 
     # =========================================================================
     # Core Decision Making
@@ -446,7 +461,9 @@ class ChiefOfStaff:
 
         elif result.decision == CEODecision.DELEGATE:
             initiative.status = InitiativeStatus.APPROVED
-            initiative.assigned_to = "background_agent"
+            initiative.assigned_to = "hive_queen"
+            # Dispatch to HiveHD Queen
+            self._delegate_to_hive(initiative, result)
 
         elif result.decision == CEODecision.DEFER:
             initiative.status = InitiativeStatus.DEFERRED
@@ -459,6 +476,91 @@ class ChiefOfStaff:
             initiative.status = InitiativeStatus.BLOCKED
             initiative.blocked_by_founder_protection = True
             initiative.protection_reason = result.reasoning
+
+    def _delegate_to_hive(self, initiative: Initiative, result: CEODecisionResult) -> None:
+        """
+        Delegate an initiative to the HiveHD Queen.
+
+        The Queen will route it to appropriate Bees for execution.
+        """
+        if not self.queen or not TaskRequest:
+            logger.warning(
+                f"Cannot delegate {initiative.id}: HiveHD Queen not available"
+            )
+            return
+
+        # Map initiative type to task kind
+        type_to_kind = {
+            InitiativeType.RESEARCH: TaskKind.RESEARCH if TaskKind else None,
+            InitiativeType.INFRASTRUCTURE: TaskKind.SYSTEM if TaskKind else None,
+            InitiativeType.MAINTENANCE: TaskKind.SYSTEM if TaskKind else None,
+            InitiativeType.CREATIVE: TaskKind.LLM if TaskKind else None,
+        }
+        task_kind = type_to_kind.get(initiative.type)
+
+        # Create task request
+        request = TaskRequest(
+            instruction=f"{initiative.name}: {initiative.description}",
+            kind=task_kind,
+            params={
+                "initiative_id": initiative.id,
+                "tags": initiative.tags,
+            },
+            context={
+                "strategic_value": result.strategic_value,
+                "cognitive_cost": result.cognitive_cost,
+                "delegated_at": datetime.utcnow().isoformat(),
+            },
+        )
+
+        # Track for later completion
+        self._delegated_tasks[initiative.id] = request.request_id
+
+        logger.info(
+            f"Delegated initiative {initiative.id} to HiveHD Queen (request={request.request_id})"
+        )
+
+        # Note: Actual dispatch happens asynchronously
+        # The Queen.dispatch() would be called from the async context
+
+    async def execute_delegated(self, initiative_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Execute a delegated initiative via the HiveHD Queen.
+
+        Call this from an async context to actually run the task.
+        """
+        if initiative_id not in self._delegated_tasks:
+            return None
+
+        if not self.queen:
+            logger.error("Cannot execute: HiveHD Queen not available")
+            return None
+
+        initiative = self._active_initiatives.get(initiative_id)
+        if not initiative:
+            # Check if it's in delegation tracking
+            request_id = self._delegated_tasks.get(initiative_id)
+            return {"error": f"Initiative {initiative_id} not found", "request_id": request_id}
+
+        # Create request
+        request = TaskRequest(
+            instruction=f"{initiative.name}: {initiative.description}",
+            params={"initiative_id": initiative_id},
+        )
+
+        # Dispatch to Queen
+        result = await self.queen.dispatch(request)
+
+        # Update initiative based on result
+        if result.success:
+            self.complete_initiative(initiative_id, success=True)
+        else:
+            logger.warning(f"Delegated task failed: {result.error}")
+
+        # Clean up tracking
+        del self._delegated_tasks[initiative_id]
+
+        return result.to_dict()
 
     def _maybe_reset_daily(self) -> None:
         """Reset daily counters if new day."""

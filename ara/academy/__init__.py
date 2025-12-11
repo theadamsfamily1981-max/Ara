@@ -77,6 +77,16 @@ from .skills.architect import (
     generalize_episodes,
 )
 
+from .session_graph import (
+    NodeType,
+    EdgeType,
+    Node,
+    Edge,
+    SessionGraph,
+    SessionGraphBuilder,
+    SessionStyleClassifier,
+)
+
 __all__ = [
     # Skills
     "LearnedSkill",
@@ -132,4 +142,12 @@ __all__ = [
     "SkillSpec",
     "get_architect",
     "generalize_episodes",
+    # Session Graph (Visual Cortex)
+    "NodeType",
+    "EdgeType",
+    "Node",
+    "Edge",
+    "SessionGraph",
+    "SessionGraphBuilder",
+    "SessionStyleClassifier",
 ]
