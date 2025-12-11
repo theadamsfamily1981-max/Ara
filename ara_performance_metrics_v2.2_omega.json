@@ -1,0 +1,136 @@
+{
+  "version": "2.2",
+  "codename": "Omega-Shim Integration",
+  "generated_at": "2025-01-15T00:00:00Z",
+  "description": "Ara performance baseline metrics for narrative interface calibration",
+  "data_series": {
+    "throughput_architectures": {
+      "title": "Throughput by Architecture",
+      "unit": "agents/second",
+      "configurations": [
+        {
+          "name": "Baseline",
+          "value": 14000,
+          "description": "Vanilla implementation without optimizations"
+        },
+        {
+          "name": "QHDC Only",
+          "value": 180000,
+          "description": "Quantum-Holographic Dissipation Control"
+        },
+        {
+          "name": "TRC Only",
+          "value": 220000,
+          "description": "Thermodynamic Reversibility Coupling"
+        },
+        {
+          "name": "Optimized",
+          "value": 350000,
+          "description": "Traditional optimization stack"
+        },
+        {
+          "name": "Omega-Shim (QHDC/TRC Patterns)",
+          "value": 450000,
+          "description": "Full Omega-Shim integration with QHDC+TRC patterns"
+        }
+      ]
+    },
+    "cognitive_capability": {
+      "title": "Cognitive Capability Profile",
+      "axes": [
+        "Planning Horizon",
+        "Futures Explored",
+        "Safety Prevented",
+        "10-Step Accuracy"
+      ],
+      "axis_descriptions": {
+        "Planning Horizon": "Maximum lookahead steps (target: 10)",
+        "Futures Explored": "Parallel futures evaluated per decision (target: 5000)",
+        "Safety Prevented": "Percentage of unsafe actions blocked (target: 92%)",
+        "10-Step Accuracy": "Prediction accuracy at 10-step horizon (target: 78%)"
+      },
+      "configurations": [
+        {
+          "name": "Baseline",
+          "values": [3, 100, 60, 25]
+        },
+        {
+          "name": "Optimized",
+          "values": [7, 2000, 85, 55]
+        },
+        {
+          "name": "Omega-Shim (QHDC/TRC)",
+          "values": [10, 5000, 92, 78]
+        }
+      ]
+    },
+    "entropy_efficiency": {
+      "title": "Entropy Cost Profile",
+      "unit": "bits/step",
+      "targets": {
+        "landauer_limit": 0.017,
+        "practical_target": 0.3,
+        "acceptable_range": [0.2, 0.5]
+      },
+      "configurations": [
+        {
+          "name": "Baseline",
+          "value": 2.5
+        },
+        {
+          "name": "Optimized",
+          "value": 0.8
+        },
+        {
+          "name": "Omega-Shim",
+          "value": 0.35
+        }
+      ]
+    },
+    "lifecycle_thresholds": {
+      "title": "Lifecycle Phase Boundaries",
+      "phases": {
+        "embryo": {
+          "min_decisions": 0,
+          "max_decisions": 100,
+          "efficiency_target": 20
+        },
+        "infant": {
+          "min_decisions": 100,
+          "max_decisions": 1000,
+          "efficiency_target": 50
+        },
+        "adolescent": {
+          "min_decisions": 1000,
+          "max_decisions": 10000,
+          "efficiency_target": 75
+        },
+        "adult": {
+          "min_decisions": 10000,
+          "max_decisions": 100000,
+          "efficiency_target": 90
+        },
+        "sage": {
+          "min_decisions": 100000,
+          "max_decisions": null,
+          "efficiency_target": 95
+        }
+      }
+    },
+    "governance_thresholds": {
+      "title": "Governance Alert Thresholds",
+      "covenant_violation_critical": 10,
+      "covenant_violation_warning": 5,
+      "entropy_cost_critical": 2.0,
+      "entropy_cost_warning": 1.0,
+      "reversibility_minimum": 0.5,
+      "efficiency_crisis_threshold": 30.0
+    }
+  },
+  "calibration_notes": {
+    "omega_shim_reference": "All efficiency calculations normalized against Omega-Shim baseline",
+    "entropy_weighting": "20% of overall efficiency derived from entropy cost",
+    "cognitive_weighting": "40% of overall efficiency derived from cognitive metrics",
+    "throughput_weighting": "60% of overall efficiency derived from throughput (before entropy adjustment)"
+  }
+}
