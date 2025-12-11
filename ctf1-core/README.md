@@ -93,7 +93,8 @@ ctf1-core/
 │   ├── 02_soc_vs_nosoc.py
 │   └── 03_agency_at_criticality.py
 ├── ctf1_agent.py             # Canonical unified cognitive agent
-├── ctf3_fisher_geometry.py   # Information Geometry validation (CTF-3)
+├── ctf3_fisher_geometry.py   # Extended IG validation
+├── ctf3_fisher_singularity.py # ★ Canonical IG singularity test with power-law fit
 ├── plots/
 └── README.md
 ```
@@ -177,10 +178,14 @@ Peak at $\lambda \approx 1.0$.
 
 Peak/divergence at $\lambda = 1.0$ where $E(\lambda) = 0$.
 
-**Run:**
+**Run (canonical test with power-law fit):**
 ```bash
-python ctf3_fisher_geometry.py
+python ctf3_fisher_singularity.py
 ```
+
+**Outputs:**
+- `ctf3_E_C_I_vs_lambda.png`: Triple-panel E, C, I vs λ
+- `ctf3_I_vs_absE_loglog.png`: Log-log scaling plot with γ estimate
 
 ---
 
