@@ -919,7 +919,7 @@ The estimated branching ratio thus directly informs the global capacity $C(\lamb
 
 ## XVI. Synthesis and Outlook: The GUTC Control Manifold
 
-The Global Unified Theory of Cognition (GUTC) proposes that the brain is a near-critical, precision-tuned inference machine. Cognition and psychopathology can thus be understood as where a system sits—and how it moves—in a low-dimensional control space spanned by global criticality ($\lambda$) and local precision fields ($\Pi$).
+The **Grand Unified Theory of Cognition (GUTC)** proposes that the brain is a near-critical, precision-tuned inference machine. Cognition and psychopathology can thus be understood in terms of where a system sits—and how it moves—in a low-dimensional control space spanned by **global criticality** ($\lambda$) and **local precision fields** ($\Pi$).
 
 ### 16.1 Core Theoretical Synthesis
 
@@ -927,35 +927,35 @@ The integration of the model's component constraints points to three powerful un
 
 #### A. Criticality as a Computational Setpoint
 
-Empirical and modeling work increasingly suggests that healthy brains operate close to a critical point ($\lambda \approx 1$), maximizing information capacity, flexibility, and sensitivity to input [49]. Our $\lambda$ parameter and the branching-ratio pipeline provide a concrete estimator and a way to track these essential deviations in individuals.
+Empirical and modeling work increasingly suggests that healthy brains operate close to a critical point ($\lambda \approx 1$), maximizing information capacity, flexibility, and sensitivity to input (cf. Section IV) [49]. Our $\lambda$ parameter and the branching-ratio pipeline (Section XV) provide a concrete estimator and a way to track these essential deviations in individuals.
 
 #### B. Predictive Coding as the Algorithm on that Substrate
 
-Predictive processing/active inference provides the principled algorithmic structure: hierarchical generative models updated by precision-weighted prediction errors [50]. Our $\Pi$ fields, implemented via ACh/DA on specific laminar microcircuits, turn this into a physically instantiated "gain map" over the critical core, determining which prediction errors drive state updates.
+Predictive processing/active inference provides the principled algorithmic structure: hierarchical generative models updated by **precision-weighted prediction errors** (cf. Sections VIII–IX) [50]. Our $\Pi$ fields, implemented via neuromodulators (ACh/DA) acting on specific laminar microcircuits (Section XI), turn this into a physically instantiated *gain map* over the critical core, determining **which** prediction errors drive state updates and by how much.
 
 #### C. Computational Psychiatry as $(\lambda, \Pi)$-Mis-tuning
 
-Computational psychiatry already frames many disorders as failures of uncertainty/precision encoding and hierarchical inference [51]. The $(\lambda, \Pi)$ phase diagram makes this link explicit: conditions like ASD and psychosis become characteristic regions and trajectories in this low-dimensional space rather than separate, siloed entities.
+Computational psychiatry already frames many disorders as failures of uncertainty/precision encoding and hierarchical inference (cf. Section VI) [51]. The $(\lambda, \Pi)$ phase diagram (Section XIV) makes this link explicit: conditions such as ASD and psychosis correspond to **characteristic regions and trajectories** in this low-dimensional space, rather than isolated, mechanistically unrelated entities.
 
 ### 16.2 Generative Theoretical Proposals
 
-This synthesis leads to several generative theories and concrete research programs:
+This synthesis yields several generative hypotheses and research programs:
 
 #### A. ConCrit–GUTC Link
 
-Conscious, flexible cognition arises only when $\lambda$ is near-critical and $\Pi$ is adaptively regulated across hierarchies. Unconscious, rigid, or psychotic states correspond to specific **deformations of this critical-precision manifold** [52]. This proposes a single, unified manifold for both normal and abnormal conscious states.
+Conscious, flexible cognition arises only when $\lambda$ is near-critical and $\Pi$ is adaptively regulated across the hierarchy. Unconscious, rigid, or psychotic states correspond to specific **deformations of this critical-precision manifold** [52]. This suggests a single continuous manifold for both "normal" and "abnormal" conscious states, rather than a categorical split.
 
 #### B. Low-Dimensional Control Manifold
 
-Despite enormous microscopic complexity, individual brains may live on a low-dimensional manifold parameterized by a few effective control variables (e.g., $\lambda$, $\Pi_{\text{sensory}}$, $\Pi_{\text{prior}}$) [53]. This predicts that large-scale recordings combined with behavioral fits should reveal clusters and trajectories in this low-dimensional space that systematically track development, learning, and illness trajectories.
+Despite enormous microscopic complexity, individual brains may live on a low-dimensional manifold parameterized by a few effective control variables (e.g., $\lambda$, $\Pi_{\text{sensory}}$, $\Pi_{\text{prior}}$) [53]. This predicts that large-scale neural recordings combined with behavioral/clinical fits should reveal **clusters and trajectories** in this control space that systematically track development, learning, and illness trajectories.
 
 #### C. Cross-Species, Cross-Substrate Law
 
-Because criticality and precision-weighted inference are substrate-agnostic principles, the same $(\lambda, \Pi)$ control picture should apply to artificial agents, animal models, and humans, with similar regions corresponding to similar functional regimes (e.g., exploration–exploitation balance, robustness vs. flexibility), regardless of implementation [54].
+Because criticality and precision-weighted inference are substrate-agnostic principles, the same $(\lambda, \Pi)$ control picture should apply to **artificial agents, animal models, and humans** [54]. Similar regions of this control space should correspond to similar functional regimes (e.g., exploration–exploitation balance, robustness vs. flexibility), regardless of the underlying implementation.
 
 ### 16.3 Research Program
 
-These directions provide a concrete research program:
+These directions define a concrete research program:
 
 $$\boxed{\text{Estimate } \hat{\lambda} \text{ from avalanches, fit } \hat{\Pi} \text{ from behavior, test predictions in } (\lambda, \Pi) \text{-space}}$$
 
@@ -966,7 +966,49 @@ $$\boxed{\text{Estimate } \hat{\lambda} \text{ from avalanches, fit } \hat{\Pi} 
 | **3. Map to $(\lambda, \Pi)$-space** | Joint parameter estimation | Position on control manifold |
 | **4. Test predictions** | Correlate with clinical scores (ADOS, PANSS) and cognitive performance | Validate phase-diagram mapping |
 
-### 16.4 Conclusion
+### 16.4 The $(\lambda, \Pi)$ Phase Diagram
+
+**Figure 1: The GUTC Control Manifold**
+
+```
+                         High Π (Rigid/Hyper-precise)
+                                    ▲
+                                    │
+           ┌────────────────────────┼────────────────────────┐
+           │                        │                        │
+           │   REGIME I             │        REGIME IV       │
+           │   ASD-like             │        Anxiety/        │
+           │   • Subcritical        │        Borderline      │
+           │   • High Π_sensory     │        • Supercritical │
+           │   • Rigid priors       │        • Hyper-plastic │
+           │                        │                        │
+   λ < 1 ◄─┼────────────────────────┼────────────────────────┼─► λ > 1
+ Subcritical                        │                      Supercritical
+           │                   ★ HEALTHY ★                   │
+           │                   (λ ≈ 1, Π calibrated)         │
+           │   REGIME III           │        REGIME II       │
+           │   Depression/          │        Psychosis       │
+           │   Anhedonia            │        • Supercritical │
+           │   • Subcritical        │        • Low Π_prior   │
+           │   • Low Π_prior        │        • Chaotic       │
+           │                        │                        │
+           └────────────────────────┼────────────────────────┘
+                                    │
+                                    ▼
+                         Low Π (Chaotic/Hypo-precise)
+```
+
+**Figure Caption:** *The $(\lambda, \Pi)$ control manifold of GUTC. The horizontal axis represents the criticality parameter $\lambda$, with subcritical dynamics ($\lambda < 1$) on the left and supercritical dynamics ($\lambda > 1$) on the right. The critical line $E(\lambda) = 0$ (where $\lambda = 1$) runs vertically through the center. The vertical axis represents precision $\Pi$, from low/chaotic (bottom) to high/rigid (top). Healthy cognition (★) occupies the near-critical region with context-sensitive, well-calibrated precision. The four quadrants correspond to archetypal psychopathological regimes: (I) ASD-like (subcritical + high $\Pi$), (II) Psychosis (supercritical + low $\Pi$), (III) Depression/Anhedonia (subcritical + low $\Pi$), (IV) Anxiety/Borderline (supercritical + high $\Pi$). Developmental trajectories, acute episodes, and treatment responses can be visualized as paths through this space.*
+
+**Example Trajectories:**
+| Trajectory | Description | Path in $(\lambda, \Pi)$-space |
+|------------|-------------|-------------------------------|
+| **Development** | Healthy maturation | Movement toward $\lambda \approx 1$ with increasing $\Pi$ flexibility |
+| **Acute psychotic episode** | Decompensation | Rightward drift ($\lambda \uparrow$) with $\Pi$ collapse |
+| **Antipsychotic treatment** | Stabilization | Leftward correction with $\Pi$ restoration |
+| **Meditation/mindfulness** | Enhanced flexibility | Fine-tuning toward optimal $(\lambda, \Pi)$ |
+
+### 16.5 Conclusion
 
 The GUTC framework unifies:
 - **Physics** (criticality, phase transitions)
@@ -981,7 +1023,7 @@ into a single, coherent theoretical structure. The brain emerges as a **near-cri
 
 $$\boxed{\lambda \text{ sets the phase}; \quad \Pi \text{ decides which errors move the system}}$$
 
-This provides a principled, biologically grounded, and empirically testable framework for understanding cognition and its disorders.
+If empirically supported, this would elevate GUTC from a unifying narrative to a **quantitative control theory of cognition**, specifying not only *what* healthy and disordered minds are, but *where* they live in a shared dynamical landscape and *how* they move within it.
 
 ### Section XVI References
 
