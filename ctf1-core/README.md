@@ -89,11 +89,12 @@ ctf1-core/
 │   ├── memory_metrics.py     # M_W, avalanche statistics
 │   └── agency.py             # Simple RL at different λ
 ├── docs/
-│   ├── GUTC_Manuscript_Draft.md   # ★★★★ Complete paper with figure placeholders
-│   ├── GUTC_Manuscript_Content.md # ★★★ Theorems, citations, simulation summary
-│   ├── GUTC_Hierarchical_HHN.md   # ★★★ Hierarchical Heteroclinic Networks
-│   ├── GUTC_Noisy_Heteroclinic.md # ★★★ Dwell times, branching, noise scaling
-│   └── GUTC_Memory_Design.md      # ★★★ Manuscript box: Attractors vs Heteroclinic
+│   ├── GUTC_Manuscript_Draft.md       # ★★★★ Complete paper with figure placeholders
+│   ├── GUTC_Manuscript_Content.md     # ★★★ Theorems, citations, simulation summary
+│   ├── GUTC_Critical_Brain_Hypothesis.md # ★★★ Biological validation (CBH ↔ GUTC)
+│   ├── GUTC_Hierarchical_HHN.md       # ★★★ Hierarchical Heteroclinic Networks
+│   ├── GUTC_Noisy_Heteroclinic.md     # ★★★ Dwell times, branching, noise scaling
+│   └── GUTC_Memory_Design.md          # ★★★ Manuscript box: Attractors vs Heteroclinic
 ├── experiments/
 │   ├── 01_lambda_sweep_memory.py
 │   ├── 02_soc_vs_nosoc.py
