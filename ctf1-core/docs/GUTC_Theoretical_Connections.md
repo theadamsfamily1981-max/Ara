@@ -1546,7 +1546,26 @@ HC01,5.0,3.5,0
 | `Pi_hat` | Estimated precision from behavioral fits |
 | `cluster` | Clinical group (0=healthy, 1=ASD, 2=psychosis, 3=other) |
 
-### B.5 GUTCVisualizer Class: Supreme 2D and 3D Manifolds
+### B.5 The Capacity Function $C(\lambda, \Pi)$
+
+The GUTC control manifold includes a **capacity function** that captures computational efficiency across the $(\lambda, \Pi)$ phase space:
+
+$$C(\lambda, \Pi) = \Pi \cdot \exp\left(-\frac{(\lambda - 1)^2}{2\sigma^2}\right)$$
+
+where $\sigma \approx 0.3$ (in normalized $\lambda$ units, or $\sigma = 1.5$ in our 0-10 coordinate system).
+
+**Key properties:**
+
+| Property | Description |
+|----------|-------------|
+| **Peak at criticality** | $C$ is maximized when $\lambda = 1$ (branching ratio = 1) |
+| **Precision scaling** | Higher $\Pi$ amplifies capacity at any $\lambda$ |
+| **Gaussian falloff** | Subcritical ($\lambda < 1$) and supercritical ($\lambda > 1$) regions have reduced capacity |
+| **Ridge geometry** | The critical line $\lambda = 1$ forms a "ridge" of optimal computation |
+
+**Interpretation:** Healthy cognition occupies the critical ridge at moderate $\Pi$. Deviations (subcritical in ASD/depression, supercritical in psychosis) reduce capacity. The Gaussian width $\sigma$ represents the "tolerance" for criticality deviations before performance degrades significantly.
+
+### B.6 GUTCVisualizer Class: Supreme 2D and 3D Manifolds
 
 The following class provides publication-ready visualizations with gradient backgrounds, glow effects, and full 3D manifold rendering.
 
@@ -1663,20 +1682,39 @@ class GUTCVisualizer:
                 ax.axvline(5, lw=width, color='gold', alpha=alpha, zorder=2)
         ax.axvline(5, ls='--', lw=2, color='black', label=r'$\lambda = 1$ (critical)', zorder=3)
 
-        # --- Capacity contours C(λ) ---
+        # --- Capacity contours C(λ, Π) ---
+        # C(λ, Π) = Π · exp(-(λ - 5)² / 2σ²)
+        # Peak at λ=5 (critical), scaled by Π (precision)
         if show_contours:
-            λ_grid = np.linspace(0.5, 9.5, 200)
-            λ_norm = np.clip(λ_grid / 10, 0.01, 0.99)
-            C = -λ_norm * np.log2(λ_norm) - (1 - λ_norm) * np.log2(1 - λ_norm)
+            L = np.linspace(0, 10, 100)
+            P = np.linspace(0, 8, 80)
+            Lambda, Pi_grid = np.meshgrid(L, P)
 
-            # Draw iso-capacity curves
-            for level, style in [(0.5, ':'), (0.7, '-.'), (0.9, ':')]:
-                mask = np.abs(C - level) < 0.02
-                for idx in np.where(mask)[0]:
-                    ax.axvline(λ_grid[idx], ls=style, lw=1, color='goldenrod',
-                              alpha=0.5, zorder=1)
-            ax.text(3.5, 7.5, r'$C(\lambda)$ contours', fontsize=9,
-                   color='goldenrod', alpha=0.8)
+            # Gaussian ridge centered at λ=5 (critical point)
+            sigma = 1.5  # Width of the critical ridge
+            Capacity = Pi_grid * np.exp(-(Lambda - 5)**2 / (2 * sigma**2))
+
+            # Normalize for cleaner contour levels
+            C_max = Capacity.max()
+            levels = np.array([0.2, 0.4, 0.6, 0.8, 0.95]) * C_max
+
+            # Draw filled contours (subtle background)
+            cf = ax.contourf(Lambda, Pi_grid, Capacity, levels=20,
+                            cmap='YlOrRd', alpha=0.15, zorder=0)
+
+            # Draw contour lines
+            CS = ax.contour(Lambda, Pi_grid, Capacity, levels=levels,
+                           colors='darkgoldenrod', linestyles='-',
+                           linewidths=0.8, alpha=0.7, zorder=1)
+
+            # Label contours
+            ax.clabel(CS, inline=True, fontsize=7,
+                     fmt=lambda x: f'C={x/C_max:.1f}')
+
+            # Legend annotation
+            ax.text(8.5, 7.5, r'$C(\lambda, \Pi)$', fontsize=10,
+                   color='darkgoldenrod', fontweight='bold',
+                   bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
 
         # --- Trajectories ---
         if show_trajectories:
@@ -1742,62 +1780,87 @@ class GUTCVisualizer:
         fig = plt.figure(figsize=(12, 9))
         ax = fig.add_subplot(111, projection='3d')
 
-        # --- Surface: λ-dependent capacity ---
+        # --- Surface: Capacity C(λ, Π) with Gaussian ridge ---
         if show_surface:
-            λ = np.linspace(0.1, 2, 50)
-            Π_s = np.linspace(0, 5, 50)
-            Λ, Π_S = np.meshgrid(λ, Π_s)
+            # Use same coordinate system as 2D: λ in [0, 10], Π in [0, 8]
+            λ_vals = np.linspace(0, 10, 60)
+            Π_vals = np.linspace(0, 8, 60)
+            Λ, Π = np.meshgrid(λ_vals, Π_vals)
 
-            # Capacity surface: C(λ, Π) = H(λ) * Π / (1 + Π)
-            # H(λ) = -λ*log(λ) - (1-λ)*log(1-λ) for λ in (0,1)
-            λ_clipped = np.clip(Λ, 0.01, 0.99)
-            H = -λ_clipped * np.log(λ_clipped) - (1 - λ_clipped) * np.log(1 - λ_clipped)
-            C = H * Π_S / (1 + Π_S)
+            # Capacity function: C(λ, Π) = Π · exp(-(λ - 5)² / 2σ²)
+            # Peak at λ=5 (critical), scaled by Π
+            sigma = 1.5
+            C = Π * np.exp(-(Λ - 5)**2 / (2 * sigma**2))
 
-            # Map λ from [0.1, 2] to [0, 10] for consistency with 2D
-            Λ_scaled = Λ * 5
+            # Normalize to [0, 1] for cleaner visualization
+            C_norm = C / C.max()
 
-            surf = ax.plot_surface(Λ_scaled, Π_S, C, cmap='viridis',
-                                  alpha=0.6, edgecolor='none')
-            fig.colorbar(surf, ax=ax, shrink=0.5, label=r'$C(\lambda, \Pi)$')
+            surf = ax.plot_surface(Λ, Π, C_norm, cmap='viridis',
+                                  alpha=0.7, edgecolor='none',
+                                  rstride=2, cstride=2)
+            cbar = fig.colorbar(surf, ax=ax, shrink=0.5, pad=0.1)
+            cbar.set_label(r'$C(\lambda, \Pi)$ (normalized)', fontsize=10)
 
-        # --- Clinical region markers ---
+            # Add wireframe at critical line λ=5
+            λ_crit = np.full_like(Π_vals, 5)
+            C_crit = Π_vals * np.exp(0)  # Peak capacity at λ=5
+            C_crit_norm = C_crit / C.max()
+            ax.plot(λ_crit, Π_vals, C_crit_norm, 'k--', lw=2,
+                   label=r'Critical ridge $\lambda=1$')
+
+        # --- Clinical region markers (on capacity surface) ---
+        # Compute actual C values for each clinical region
+        def capacity(lam, pi, sigma=1.5):
+            return pi * np.exp(-(lam - 5)**2 / (2 * sigma**2))
+
+        C_max = 8.0  # Max capacity (at λ=5, Π=8)
         regions_3d = [
-            (5, 3, 2.5, 'Healthy', '#2ecc71'),      # λ=1, moderate Π
-            (3, 5, 1.5, 'ASD-like', '#e67e22'),     # subcritical, high Π_sens
-            (7, 5, 3.5, 'Psychotic', '#e74c3c'),    # supercritical, high Π_prior
-            (1.5, 1, 0.5, 'Anesthetic', '#7f8c8d'), # low everything
+            # (λ, Π, label, color) - z computed from capacity function
+            (5.0, 3.0, 'Healthy', '#2ecc71'),       # Critical, moderate Π
+            (3.0, 5.5, 'ASD-like', '#e67e22'),      # Subcritical, high Π
+            (7.0, 5.5, 'Psychotic', '#e74c3c'),     # Supercritical, high Π
+            (1.5, 1.0, 'Anesthetic', '#7f8c8d'),    # Deep subcritical, low Π
+            (3.0, 1.5, 'Depressive', '#3498db'),    # Subcritical, low Π
         ]
-        for x, y, z, label, color in regions_3d:
-            ax.scatter([x], [y], [z], c=color, s=200, marker='o',
-                      edgecolors='black', linewidth=1.5, label=label)
-            ax.text(x, y, z + 0.3, label, fontsize=10, ha='center')
+        for lam, pi, label, color in regions_3d:
+            c_val = capacity(lam, pi) / C_max  # Normalized capacity
+            ax.scatter([lam], [pi], [c_val], c=color, s=200, marker='o',
+                      edgecolors='black', linewidth=1.5, label=label, zorder=10)
+            ax.text(lam, pi, c_val + 0.08, label, fontsize=9, ha='center',
+                   fontweight='bold')
 
-        # --- Archetypal trajectories in 3D ---
+        # --- Archetypal trajectories on capacity surface ---
         if show_trajectories:
-            # Development: low → critical
-            t = np.linspace(0, 1, 20)
-            dev_λ = 1.5 + 3.5 * t
-            dev_Π_s = 0.8 + 2.2 * t
-            dev_Π_p = 0.5 + 2.0 * t
-            ax.plot(dev_λ, dev_Π_s, dev_Π_p, 'b-', lw=2, label='Development')
+            t = np.linspace(0, 1, 30)
 
-            # Psychosis trajectory
-            psy_λ = 5 + 2.5 * t
-            psy_Π_s = 3.5 + 1.5 * t
-            psy_Π_p = 2.5 + 1.0 * np.exp(t) - 1
-            ax.plot(psy_λ, psy_Π_s, psy_Π_p, 'r--', lw=2, label='Psychosis onset')
+            # Development: low λ, low Π → critical λ, moderate Π
+            dev_λ = 1.5 + 3.5 * t
+            dev_Π = 0.8 + 2.2 * t
+            dev_C = capacity(dev_λ, dev_Π) / C_max
+            ax.plot(dev_λ, dev_Π, dev_C, 'b-', lw=2.5, label='Development')
+
+            # Psychosis onset: critical → supercritical
+            psy_λ = 5.0 + 2.5 * t
+            psy_Π = 3.5 + 2.0 * t
+            psy_C = capacity(psy_λ, psy_Π) / C_max
+            ax.plot(psy_λ, psy_Π, psy_C, 'r--', lw=2.5, label='Psychosis onset')
+
+            # Recovery: supercritical → critical
+            rec_λ = 7.5 - 2.5 * t
+            rec_Π = 5.5 - 2.0 * t
+            rec_C = capacity(rec_λ, rec_Π) / C_max
+            ax.plot(rec_λ, rec_Π, rec_C, 'g:', lw=2.5, label='Recovery')
 
         # --- Axes ---
-        ax.set_xlabel(r'$\lambda$ (Criticality)', fontsize=11)
-        ax.set_ylabel(r'$\Pi_{\text{sensory}}$', fontsize=11)
-        ax.set_zlabel(r'$\Pi_{\text{prior}}$', fontsize=11)
-        ax.set_title('3D GUTC Manifold: $(\lambda, \Pi_s, \Pi_p)$ Control Space',
-                    fontsize=13, fontweight='bold')
+        ax.set_xlabel(r'$\lambda$ (Criticality)', fontsize=11, labelpad=10)
+        ax.set_ylabel(r'$\Pi$ (Precision)', fontsize=11, labelpad=10)
+        ax.set_zlabel(r'$C(\lambda, \Pi)$', fontsize=11, labelpad=10)
+        ax.set_title('3D GUTC Capacity Surface: Computational Capacity Landscape',
+                    fontsize=13, fontweight='bold', pad=20)
 
         ax.set_xlim(0, 10)
-        ax.set_ylim(0, 6)
-        ax.set_zlim(0, 4)
+        ax.set_ylim(0, 8)
+        ax.set_zlim(0, 1.1)
 
         ax.legend(loc='upper left')
         ax.view_init(elev=25, azim=45)
@@ -1908,7 +1971,7 @@ if __name__ == '__main__':
     plt.show()
 ```
 
-### B.6 CLI Tool: `phase_diagram.py`
+### B.7 CLI Tool: `phase_diagram.py`
 
 The following CLI script integrates with data pipelines for automated figure generation.
 
@@ -2099,7 +2162,7 @@ if __name__ == '__main__':
     main()
 ```
 
-### B.7 Trajectory CSV Format (for Animation)
+### B.8 Trajectory CSV Format (for Animation)
 
 ```csv
 id,time,lambda_hat,Pi_hat
@@ -2122,7 +2185,7 @@ S002,4.0,7.2,6.0
 | `lambda_hat` | Estimated criticality at this time point |
 | `Pi_hat` | Estimated precision at this time point |
 
-### B.8 Usage Summary
+### B.9 Usage Summary
 
 | Command | Output |
 |---------|--------|
@@ -2134,7 +2197,7 @@ S002,4.0,7.2,6.0
 | `python phase_diagram.py --all --csv data.csv` | Full suite |
 | `pdflatex lambda_pi_manifold.tex` | TikZ version (Section 16.4) |
 
-### B.9 Integration with Analysis Pipeline
+### B.10 Integration with Analysis Pipeline
 
 ```bash
 #!/bin/bash
