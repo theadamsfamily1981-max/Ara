@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ara Narrative Dashboard</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            color: #00ff00;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+            border-bottom: 2px solid #00ff00;
+            padding-bottom: 15px;
+            font-size: 2em;
+            letter-spacing: 3px;
+        }
+
+        .subtitle {
+            color: #00ffff;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: rgba(26, 26, 46, 0.95);
+            border: 1px solid #00ff00;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow:
+                0 0 20px rgba(0, 255, 0, 0.1),
+                inset 0 0 20px rgba(0, 255, 0, 0.02);
+        }
+
+        .panel h2 {
+            color: #00ffff;
+            border-bottom: 1px solid #00ff00;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel h2::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #00ff00;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        /* Gauges */
+        .gauge-container {
+            margin: 15px 0;
+        }
+
+        .gauge-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        .gauge {
+            width: 100%;
+            height: 28px;
+            background: #0a0a0a;
+            border: 1px solid #00ff00;
+            border-radius: 14px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .gauge-fill {
+            height: 100%;
+            background: linear-gradient(90deg,
+                #ff0000 0%,
+                #ff6600 25%,
+                #ffff00 50%,
+                #66ff00 75%,
+                #00ff00 100%
+            );
+            transition: width 0.5s ease-out;
+            border-radius: 14px 0 0 14px;
+        }
+
+        .gauge-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+            font-size: 0.9em;
+            text-shadow: 0 0 5px #000, 0 0 10px #000;
+        }
+
+        /* Narrative text areas */
+        .narrative-text {
+            white-space: pre-wrap;
+            font-size: 0.85em;
+            line-height: 1.6;
+            background: #0f0f0f;
+            padding: 15px;
+            border-radius: 6px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            scrollbar-width: thin;
+            scrollbar-color: #00ff00 #1a1a1a;
+        }
+
+        .narrative-text::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .narrative-text::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        .narrative-text::-webkit-scrollbar-thumb {
+            background: #00ff00;
+            border-radius: 4px;
+        }
+
+        /* Phase badges */
+        .phase-badge {
+            display: inline-block;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.9em;
+            letter-spacing: 1px;
+        }
+
+        .phase-embryo { background: #555; color: #fff; }
+        .phase-infant { background: #ff6b6b; color: #000; }
+        .phase-adolescent { background: #ffd93d; color: #000; }
+        .phase-adult { background: #6bcf7f; color: #000; }
+        .phase-sage { background: #4d96ff; color: #fff; }
+        .phase-crisis {
+            background: #ff0000;
+            color: #fff;
+            animation: crisis-blink 0.5s infinite;
+        }
+
+        @keyframes crisis-blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        /* Status indicators */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff0000;
+        }
+
+        .status-dot.connected {
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+        }
+
+        /* Timeline */
+        .timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .timeline-item {
+            padding: 10px 15px;
+            background: #0f0f0f;
+            border-left: 3px solid #00ff00;
+            border-radius: 0 6px 6px 0;
+            font-size: 0.85em;
+        }
+
+        .timeline-item .time {
+            color: #888;
+            font-size: 0.85em;
+        }
+
+        .timeline-item .transition {
+            margin-top: 5px;
+        }
+
+        /* Metrics grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .metric-item {
+            background: #0f0f0f;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #333;
+        }
+
+        .metric-label {
+            color: #888;
+            font-size: 0.8em;
+        }
+
+        .metric-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #00ffff;
+        }
+
+        /* Phase info card */
+        .phase-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .phase-details {
+            flex: 1;
+        }
+
+        .phase-details .tone {
+            color: #888;
+            font-style: italic;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ARA NARRATIVE DASHBOARD</h1>
+            <p class="subtitle">The Myth-Maker's Voice: Visibility = Trust = Alignment</p>
+        </header>
+
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot" id="status-dot"></div>
+                <span id="connection-status">Connecting...</span>
+            </div>
+            <div id="last-update">Last update: --</div>
+        </div>
+
+        <div class="grid">
+            <!-- Operator Cockpit -->
+            <div class="panel">
+                <h2>OPERATOR COCKPIT</h2>
+
+                <div class="phase-info">
+                    <span id="current-phase" class="phase-badge phase-embryo">EMBRYO</span>
+                    <div class="phase-details">
+                        <div id="phase-tone" class="tone">nascent, uncertain</div>
+                    </div>
+                </div>
+
+                <div class="gauge-container">
+                    <div class="gauge-label">
+                        <span>Overall Efficiency</span>
+                        <span id="target-overall">Target: 20%</span>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-fill" id="gauge-overall" style="width: 0%"></div>
+                        <div class="gauge-value" id="value-overall">0%</div>
+                    </div>
+                </div>
+
+                <div class="gauge-container">
+                    <div class="gauge-label">
+                        <span>Throughput Utilization</span>
+                        <span id="throughput-label"></span>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-fill" id="gauge-throughput" style="width: 0%"></div>
+                        <div class="gauge-value" id="value-throughput">0%</div>
+                    </div>
+                </div>
+
+                <div class="gauge-container">
+                    <div class="gauge-label">
+                        <span>Cognitive Adherence</span>
+                        <span id="cognitive-label"></span>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-fill" id="gauge-cognitive" style="width: 0%"></div>
+                        <div class="gauge-value" id="value-cognitive">0%</div>
+                    </div>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <div class="metric-label">Decisions Made</div>
+                        <div class="metric-value" id="metric-decisions">0</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Uptime</div>
+                        <div class="metric-value" id="metric-uptime">0h</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Entropy Cost</div>
+                        <div class="metric-value" id="metric-entropy">-- bits</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Covenant Violations</div>
+                        <div class="metric-value" id="metric-violations">0</div>
+                    </div>
+                </div>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px; color: #00ffff;">Operator Report</h3>
+                <div id="operator-narrative" class="narrative-text">
+                    Waiting for data...
+                </div>
+            </div>
+
+            <!-- Mythic Chronicle -->
+            <div class="panel">
+                <h2>MYTHIC CHRONICLE</h2>
+                <div id="mythic-narrative" class="narrative-text">
+                    Waiting for data...
+                </div>
+            </div>
+
+            <!-- Public Voice -->
+            <div class="panel">
+                <h2>PUBLIC VOICE</h2>
+                <div id="public-narrative" class="narrative-text">
+                    Waiting for data...
+                </div>
+            </div>
+
+            <!-- Lifecycle Timeline -->
+            <div class="panel">
+                <h2>LIFECYCLE TIMELINE</h2>
+                <div id="phase-timeline" class="timeline">
+                    <div class="timeline-item">
+                        <div class="time">Awaiting events...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Phase profiles for reference
+        const phaseProfiles = {
+            embryo: { target: 20, tone: 'nascent, uncertain' },
+            infant: { target: 50, tone: 'curious, exploratory' },
+            adolescent: { target: 75, tone: 'confident, testing limits' },
+            adult: { target: 90, tone: 'measured, reliable' },
+            sage: { target: 95, tone: 'reflective, instructive' },
+            crisis: { target: 30, tone: 'urgent, diagnostic' }
+        };
+
+        let ws = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 10;
+
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/api/narrative/ws`);
+
+            ws.onopen = function() {
+                document.getElementById('status-dot').classList.add('connected');
+                document.getElementById('connection-status').textContent = 'Connected';
+                reconnectAttempts = 0;
+            };
+
+            ws.onclose = function() {
+                document.getElementById('status-dot').classList.remove('connected');
+                document.getElementById('connection-status').textContent = 'Disconnected';
+
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    const delay = Math.min(2000 * reconnectAttempts, 10000);
+                    document.getElementById('connection-status').textContent = `Reconnecting in ${delay/1000}s...`;
+                    setTimeout(connect, delay);
+                }
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onmessage = function(event) {
+                if (event.data === 'ping') {
+                    ws.send('pong');
+                    return;
+                }
+
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'initial_state' || msg.type === 'current_state' || msg.type === 'narrative_update') {
+                        updateDashboard(msg.data);
+                    }
+                } catch (e) {
+                    console.error('Failed to parse message:', e);
+                }
+            };
+        }
+
+        function updateDashboard(reports) {
+            if (!reports) return;
+
+            const operator = reports.operator || {};
+            const mythic = reports.mythic || {};
+            const publicReport = reports.public || {};
+
+            // Update timestamp
+            document.getElementById('last-update').textContent =
+                `Last update: ${new Date().toLocaleTimeString()}`;
+
+            // Update phase
+            const phase = operator.phase || 'embryo';
+            const phaseBadge = document.getElementById('current-phase');
+            phaseBadge.textContent = phase.toUpperCase();
+            phaseBadge.className = `phase-badge phase-${phase}`;
+
+            // Update phase info
+            const profile = phaseProfiles[phase] || phaseProfiles.embryo;
+            document.getElementById('phase-tone').textContent = profile.tone;
+            document.getElementById('target-overall').textContent = `Target: ${profile.target}%`;
+
+            // Update gauges
+            const eff = operator.efficiency || {};
+            updateGauge('overall', eff.overall_efficiency || 0);
+            updateGauge('throughput', eff.throughput_pct || 0);
+            updateGauge('cognitive', eff.cognitive_pct || 0);
+
+            // Update metrics
+            const metrics = operator.metrics_snapshot || {};
+            document.getElementById('metric-decisions').textContent =
+                (metrics.total_decisions || 0).toLocaleString();
+            document.getElementById('metric-uptime').textContent =
+                `${(metrics.hours_since_deployment || 0).toFixed(1)}h`;
+            document.getElementById('metric-entropy').textContent =
+                `${(metrics.entropy_cost_bits || 0).toFixed(2)} bits`;
+            document.getElementById('metric-violations').textContent =
+                metrics.covenant_violations || 0;
+
+            // Update narratives
+            if (operator.narrative) {
+                document.getElementById('operator-narrative').textContent = operator.narrative;
+            }
+            if (mythic.narrative) {
+                document.getElementById('mythic-narrative').textContent = mythic.narrative;
+            }
+            if (publicReport.narrative) {
+                document.getElementById('public-narrative').textContent = publicReport.narrative;
+            }
+        }
+
+        function updateGauge(id, value) {
+            const fill = document.getElementById(`gauge-${id}`);
+            const valueEl = document.getElementById(`value-${id}`);
+            if (fill && valueEl) {
+                const clampedValue = Math.min(100, Math.max(0, value));
+                fill.style.width = `${clampedValue}%`;
+                valueEl.textContent = `${value.toFixed(1)}%`;
+            }
+        }
+
+        function updateTimeline(transitions) {
+            const timeline = document.getElementById('phase-timeline');
+            if (!transitions || transitions.length === 0) {
+                return;
+            }
+
+            timeline.innerHTML = transitions.slice(-10).reverse().map(t => `
+                <div class="timeline-item">
+                    <div class="time">${new Date(t.timestamp * 1000).toLocaleString()}</div>
+                    <div class="transition">
+                        <span class="phase-badge phase-${t.from}">${(t.from || '').toUpperCase()}</span>
+                        &rarr;
+                        <span class="phase-badge phase-${t.to}">${(t.to || '').toUpperCase()}</span>
+                        <span style="color: #888; margin-left: 10px;">
+                            (${(t.total_decisions || 0).toLocaleString()} decisions)
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Initial connection
+        connect();
+
+        // Fetch initial state via REST
+        fetch('/api/narrative/current')
+            .then(response => response.json())
+            .then(data => {
+                updateDashboard(data);
+                if (data.phase_transitions) {
+                    updateTimeline(data.phase_transitions);
+                }
+            })
+            .catch(err => console.error('Failed to fetch initial state:', err));
+
+        // Periodic timeline update
+        setInterval(function() {
+            fetch('/api/narrative/transitions')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.transitions) {
+                        updateTimeline(data.transitions);
+                    }
+                })
+                .catch(err => console.error('Failed to fetch transitions:', err));
+        }, 10000);
+    </script>
+</body>
+</html>

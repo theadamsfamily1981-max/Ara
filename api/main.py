@@ -40,6 +40,7 @@ from .services.metrics_service import MetricsService
 from .services.training_service import TrainingService
 from .services.pareto_service import ParetoService
 from .routers.ara_router import router as ara_router
+from .routers.narrative_router import router as narrative_router
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -121,8 +122,9 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="web/static"), name="static")
 templates = Jinja2Templates(directory="web/templates")
 
-# Include Ara router
+# Include routers
 app.include_router(ara_router)
+app.include_router(narrative_router)
 
 
 # Background task for broadcasting metrics
