@@ -95,6 +95,7 @@ ctf1-core/
 ├── ctf1_agent.py             # Canonical unified cognitive agent
 ├── ctf3_fisher_geometry.py   # Extended IG validation
 ├── ctf3_fisher_singularity.py # ★ Canonical IG singularity test with power-law fit
+├── ctf4_heteroclinic_memory.py # ★★ Final synthesis: M_W + M_L validation
 ├── plots/
 └── README.md
 ```
@@ -189,6 +190,39 @@ python ctf3_fisher_singularity.py
 
 ---
 
+### CTF-4: Heteroclinic Memory Validation (Final Synthesis)
+
+**Question:** Does Critical + $M_L$ structure outperform other regimes on associative tasks?
+
+**Method:** Compare three agents on a sequential association task ($P_1 \to P_2 \to P_3$):
+- **Critical (SOC + M_L)**: E(λ) ≈ 0, heteroclinic links enabled
+- **Ordered (No M_L)**: λ = 0.5, no memory structure
+- **Chaotic (No M_L)**: λ = 1.5, no memory structure
+
+**Architecture:**
+$$W = \lambda \cdot W_{\text{base}} + W_{\text{mem}}$$
+
+where $W_{\text{mem}} = \sum_i W_{P_i} + \sum_{ij} C_{ij} \cdot W_{\Gamma_{ij}}$
+
+**Expected Result:**
+| Agent | Avg Reward | E(λ) |
+|-------|------------|------|
+| Critical (SOC + M_L) | **Highest** | ≈ 0 |
+| Ordered (No M_L) | Low | < 0 |
+| Chaotic (No M_L) | Low | > 0 |
+
+**Run:**
+```bash
+python ctf4_heteroclinic_memory.py
+```
+
+**Outputs:**
+- `CTF-4_Heteroclinic_Validation.png`: 4-panel (Reward, E(λ), C(λ), T(λ))
+
+**Validates:** $M_W$ (power-law dynamics) + $M_L$ (heteroclinic memory) + SOC (criticality) = optimal cognition
+
+---
+
 ## Usage
 
 ```bash
@@ -268,6 +302,7 @@ If experiments confirm predictions:
 2. **SOC maintains criticality** → Self-organization is viable
 3. **Agency is best at criticality** → Action selection benefits from critical dynamics
 4. **FIM diverges at criticality** → RG fixed point = IG singularity (CTF-3)
+5. **M_L + criticality = optimal association** → Structured memory needs critical substrate (CTF-4)
 
 This is a **numerical validation** that "thought" (information processing, memory, adaptive behavior) is maximized exactly where the dynamical system is critical.
 
@@ -277,4 +312,10 @@ This is a **numerical validation** that "thought" (information processing, memor
 - This is **maximal distinguishability**: optimal sensitivity to structure (not chaos)
 - Two systems are "the same kind of thinker" iff they share the same universality class
 
-No neurons. No AI. Just $E(\lambda) = 0$, $\max C(\lambda)$, and $I(\lambda) \to \infty$.
+**The Heteroclinic Memory Theorem (CTF-4):**
+- $M_W$ (power-law dynamics): spontaneous avalanche activity at E(λ) = 0
+- $M_L$ (heteroclinic memory): saddle-node patterns + link manifolds
+- Both coexist ONLY at criticality: $W = \lambda \cdot W_{\text{base}} + W_{\text{mem}}$
+- Associative sequence traversal ($P_1 \to P_2 \to P_3$) is stable IFF E(λ) ≈ 0
+
+No neurons. No AI. Just $E(\lambda) = 0$, $\max C(\lambda)$, $I(\lambda) \to \infty$, and $M_W + M_L$.
