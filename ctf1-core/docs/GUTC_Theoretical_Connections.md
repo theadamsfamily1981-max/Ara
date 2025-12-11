@@ -326,6 +326,42 @@ A powerful pattern emerges: slow AIF for planning, fast execution for control.
 - Bistable perception → Heteroclinic orbit competition
 - Parkinson's bradykinesia → Dopaminergic precision deficits → SOC failure
 
+### 6.6 Precision Weighting: The Neurobiological Control Signal
+
+**Precision ($\Pi$)** is the inverse variance of prediction errors, acting as gain control:
+
+$$\Pi = \frac{1}{\sigma^2}$$
+
+**Precision-weighted error update:**
+$$\Delta q(x) \propto \Pi \cdot \epsilon, \quad \epsilon = u - \hat{u}$$
+
+High precision → error is reliable → strong belief update.
+
+**Dopamine as Precision Modulator:**
+
+| Dopamine Level | Precision Effect | Cognitive Outcome |
+|----------------|------------------|-------------------|
+| High | $\Pi \uparrow$ on relevant errors | Efficient learning |
+| Low | $\Pi \downarrow$ | Errors treated as noise |
+| Aberrant | Misallocated $\Pi$ | Pathological inference |
+
+**Schizophrenia as Aberrant Precision Weighting:**
+
+| Component | Aberrant Weighting | Symptom |
+|-----------|-------------------|---------|
+| Top-down (priors) | Over-precision ($\Pi_{\text{prior}} \uparrow$) | Delusions (rigid beliefs) |
+| Bottom-up (sensory) | Under-precision ($\Pi_{\text{sensory}} \downarrow$) | Hallucinations |
+| Self-generated actions | Under-precision ($\Pi_{\text{action}} \downarrow$) | Loss of agency |
+
+**Two-Timescale GUTC Control:**
+- **Slow (SOC):** Homeostatic mechanisms adjust $\theta$ to maintain $\rho(W) \approx 1$
+- **Fast (Precision):** Neuromodulators adjust $\Pi$ to control inference gain
+
+**The GUTC-Precision Connection:**
+$$\Pi \propto \frac{1}{\sigma^2} \implies \tau_{\text{dwell}} \propto -\log \sigma \propto \log \sqrt{\Pi}$$
+
+High precision → low noise → long dwell times → stable inference at criticality.
+
 ---
 
 ## VII. Implications
