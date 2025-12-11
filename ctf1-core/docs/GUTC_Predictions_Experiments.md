@@ -698,6 +698,190 @@ $$\text{SE}(\hat{m}_{\text{geo}}) \approx \hat{m}_{\text{geo}} \sqrt{\frac{\hat{
 
 ---
 
+## Operational Protocol: Reproducible Pipeline Specification
+
+### Phase Parameter Estimation ($\hat{\lambda}, \hat{\alpha}$) from Resting-State Data
+
+Global phase parameters are estimated from electrophysiological time-series (EEG/MEG/ECoG). These metrics quantify the system's distance from the critical set-point, $E(\lambda) = 0$.
+
+#### Preprocessing Pipeline (Activity Binning)
+
+1. **Filtering:** Apply bandpass filtering (e.g., 1–40 Hz) to remove noise and DC offset
+2. **Activity Definition ($A_t$):** For each time bin $\Delta t$ (e.g., 4 ms), define $A_t$ as the number of channels exceeding threshold ($3 \times \text{SD}$)
+3. **Avalanche Identification:** Avalanche begins when $A_t > 0$, ends when $A_t = 0$
+4. **Metric Calculation:** Compute $P(s)$ distribution and bin-wise ratios
+
+#### Parameter Estimation Summary
+
+| Parameter | Estimation Method | Criticality Proxy |
+|-----------|-------------------|-------------------|
+| $\hat{\lambda}_{\text{phase}}$ | Geometric mean: $\hat{m}_{\text{geo}} = \exp(\langle \log(A_{t+1}/A_t) \rangle)$ | Distance-to-criticality ($m = 1$) |
+| $\hat{\alpha}_{\text{phase}}$ | Power-law fit: $P(s) \sim s^{-\alpha}$ | Steepness ($\alpha > 1.5$ → subcritical) |
+
+---
+
+## Generative Model Specification: Precision Estimation
+
+Precision parameters require fitting a hierarchical generative model to behavioral data from prediction-error tasks.
+
+### Hierarchical Gaussian Filter (HGF/AIF) Structure
+
+```
+Level 2 (Prior):     Slow-changing environmental volatility
+                           ↓
+Level 1 (State):     Fast-changing hidden state (e.g., P(stimulus A))
+                           ↓
+Observation (u):     Sensory input (stimulus identity)
+```
+
+### Precision Parameter Estimation
+
+| Parameter | Task Design | Model Parameter | Falsifiable Prediction |
+|-----------|-------------|-----------------|------------------------|
+| $\hat{\Pi}_{\text{prior}}$ | Probabilistic Reversal Task | $\Pi_{\text{prior}} \propto 1/\sigma^2_{x_1}$ | Higher → higher S.C.I. severity |
+| $\hat{\Pi}_{\text{sensory}}$ | Noisy Detection Task | $\Pi_{\text{sensory}} \propto 1/\sigma^2_{u}$ | Higher → higher S.C.I. severity |
+
+---
+
+## Language-Agnostic Pseudocode: CBH/GUTC Metrics
+
+### Avalanche Identification
+
+```pseudo
+INPUT: A[0..T-1]   // nonnegative integers, event counts per bin
+
+avalanches_sizes  = []
+avalanches_durs   = []
+
+in_avalanche = FALSE
+current_size = 0
+current_dur  = 0
+
+FOR t = 0 TO T-1:
+    IF A[t] > 0:
+        in_avalanche = TRUE
+        current_size = current_size + A[t]
+        current_dur  = current_dur  + 1
+    ELSE:
+        IF in_avalanche == TRUE:
+            APPEND current_size TO avalanches_sizes
+            APPEND current_dur  TO avalanches_durs
+            in_avalanche = FALSE
+            current_size = 0
+            current_dur  = 0
+        ENDIF
+    ENDIF
+ENDFOR
+
+// Close trailing avalanche if needed
+IF in_avalanche == TRUE:
+    APPEND current_size TO avalanches_sizes
+    APPEND current_dur  TO avalanches_durs
+ENDIF
+
+OUTPUT: avalanches_sizes[], avalanches_durs[]
+```
+
+### Branching Ratio (Least-Squares)
+
+```pseudo
+INPUT: A[0..T-1]
+
+sum_At_At1 = 0
+sum_At2    = 0
+
+FOR t = 0 TO T-2:
+    IF A[t] > 0:
+        sum_At_At1 = sum_At_At1 + A[t] * A[t+1]
+        sum_At2    = sum_At2    + A[t] * A[t]
+    ENDIF
+ENDFOR
+
+IF sum_At2 > 0:
+    lambda_hat = sum_At_At1 / sum_At2
+ELSE:
+    lambda_hat = NaN
+ENDIF
+
+E_hat = lambda_hat - 1.0
+
+OUTPUT: lambda_hat, E_hat
+```
+
+### Branching Ratio (Geometric Estimator)
+
+```pseudo
+INPUT: A[0..T-1]
+
+log_ratios = []
+
+FOR t = 0 TO T-2:
+    IF A[t] > 0 AND A[t+1] > 0:
+        r = A[t+1] / A[t]
+        APPEND log(r) TO log_ratios
+    ENDIF
+ENDFOR
+
+IF length(log_ratios) > 0:
+    mean_log_r = AVERAGE(log_ratios)
+    lambda_hat = exp(mean_log_r)    // geometric mean
+    E_hat      = lambda_hat - 1.0
+ELSE:
+    lambda_hat = NaN
+    E_hat      = NaN
+ENDIF
+
+OUTPUT: lambda_hat, E_hat
+```
+
+### Avalanche Size Exponent (Log-Log Slope)
+
+```pseudo
+INPUT: avalanches_sizes[]
+
+// Choose minimum size for tail fit
+xmin = MEDIAN(avalanches_sizes)
+
+tail_sizes = []
+FOR each s IN avalanches_sizes:
+    IF s >= xmin:
+        APPEND s TO tail_sizes
+    ENDIF
+ENDFOR
+
+IF length(tail_sizes) < MIN_TAIL_COUNT:    // e.g., 20
+    alpha_hat = NaN
+    STOP
+ENDIF
+
+// Bin logarithmically
+num_bins = 10
+hist, bin_edges = HISTOGRAM(tail_sizes, num_bins, density=TRUE)
+
+bin_centers = []
+bin_probs   = []
+FOR i = 0 TO length(hist)-1:
+    IF hist[i] > 0:
+        center = 0.5 * (bin_edges[i] + bin_edges[i+1])
+        APPEND center TO bin_centers
+        APPEND hist[i] TO bin_probs
+    ENDIF
+ENDFOR
+
+// Linear fit in log-log space
+log_s = [log10(c) FOR c IN bin_centers]
+log_p = [log10(p) FOR p IN bin_probs]
+
+slope, intercept = LINEAR_REGRESSION(log_s, log_p)
+alpha_hat = -slope    // P(s) ~ s^{-alpha}
+
+OUTPUT: alpha_hat
+```
+
+**Note:** For publication-grade analysis, use proper maximum-likelihood fitting with goodness-of-fit tests.
+
+---
+
 ## References
 
 1. Beggs, J. M., & Plenz, D. (2003). Neuronal avalanches in neocortical circuits. *J. Neurosci.*
