@@ -344,7 +344,69 @@ Psychopathology maps onto characteristic regions of the (λ, Π) manifold, provi
 
 ---
 
-## 10. Future Directions
+## 10. Clinical Applications in Psychiatry and Neurology
+
+The GUTC framework, with its control manifold spanned by criticality (λ) and precision (Π), offers a novel approach for clinical applications in psychiatry and neurology.
+
+### 10.1 Diagnostic Mapping: Disorders as Manifold Coordinates
+
+Different clinical conditions occupy characteristic regions of the (λ, Π) manifold:
+
+| Condition | λ Domain | Π Profile | Manifold Region |
+|-----------|----------|-----------|-----------------|
+| **ASD-like** | < 1 (subcritical) | High Π_prior, low Π_sensory | Rigid, overly precise priors |
+| **Psychosis-like** | > 1 (supercritical) | High Π_sensory, low Π_prior | Unstable, sensory-dominated |
+| **Depression/Anhedonia** | < 1 (subcritical) | Low Π_prior | Stuck pessimistic priors |
+| **Healthy** | ≈ 1 (critical) | Balanced Π | Flexible, efficient inference |
+
+This mapping provides a geometric target for diagnosis: estimating (λ̂, Π̂) from neural data places a patient on the manifold.
+
+### 10.2 Biomarkers and Measurement Tools
+
+**Avalanche-based biomarkers:**
+- **λ̂** (branching ratio): estimated from EEG/MEG avalanche propagation
+- **α̂** (size exponent): deviation from 3/2 indicates distance from criticality
+- **z** (duration exponent): deviation from 2 as secondary indicator
+
+**Precision estimation:**
+- Mismatch negativity (MMN) amplitude as proxy for sensory precision Π_sensory
+- P300 amplitude variations as proxy for prior precision Π_prior
+- Pupil dilation and galvanic skin response for arousal-linked precision
+
+**Neuro-symbiotic interfaces:**
+- Closed-loop devices (e.g., NSHB, Somatic Loom) for real-time (λ, Π) monitoring
+- Continuous feedback enabling precision trajectory tracking over time
+
+### 10.3 Therapeutic Interventions
+
+**Pharmacological modulation:**
+- **5-HT2A agonists** (e.g., psilocybin): increase λ toward criticality in subcritical (rigid) states
+- **NMDA modulators** (e.g., ketamine): adjust precision balance in depression
+- **GABA modulators**: stabilize supercritical dynamics in psychosis
+
+**Neurofeedback and BCI:**
+- Real-time λ̂ feedback to train patients toward critical dynamics
+- Precision-weighted error training via attention-based tasks
+- Closed-loop stimulation (tDCS, TMS) targeting specific manifold coordinates
+
+**Active Inference Therapy (AIT):**
+- Behavioral interventions designed to recalibrate precision allocation
+- Exposure-based precision updating for anxiety disorders
+- Prediction error tolerance training for ASD
+
+### 10.4 Challenges and Future Directions
+
+**Longitudinal validation:** Track (λ̂, Π̂) trajectories over treatment course to validate manifold-based predictions.
+
+**Robust EEG/MEG pipelines:** Develop standardized preprocessing for avalanche extraction across clinical populations.
+
+**Causal intervention tests:** Use closed-loop stimulation to causally verify that moving (λ, Π) toward the healthy corridor improves symptoms.
+
+**Computational phenotyping:** Build classifiers mapping raw neural data → manifold coordinates → diagnostic categories.
+
+---
+
+## 11. Future Directions
 
 1. **Complete avalanche mapping**: Map α̂(λ, Π) and ẑ(λ, Π) across the full manifold
 2. **Information geometry**: Compute Fisher information and show it peaks at E(λ) = 0
@@ -354,7 +416,7 @@ Psychopathology maps onto characteristic regions of the (λ, Π) manifold, provi
 
 ---
 
-## 11. Conclusion
+## 12. Conclusion
 
 The GUTC control manifold provides a unified, quantitative theory connecting:
 - **Dynamics**: E(λ) ≈ 0
