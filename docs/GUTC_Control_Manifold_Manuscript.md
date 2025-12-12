@@ -309,6 +309,30 @@ where w_l encode how much each timescale contributes to behavior.
 
 **Claim (Uniform criticality maximizes capacity):** C_hier is maximized when *all levels* operate at criticality: λ_l ≈ 1 for all l. Simulations confirm C(1.0, 1.0, 1.0) > C(0.7, 1.0, 1.3) for any mixed configuration.
 
+### 7.5 The Hierarchical GUTC Agency Functional
+
+For an L-level hierarchy with inter-level coupling matrix Γ, the unified GUTC objective extends to:
+
+```
+J_hier(π, {λ_l}, {Π_l}, Γ) = Σ_l G^(l)(π) + α Σ_l |E^(l)(λ_l)|² + β ||Γ - Γ*||²
+```
+
+where:
+- G^(l)(π) is the expected free energy at level l (pragmatic + epistemic)
+- |E^(l)(λ_l)|² is the criticality penalty at level l
+- ||Γ - Γ*||² is the coupling misalignment penalty
+
+The optimal coupling Γ* arises from manifold alignment:
+
+```
+Γ*_asc(l) · Π^(l)_sens = Γ*_desc(l+1) · Π^(l+1)_prior
+```
+
+**Proposition (Hierarchical agency optimum):** The minimum of J_hier is achieved when:
+1. All levels are critical: λ_l ≈ 1 for all l
+2. Coupling is balanced: Γ = Γ* with ρ(Γ) < 1
+3. Each level minimizes its local EFE: π*_l = argmin_π G^(l)(π)
+
 ---
 
 ## 8. Psychopathology as Mis-Tuning
@@ -406,7 +430,52 @@ This mapping provides a geometric target for diagnosis: estimating (λ̂, Π̂) 
 
 ---
 
-## 11. Future Directions
+## 11. Frontiers
+
+The GUTC framework opens several research frontiers extending from theory to application.
+
+### 11.1 Frontier 1: Hierarchical Memory and the Γ Matrix
+
+The Γ coupling matrix provides a natural substrate for **hierarchical Hopfield networks** (HHNs):
+
+- **Memory manifolds M_L**: Pattern storage as stable manifolds W^s(P_i) connected via heteroclinic orbits. Capacity scales as C_mem ∝ L · d.
+- **Recall as trajectory navigation**: Memory retrieval as navigation between attractors via saddle-mediated transitions, with Γ controlling transition rates.
+- **Γ learning rules**: Hebbian-like rules adapting Γ_asc and Γ_desc based on cross-level prediction-error correlations.
+
+### 11.2 Frontier 2: The Neuro-Symbiotic Data Pipeline
+
+Translating GUTC to clinical practice requires a measurement-to-manifold pipeline:
+
+1. **Acquisition**: High-density EEG/MEG with temporal resolution ≤ 1 ms
+2. **Preprocessing**: Source localization, artifact rejection, signal whitening
+3. **Avalanche extraction**: Thresholding, binning to identify size s and duration τ distributions
+4. **Parameter estimation**: MLE fitting for λ̂ (branching ratio) and α̂ (size exponent)
+5. **Manifold projection**: Mapping (λ̂, Π̂) coordinates for diagnostic classification
+
+### 11.3 Frontier 3: Closed-Loop Criticality Control
+
+Real-time feedback systems maintaining E(λ) ≈ 0:
+
+- **Neuro-symbiotic interfaces**: Wearable EEG devices providing continuous λ̂ estimates
+- **Adaptive stimulation**: TMS/tDCS protocols adjusting based on criticality deviations
+- **Neurofeedback training**: Real-time feedback guiding subjects toward the critical corridor
+
+### 11.4 Frontier 4: Information Geometry of the Manifold
+
+The (λ, Π) manifold admits a Riemannian structure via the Fisher information metric:
+
+```
+g_ij(λ, Π) = E[∂ln p(x|λ,Π)/∂θ_i · ∂ln p(x|λ,Π)/∂θ_j]
+```
+
+This enables:
+- **Geodesic therapy paths**: Optimal interventions as geodesics minimizing "therapeutic distance"
+- **Curvature diagnostics**: High curvature regions indicate phase boundaries
+- **Natural gradient descent**: Learning rules respecting information geometry
+
+---
+
+## 12. Future Directions
 
 1. **Complete avalanche mapping**: Map α̂(λ, Π) and ẑ(λ, Π) across the full manifold
 2. **Information geometry**: Compute Fisher information and show it peaks at E(λ) = 0
@@ -416,7 +485,7 @@ This mapping provides a geometric target for diagnosis: estimating (λ̂, Π̂) 
 
 ---
 
-## 12. Conclusion
+## 13. Conclusion
 
 The GUTC control manifold provides a unified, quantitative theory connecting:
 - **Dynamics**: E(λ) ≈ 0

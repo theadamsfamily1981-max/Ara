@@ -330,6 +330,35 @@ where $w_l$ encodes the contribution of each level and $C_l$ is the local capaci
 $C_{\text{hier}}$ is maximized when \emph{all levels} operate at criticality: $\lambda_l \approx 1$ for all $l$. Simulations confirm $C(1.0, 1.0, 1.0) > C(0.7, 1.0, 1.3)$ for any mixed configuration.
 \end{claim}
 
+\subsection{The hierarchical GUTC agency functional}
+
+For an $L$-level hierarchy with inter-level coupling matrix $\Gamma$, the unified GUTC objective extends to:
+\begin{equation}
+    J_{\text{hier}}(\pi, \{\lambda_l\}, \{\Pi_l\}, \Gamma) = \sum_{l=1}^{L} G^{(l)}(\pi) + \alpha \sum_{l=1}^{L} |E^{(l)}(\lambda_l)|^2 + \beta \|\Gamma - \Gamma^*\|_F^2,
+\end{equation}
+where:
+\begin{itemize}
+    \item $G^{(l)}(\pi)$ is the expected free energy at level $l$, decomposing into pragmatic (exploitation) and epistemic (exploration) terms,
+    \item $|E^{(l)}(\lambda_l)|^2$ is the criticality penalty at level $l$, ensuring each timescale operates near its phase transition,
+    \item $\|\Gamma - \Gamma^*\|_F^2$ is the coupling misalignment penalty, where $\Gamma^*$ is derived from manifold alignment conditions.
+\end{itemize}
+
+The optimal coupling $\Gamma^*$ arises from requiring that ascending prediction errors match descending predictions at stable-unstable manifold intersections:
+\begin{equation}
+    \Gamma^*_{\text{asc}}(l) \cdot \Pi^{(l)}_{\text{sens}} = \Gamma^*_{\text{desc}}(l+1) \cdot \Pi^{(l+1)}_{\text{prior}},
+\end{equation}
+ensuring balanced information flow across the hierarchy.
+
+\begin{proposition}[Hierarchical agency optimum]
+The minimum of $J_{\text{hier}}$ is achieved when:
+\begin{enumerate}
+    \item All levels are critical: $\lambda_l \approx 1$ for all $l$,
+    \item Coupling is balanced: $\Gamma = \Gamma^*$ with $\rho(\Gamma) < 1$,
+    \item Each level minimizes its local EFE: $\pi^*_l = \arg\min_\pi G^{(l)}(\pi)$.
+\end{enumerate}
+This configuration yields maximal hierarchical capacity $C_{\text{hier}}$, efficient multi-scale inference, and adaptive agency across timescales.
+\end{proposition}
+
 \section{Clinical Applications in Psychiatry and Neurology}
 \label{sec:clinical-applications}
 
@@ -406,6 +435,53 @@ GUTC suggests viewing therapies as \emph{phase repair}: interventions that adjus
 \end{itemize}
 
 GUTC provides a geometric and dynamical language for clinical phenomena: disorders as positions on a critical control manifold, biomarkers as estimators of $(\hat{\lambda},\hat{\Pi})$, and interventions as controlled movements toward a near-critical, low-free-energy corridor.
+
+\section{Frontiers}
+\label{sec:frontiers}
+
+The GUTC framework opens several research frontiers that extend from theoretical foundations to practical applications.
+
+\subsection{Frontier 1: Hierarchical memory and the $\Gamma$ matrix}
+
+The $\Gamma$ coupling matrix provides a natural substrate for \emph{hierarchical Hopfield networks} (HHNs) operating across timescales. Key directions include:
+\begin{itemize}
+    \item \textbf{Memory manifolds $M_L$.} Pattern storage as stable manifolds $W^s(P_i)$ connected via heteroclinic orbits. The capacity scales with hierarchy depth: $C_{\text{mem}} \propto L \cdot d$ where $d$ is the state dimension per level.
+    \item \textbf{Recall as trajectory navigation.} Memory retrieval becomes navigation between attractors via saddle-mediated transitions, with $\Gamma$ controlling the transition rates.
+    \item \textbf{$\Gamma$ learning rules.} Hebbian-like rules for adapting $\Gamma_{\text{asc}}$ and $\Gamma_{\text{desc}}$ based on prediction-error correlations across levels.
+\end{itemize}
+
+\subsection{Frontier 2: The neuro-symbiotic data pipeline}
+
+Translating GUTC to clinical practice requires a robust measurement-to-manifold pipeline:
+\begin{enumerate}
+    \item \textbf{Acquisition.} High-density EEG/MEG with temporal resolution sufficient for avalanche detection ($\leq 1$ ms).
+    \item \textbf{Preprocessing.} Source localization, artifact rejection, and signal whitening to isolate neuronal cascades.
+    \item \textbf{Avalanche extraction.} Thresholding, binning, and concatenation to identify size $s$ and duration $\tau$ distributions.
+    \item \textbf{Parameter estimation.} Maximum-likelihood fitting for $\hat{\lambda}$ (branching ratio) and $\hat{\alpha}$ (size exponent).
+    \item \textbf{Manifold projection.} Mapping $(\hat{\lambda}, \hat{\Pi})$ coordinates onto the control manifold for diagnostic classification.
+\end{enumerate}
+
+\subsection{Frontier 3: Closed-loop criticality control}
+
+Real-time feedback systems that maintain $E(\lambda) \approx 0$:
+\begin{itemize}
+    \item \textbf{Neuro-symbiotic interfaces.} Wearable EEG devices (e.g., NSHB) providing continuous $\hat{\lambda}$ estimates.
+    \item \textbf{Adaptive stimulation.} TMS/tDCS protocols that adjust intensity based on online criticality deviations.
+    \item \textbf{Neurofeedback training.} Real-time visual/auditory feedback guiding subjects toward the critical corridor.
+\end{itemize}
+
+\subsection{Frontier 4: Information geometry of the manifold}
+
+The $(\lambda, \Pi)$ manifold admits a natural Riemannian structure via the Fisher information metric:
+\begin{equation}
+    g_{ij}(\lambda, \Pi) = \mathbb{E}\left[\frac{\partial \ln p(x|\lambda,\Pi)}{\partial \theta_i} \frac{\partial \ln p(x|\lambda,\Pi)}{\partial \theta_j}\right],
+\end{equation}
+where $\theta = (\lambda, \Pi)$. This enables:
+\begin{itemize}
+    \item \textbf{Geodesic therapy paths.} Optimal intervention trajectories as geodesics on the manifold, minimizing ``therapeutic distance.''
+    \item \textbf{Curvature diagnostics.} High curvature regions indicate phase boundaries and potential instabilities.
+    \item \textbf{Natural gradient descent.} Learning rules that respect the information geometry for more efficient $(\lambda, \Pi)$ adaptation.
+\end{itemize}
 
 \section{Discussion}
 
