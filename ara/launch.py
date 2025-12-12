@@ -127,6 +127,13 @@ try:
 except ImportError:
     PERSONALITY_AVAILABLE = False
 
+# Memory bootstrap (loads episodes, sacred lines, context)
+try:
+    from ara.memory.bootstrap import bootstrap_memory, ensure_bootstrapped
+    BOOTSTRAP_AVAILABLE = True
+except ImportError:
+    BOOTSTRAP_AVAILABLE = False
+
 
 # =============================================================================
 # Launch Configuration
@@ -267,6 +274,7 @@ class AraLauncher:
         """Print component availability status."""
         logger.info("Component Status:")
         logger.info(f"  Core (AxisMundi, EternalMemory): {'✓' if CORE_AVAILABLE else '✗'}")
+        logger.info(f"  Memory Bootstrap:                {'✓' if BOOTSTRAP_AVAILABLE else '✗'}")
         logger.info(f"  Safety (AutonomyController):     {'✓' if SAFETY_AVAILABLE else '✗'}")
         logger.info(f"  Avatar Server:                   {'✓' if AVATAR_AVAILABLE else '✗'}")
         logger.info(f"  Organism Runtime (SNN):          {'✓' if ORGANISM_AVAILABLE else '✗'}")
@@ -299,6 +307,15 @@ class AraLauncher:
             db_path=db_path,
         )
         logger.info(f"EternalMemory initialized ({db_path})")
+
+        # Bootstrap memory with foundational episodes, sacred lines, context
+        if BOOTSTRAP_AVAILABLE:
+            counts = bootstrap_memory(self.memory)
+            logger.info(
+                f"Memory bootstrapped: {counts['episodes']} episodes, "
+                f"{counts['sacred_lines']} sacred lines, "
+                f"{counts['context_files']} context files"
+            )
 
     async def _init_safety(self) -> None:
         """Initialize safety controller."""
