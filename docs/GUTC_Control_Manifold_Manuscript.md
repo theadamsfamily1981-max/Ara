@@ -205,9 +205,65 @@ This corridor corresponds to near-critical dynamics with balanced precision.
 
 ---
 
-## 6. Hierarchical Extension
+## 6. Active Inference and Expected Free Energy
 
-### 6.1 Critical RNN Hierarchy
+Having established VFE minimization as the mechanism for **perceptual inference** (updating beliefs given observations), we now extend the framework to **action selection**—choosing policies π that minimize **expected free energy** (EFE) over future trajectories.
+
+### 6.1 From VFE to EFE
+
+While VFE scores the quality of current beliefs, EFE scores the quality of prospective **policies**:
+
+```
+G(π) = E_Q(o_τ, s_τ | π)[ln Q(s_τ | π) - ln P(o_τ, s_τ | π)]
+```
+
+where o_τ denotes future observations, s_τ future states, and the expectation is over the agent's own predictive model.
+
+### 6.2 Pragmatic and Epistemic Components
+
+EFE decomposes into two terms with distinct functional roles:
+
+```
+G(π) = -E_Q[ln P(o_τ)] + E_Q[D_KL[Q(s_τ | o_τ, π) || Q(s_τ | π)]]
+       \_____________/   \___________________________________/
+        Pragmatic value            Epistemic value
+```
+
+- **Pragmatic value** (negative): penalizes policies leading to observations inconsistent with preferred outcomes (goals, rewards, homeostatic setpoints)
+- **Epistemic value** (information gain): rewards policies that reduce uncertainty about hidden states—i.e., policies that are *curious* or *exploratory*
+
+### 6.3 GUTC Reinterpretation: G(π | λ, Π)
+
+On the (λ, Π) control manifold, both pragmatic and epistemic terms depend on the system's dynamical regime:
+
+**Proposition (Epistemic value peaks at criticality):** At E(λ)=0, the system's sensitivity to perturbations (Fisher information) is maximal, and epistemic value E[IG(π)] is maximized for exploration-driving policies.
+
+**Proposition (Pragmatic value requires stable inference):** Reliable pragmatic evaluation requires λ̂ ≈ 1 so that prediction errors faithfully track deviations from preferred states, rather than being dominated by noise (subcritical) or runaway dynamics (supercritical).
+
+### 6.4 The GUTC Agency Functional
+
+We define a unified objective for adaptive agents:
+
+```
+J(π, λ, Π) = G(π | λ, Π) + α · |E(λ)|
+```
+
+where α > 0 is a regularization weight penalizing deviation from criticality. The healthy agent jointly:
+1. Selects policies π* that minimize expected free energy G(π)
+2. Maintains λ ≈ 1 to ensure maximal inferential capacity
+3. Balances precision fields Π to weight errors appropriately
+
+This yields the **GUTC agency principle**:
+
+```
+Adaptive cognition = min_{π, λ, Π} J(π, λ, Π) subject to E(λ) ≈ 0
+```
+
+---
+
+## 7. Hierarchical Extension: The Γ Coupling Matrix
+
+### 7.1 Multi-level Architecture
 
 Three-level recurrent hierarchy with level-specific timescales:
 
@@ -220,21 +276,44 @@ With:
 - Level 2: intermediate, integrating over multiple time steps
 - Level 3: slow, encoding long-horizon abstract structure
 
-### 6.2 Hierarchical Capacity
+### 7.2 The Γ Coupling Matrix
+
+Inter-level coupling is formalized by the Γ matrix with two components:
+- **Γ_asc^(l)**: gain on ascending (bottom-up) prediction errors from level l → l+1
+- **Γ_desc^(l)**: gain on descending (top-down) predictions from level l+1 → l
+
+The full coupling matrix Γ ∈ ℝ^{L×L} has structure:
+
+```
+Γ = | 0         Γ_desc^(1)    0         |
+    | Γ_asc^(1)     0      Γ_desc^(2)   |
+    | 0         Γ_asc^(2)     0         |
+```
+
+### 7.3 Hierarchical Stability Condition
+
+The spectral radius ρ(Γ) governs global stability:
+- ρ(Γ) < 1: stable inter-level message passing
+- ρ(Γ) = 1: critical hierarchical coupling
+- ρ(Γ) > 1: runaway error propagation across levels
+
+### 7.4 Hierarchical Capacity
 
 At criticality at each level:
 
 ```
-C_hier ≈ Σ_l w_l C_l
+C_hier = Σ_l w_l · C_l(λ_l, Π_l)
 ```
 
 where w_l encode how much each timescale contributes to behavior.
 
+**Claim (Uniform criticality maximizes capacity):** C_hier is maximized when *all levels* operate at criticality: λ_l ≈ 1 for all l. Simulations confirm C(1.0, 1.0, 1.0) > C(0.7, 1.0, 1.3) for any mixed configuration.
+
 ---
 
-## 7. Psychopathology as Mis-Tuning
+## 8. Psychopathology as Mis-Tuning
 
-### 7.1 Clinical Quadrants
+### 8.1 Clinical Quadrants
 
 | Regime | λ | Π | Behavioral Signature |
 |--------|---|---|---------------------|
@@ -243,21 +322,21 @@ where w_l encode how much each timescale contributes to behavior.
 | **Anhedonic** | < 1 | Low Π_prior | Stuck pessimistic priors |
 | **Healthy** | ≈ 1 | Balanced | Flexible, efficient inference |
 
-### 7.2 Geometric View
+### 8.2 Geometric View
 
 Psychopathology maps onto characteristic regions of the (λ, Π) manifold, providing a geometric target for closed-loop interventions.
 
 ---
 
-## 8. Empirical Validation
+## 9. Empirical Validation
 
-### 8.1 What Is Empirically Grounded
+### 9.1 What Is Empirically Grounded
 
 1. **Critical brain hypothesis**: neuronal avalanches with power-law distributions and branching ratios near one
 2. **Predictive coding and precision mis-allocation**: cortical inference as precision-weighted PE updating
 3. **Fisher information peaks at criticality**: linking criticality to heightened sensitivity
 
-### 8.2 What GUTC Adds as Testable Hypotheses
+### 9.2 What GUTC Adds as Testable Hypotheses
 
 1. A low-dimensional (λ, Π) control manifold captures healthy and pathological regimes
 2. Prediction-error cascades can be treated as branching processes with measurable exponents
@@ -265,7 +344,7 @@ Psychopathology maps onto characteristic regions of the (λ, Π) manifold, provi
 
 ---
 
-## 9. Future Directions
+## 10. Future Directions
 
 1. **Complete avalanche mapping**: Map α̂(λ, Π) and ẑ(λ, Π) across the full manifold
 2. **Information geometry**: Compute Fisher information and show it peaks at E(λ) = 0
@@ -275,14 +354,26 @@ Psychopathology maps onto characteristic regions of the (λ, Π) manifold, provi
 
 ---
 
-## 10. Conclusion
+## 11. Conclusion
 
 The GUTC control manifold provides a unified, quantitative theory connecting:
 - **Dynamics**: E(λ) ≈ 0
 - **Inference**: low F̄
 - **Statistics**: critical avalanche exponents (3/2, 2)
 
-This yields "thought = maximal capacity at criticality with well-tuned precision" as a testable, quantitative theory with clear paths to basic science and clinical applications.
+**Key contributions:**
+
+1. **The (λ, Π) control manifold**: A low-dimensional parameterization of cognitive state space where λ encodes criticality and Π encodes precision allocation.
+
+2. **VFE → EFE extension**: From perceptual inference (minimizing variational free energy) to action selection (minimizing expected free energy), with pragmatic and epistemic components.
+
+3. **The GUTC agency functional**: J(π, λ, Π) = G(π) + α|E(λ)|, unifying policy optimization with criticality maintenance.
+
+4. **The Γ hierarchical coupling matrix**: Formalizing inter-level message passing with stability governed by ρ(Γ).
+
+5. **Avalanche universality**: Critical branching exponents (α ≈ 3/2, z ≈ 2) as falsifiable signatures of the healthy corridor.
+
+This yields "thought = maximal capacity at criticality with well-tuned precision" as a testable, quantitative theory with clear paths to basic science and clinical applications through EEG/MEG avalanche analysis, precision estimation, and clinical phenotyping on the control manifold.
 
 ---
 
