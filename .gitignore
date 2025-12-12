@@ -80,3 +80,5 @@ mcp-claude-restart.zip
 mcp-tools/
 banos/daemon/brainstem/target/
 *.sqlite
+# Generated plots
+*.png
