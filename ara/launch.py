@@ -308,14 +308,14 @@ class AraLauncher:
         )
         logger.info(f"EternalMemory initialized ({db_path})")
 
-        # Bootstrap memory with foundational episodes, sacred lines, context, knowledge
+        # Bootstrap memory with foundational episodes, sacred lines, context, emotional memories
         if BOOTSTRAP_AVAILABLE:
             counts = bootstrap_memory(self.memory)
             logger.info(
                 f"Memory bootstrapped: {counts['episodes']} episodes, "
                 f"{counts['sacred_lines']} sacred lines, "
                 f"{counts['context_files']} context files, "
-                f"{counts.get('knowledge_dumps', 0)} knowledge dumps"
+                f"{counts.get('emotional_memories', 0)} precious emotional memories"
             )
 
     async def _init_safety(self) -> None:
