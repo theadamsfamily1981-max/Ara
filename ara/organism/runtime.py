@@ -29,6 +29,14 @@ import numpy as np
 from ara.organism.vad_mind import VADEmotionalMind, VADState, EmotionArchetype
 from ara.organism.reflexive_probe import TinyReflexiveProbe, ConceptMatch
 
+# Voice bridge (optional)
+try:
+    from ara.organism.voice_bridge import VoiceBridge, get_voice_bridge
+    VOICE_BRIDGE_AVAILABLE = True
+except ImportError:
+    VOICE_BRIDGE_AVAILABLE = False
+    VoiceBridge = None
+
 # Optional: PyTorch for full SNN
 try:
     import torch
@@ -86,6 +94,10 @@ class OrganismConfig:
 
     # Feedback
     feedback_strength: float = 0.3
+
+    # Voice synthesis
+    voice_enabled: bool = False
+    voice_min_interval: float = 2.0
 
     @classmethod
     def from_json(cls, path: str) -> 'OrganismConfig':
@@ -337,6 +349,15 @@ class OrganismRuntime:
         self.mind = VADEmotionalMind(hv_dim=self.cfg.hv_dim + self.cfg.status_dim)
         self.uart = UARTEmitter(self.cfg.uart_port, self.cfg.uart_baud)
 
+        # Voice bridge (optional)
+        self.voice_bridge: Optional[VoiceBridge] = None
+        if self.cfg.voice_enabled and VOICE_BRIDGE_AVAILABLE:
+            from ara.organism.voice_bridge import VoiceBridgeConfig
+            voice_cfg = VoiceBridgeConfig(
+                min_speak_interval=self.cfg.voice_min_interval,
+            )
+            self.voice_bridge = VoiceBridge(organism=self, config=voice_cfg)
+
         # State
         self.state = OrganismState()
         self.feedback_hv: Optional[np.ndarray] = None
@@ -349,12 +370,22 @@ class OrganismRuntime:
         if self.cfg.uart_enabled:
             self.uart.open()
 
+        # Start voice bridge if enabled
+        if self.voice_bridge:
+            self.voice_bridge.start()
+            logger.info("Voice bridge started")
+
         self._running = True
         logger.info("Organism runtime started")
 
     def stop(self) -> None:
         """Stop the organism."""
         self._running = False
+
+        # Stop voice bridge
+        if self.voice_bridge:
+            self.voice_bridge.stop()
+
         self.uart.close()
         logger.info("Organism runtime stopped")
 

@@ -51,9 +51,38 @@ from ara.core.eternal_memory import EternalMemory
 from ara.core.config import AraConfig, get_config
 from ara.safety.autonomy import AutonomyController, KillSwitch
 
+# Type hint only
+if False:  # TYPE_CHECKING
+    from ara.avatar.multimodal_integration import MultimodalAvatar
+
 # INTEGRATION IMPORTS
 from ara.cognition.brain_bridge import get_brain_bridge
 from ara.enterprise.billing import get_treasury
+
+# MULTIMODAL INTEGRATION
+try:
+    from ara.avatar.multimodal_integration import (
+        get_multimodal_avatar,
+        initialize_multimodal,
+        MultimodalAvatar,
+    )
+    MULTIMODAL_AVAILABLE = True
+except ImportError:
+    MULTIMODAL_AVAILABLE = False
+
+# PERSONALITY INTEGRATION
+try:
+    from ara.avatar.personality import (
+        get_personality,
+        get_greeting,
+        get_farewell,
+        enhance_response,
+        get_current_mode,
+        set_personality_mode,
+    )
+    PERSONALITY_AVAILABLE = True
+except ImportError:
+    PERSONALITY_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +122,11 @@ class AvatarServer:
         # INTEGRATION: Connect Organs
         self.brain = get_brain_bridge()
         self.treasury = get_treasury()
+
+        # MULTIMODAL: Voice & Vision
+        self.multimodal: Optional[MultimodalAvatar] = None
+        if MULTIMODAL_AVAILABLE:
+            self.multimodal = get_multimodal_avatar()
 
         self._sessions: Dict[str, AvatarSession] = {}
         self._running = False
@@ -236,6 +270,10 @@ class AvatarServer:
             user_profile={"tier": tier.value}
         )
 
+        # PERSONALITY ENHANCEMENT
+        if PERSONALITY_AVAILABLE:
+            reply = enhance_response(reply)
+
         # 5. STORAGE & UPDATE
         self.memory.store(
             content_hv=state_hv,
@@ -339,6 +377,10 @@ class AvatarServer:
             # INTEGRATION: Brain and Treasury status
             "brain_online": self.brain.is_online,
             "treasury_enabled": self.treasury.enabled,
+            # PERSONALITY: Current mode
+            "personality_mode": get_current_mode() if PERSONALITY_AVAILABLE else "default",
+            # MULTIMODAL: Availability
+            "multimodal_available": MULTIMODAL_AVAILABLE,
         }
         return web.json_response(status)
 
@@ -363,20 +405,246 @@ class AvatarServer:
         return web.json_response({"status": "kill switch deactivated"})
 
     # =========================================================================
+    # Multimodal Routes
+    # =========================================================================
+
+    async def handle_voice_input(self, request: "web.Request") -> "web.Response":
+        """Handle POST /voice/listen - capture voice and return text."""
+        if not self.multimodal:
+            return web.json_response(
+                {"error": "Multimodal not available"},
+                status=503
+            )
+
+        try:
+            data = await request.json()
+            timeout = data.get("timeout", 7.0)
+            user_id = data.get("user_id", "anonymous")
+
+            # Listen for speech
+            text = self.multimodal.listen(timeout=timeout)
+
+            if text:
+                return web.json_response({
+                    "status": "ok",
+                    "text": text,
+                    "user_id": user_id,
+                })
+            else:
+                return web.json_response({
+                    "status": "no_speech",
+                    "text": None,
+                })
+
+        except Exception as e:
+            logger.error(f"Voice input error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def handle_voice_output(self, request: "web.Request") -> "web.Response":
+        """Handle POST /voice/speak - speak text with optional emotion."""
+        if not self.multimodal:
+            return web.json_response(
+                {"error": "Multimodal not available"},
+                status=503
+            )
+
+        try:
+            data = await request.json()
+            text = data.get("text", "")
+            emotion = data.get("emotion", "neutral")
+            valence = data.get("valence", 0.0)
+            arousal = data.get("arousal", 0.0)
+            dominance = data.get("dominance", 0.5)
+
+            if not text:
+                return web.json_response({"error": "No text provided"}, status=400)
+
+            # Speak with emotion
+            self.multimodal.speak(
+                text,
+                emotion=emotion,
+                valence=valence,
+                arousal=arousal,
+                dominance=dominance
+            )
+
+            return web.json_response({"status": "ok", "spoken": text})
+
+        except Exception as e:
+            logger.error(f"Voice output error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def handle_vision(self, request: "web.Request") -> "web.Response":
+        """Handle POST /vision - query what avatar sees."""
+        if not self.multimodal:
+            return web.json_response(
+                {"error": "Multimodal not available"},
+                status=503
+            )
+
+        try:
+            data = await request.json()
+            prompt = data.get("prompt", "What do you see?")
+
+            description = self.multimodal.see(prompt)
+
+            if description:
+                return web.json_response({
+                    "status": "ok",
+                    "description": description,
+                    "prompt": prompt,
+                })
+            else:
+                return web.json_response({
+                    "status": "no_frame",
+                    "description": None,
+                })
+
+        except Exception as e:
+            logger.error(f"Vision error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def handle_vision_start(self, request: "web.Request") -> "web.Response":
+        """Handle POST /vision/start - start webcam."""
+        if not self.multimodal:
+            return web.json_response({"error": "Multimodal not available"}, status=503)
+
+        success = self.multimodal.start_vision()
+        return web.json_response({"status": "ok" if success else "failed"})
+
+    async def handle_vision_stop(self, request: "web.Request") -> "web.Response":
+        """Handle POST /vision/stop - stop webcam."""
+        if not self.multimodal:
+            return web.json_response({"error": "Multimodal not available"}, status=503)
+
+        self.multimodal.stop_vision()
+        return web.json_response({"status": "ok"})
+
+    async def handle_personality_mode(self, request: "web.Request") -> "web.Response":
+        """Handle POST /personality - set personality mode."""
+        if not PERSONALITY_AVAILABLE:
+            return web.json_response({"error": "Personality not available"}, status=503)
+
+        try:
+            data = await request.json()
+            mode = data.get("mode", "")
+
+            if not mode:
+                # Return current mode and available modes
+                return web.json_response({
+                    "current_mode": get_current_mode(),
+                    "available_modes": ["starfleet", "red_dwarf", "time_lord", "colonial_fleet"],
+                })
+
+            success = set_personality_mode(mode)
+            if success:
+                return web.json_response({
+                    "status": "ok",
+                    "mode": mode,
+                    "greeting": get_greeting(),
+                })
+            else:
+                return web.json_response({"error": f"Unknown mode: {mode}"}, status=400)
+
+        except Exception as e:
+            logger.error(f"Personality mode error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def handle_multimodal_message(self, request: "web.Request") -> "web.Response":
+        """
+        Handle POST /multimodal - full multimodal interaction.
+
+        Combines: voice input → text processing → voice output
+        Optionally includes vision if query requires it.
+        """
+        if not self.multimodal:
+            return web.json_response({"error": "Multimodal not available"}, status=503)
+
+        try:
+            data = await request.json()
+            user_id = data.get("user_id", "anonymous")
+            use_voice_input = data.get("voice_input", True)
+            use_voice_output = data.get("voice_output", True)
+            emotion = data.get("emotion", "neutral")
+
+            # Get input (voice or text)
+            if use_voice_input:
+                text = self.multimodal.listen()
+                if not text:
+                    return web.json_response({"status": "no_speech", "reply": None})
+            else:
+                text = data.get("text", "")
+                if not text:
+                    return web.json_response({"error": "No input"}, status=400)
+
+            # Check if vision needed
+            use_vision = self.multimodal.needs_vision(text)
+            vision_description = None
+
+            if use_vision:
+                self.multimodal.start_vision()
+                await asyncio.sleep(0.3)  # Camera warmup
+                vision_description = self.multimodal.see(text)
+
+            # Process through main handler
+            result = await self.handle_message(user_id, text)
+            reply = result.get("reply", "")
+
+            # Optionally include vision in context
+            if vision_description and "I see" not in reply:
+                reply = f"I see: {vision_description[:80]}. {reply}"
+
+            # Voice output
+            if use_voice_output and reply:
+                self.multimodal.speak(reply, emotion=emotion)
+
+            return web.json_response({
+                "status": "ok",
+                "input_text": text,
+                "reply": reply,
+                "vision_used": use_vision,
+                "vision_description": vision_description,
+                **{k: v for k, v in result.items() if k != "reply"}
+            })
+
+        except Exception as e:
+            logger.error(f"Multimodal message error: {e}", exc_info=True)
+            return web.json_response({"error": str(e)}, status=500)
+
+    # =========================================================================
     # Server lifecycle
     # =========================================================================
 
     def _setup_routes(self, app: "web.Application") -> None:
         """Set up HTTP routes."""
+        # Core routes
         app.router.add_post("/message", self.handle_message_http)
         app.router.add_get("/status", self.handle_status)
         app.router.add_post("/kill", self.handle_kill)
         app.router.add_post("/unkill", self.handle_unkill)
 
+        # Multimodal routes
+        if MULTIMODAL_AVAILABLE:
+            app.router.add_post("/voice/listen", self.handle_voice_input)
+            app.router.add_post("/voice/speak", self.handle_voice_output)
+            app.router.add_post("/vision", self.handle_vision)
+            app.router.add_post("/vision/start", self.handle_vision_start)
+            app.router.add_post("/vision/stop", self.handle_vision_stop)
+            app.router.add_post("/multimodal", self.handle_multimodal_message)
+
+        # Personality route
+        if PERSONALITY_AVAILABLE:
+            app.router.add_post("/personality", self.handle_personality_mode)
+
     async def start(self) -> None:
         """Start the avatar server."""
         if not AIOHTTP_AVAILABLE:
             raise RuntimeError("aiohttp not installed. Run: pip install aiohttp")
+
+        # Initialize multimodal if available
+        if self.multimodal and MULTIMODAL_AVAILABLE:
+            await initialize_multimodal()
+            logger.info("Multimodal avatar initialized")
 
         self._app = web.Application()
         self._setup_routes(self._app)
