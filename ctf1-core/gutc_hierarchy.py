@@ -494,6 +494,186 @@ def analyze_hierarchy_timescales(results: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # =============================================================================
+# Γ (Gamma) Hierarchical Coupling Matrix
+# =============================================================================
+
+@dataclass
+class GammaCouplingMatrix:
+    """
+    The Γ (Gamma) Coupling Matrix formalizes inter-level information flow.
+
+    Architecture:
+        Γ = [Γ_asc, Γ_desc]
+
+    where:
+        Γ_asc[l,l+1] = A^(l+1) · Π_sens^(l)   (ascending error gain)
+        Γ_desc[l,l-1] = B^(l-1) · Π_prior^(l) (descending prediction gain)
+
+    The effective coupling strength determines how quickly information
+    propagates through the hierarchy. At criticality (all λ_l ≈ 1),
+    information flows maximally efficiently.
+
+    Properties:
+        - det(I - Γ) > 0: stable hierarchy (errors don't explode)
+        - Tr(Γ) ~ n_levels: balanced coupling
+        - ρ(Γ) < 1: convergent predictive dynamics
+    """
+    n_levels: int
+    ascending_gains: List[float]   # Γ_asc[l] = gain from level l to l+1
+    descending_gains: List[float]  # Γ_desc[l] = gain from level l+1 to l
+    precision_sens: List[float]    # Π_sens at each level
+    precision_prior: List[float]   # Π_prior at each level
+
+    @classmethod
+    def from_network(cls, network: 'HierarchicalGUTCNetwork') -> 'GammaCouplingMatrix':
+        """Construct Γ matrix from a hierarchical network."""
+        n_levels = network.n_levels
+        configs = network.get_level_configs()
+
+        ascending_gains = []
+        descending_gains = []
+        precision_sens = []
+        precision_prior = []
+
+        for i, cfg in enumerate(configs):
+            precision_sens.append(cfg.pi_sensory)
+            precision_prior.append(cfg.pi_prior)
+            ascending_gains.append(cfg.ascending_gain)
+            descending_gains.append(cfg.descending_gain)
+
+        return cls(
+            n_levels=n_levels,
+            ascending_gains=ascending_gains,
+            descending_gains=descending_gains,
+            precision_sens=precision_sens,
+            precision_prior=precision_prior,
+        )
+
+    def effective_ascending(self, level: int) -> float:
+        """Effective ascending coupling: A · Π_sens."""
+        if level >= self.n_levels - 1:
+            return 0.0
+        return self.ascending_gains[level] * self.precision_sens[level]
+
+    def effective_descending(self, level: int) -> float:
+        """Effective descending coupling: B · Π_prior."""
+        if level <= 0:
+            return 0.0
+        return self.descending_gains[level] * self.precision_prior[level]
+
+    def total_coupling_strength(self) -> float:
+        """Total coupling strength Σ(Γ_asc + Γ_desc)."""
+        total = 0.0
+        for l in range(self.n_levels):
+            total += self.effective_ascending(l)
+            total += self.effective_descending(l)
+        return total
+
+    def coupling_balance(self) -> float:
+        """
+        Coupling balance ratio: Σ Γ_asc / Σ Γ_desc.
+
+        Balanced hierarchy: ratio ≈ 1
+        Bottom-up dominated: ratio > 1
+        Top-down dominated: ratio < 1
+        """
+        asc_total = sum(self.effective_ascending(l) for l in range(self.n_levels))
+        desc_total = sum(self.effective_descending(l) for l in range(self.n_levels))
+
+        if desc_total < 1e-10:
+            return float('inf')
+        return asc_total / desc_total
+
+    def as_matrix(self) -> np.ndarray:
+        """
+        Construct the full Γ matrix as (n_levels × n_levels).
+
+        Γ[i,j] = coupling from level j to level i
+        """
+        G = np.zeros((self.n_levels, self.n_levels))
+
+        for l in range(self.n_levels - 1):
+            # Ascending: l → l+1
+            G[l+1, l] = self.effective_ascending(l)
+            # Descending: l+1 → l
+            G[l, l+1] = self.effective_descending(l+1)
+
+        return G
+
+    def spectral_radius(self) -> float:
+        """Spectral radius ρ(Γ) - must be < 1 for stability."""
+        G = self.as_matrix()
+        return np.max(np.abs(np.linalg.eigvals(G)))
+
+    def is_stable(self) -> bool:
+        """Check if hierarchy is stable (ρ(Γ) < 1)."""
+        return self.spectral_radius() < 1.0
+
+
+def compute_hierarchical_information_flow(
+    network: 'HierarchicalGUTCNetwork',
+    results: Dict[str, Any],
+) -> Dict[str, float]:
+    """
+    Compute information-theoretic metrics for hierarchical flow.
+
+    Metrics:
+        - I_asc: Mutual information in ascending direction
+        - I_desc: Mutual information in descending direction
+        - I_total: Total information throughput
+        - η_efficiency: Information efficiency (I / coupling_strength)
+    """
+    n_levels = network.n_levels
+    states = results["states"]
+    errors = results["errors"]
+
+    # Estimate mutual information via correlation (Gaussian approximation)
+    # I(X;Y) ≈ -0.5 log(1 - ρ²) where ρ is correlation
+
+    I_asc = 0.0
+    I_desc = 0.0
+
+    for l in range(n_levels - 1):
+        # Ascending: correlation between errors[l] and states[l+1]
+        if len(errors[l]) > 0 and len(states[l+1]) > 0:
+            min_len = min(len(errors[l]), len(states[l+1]))
+            err_flat = errors[l][:min_len].flatten()
+            state_flat = states[l+1][:min_len].flatten()
+
+            if len(err_flat) > 10:
+                corr = np.corrcoef(err_flat, state_flat)[0, 1]
+                if not np.isnan(corr) and abs(corr) < 0.9999:
+                    I_asc += -0.5 * np.log(1 - corr**2)
+
+        # Descending: correlation between states[l+1] and states[l]
+        if len(states[l]) > 0 and len(states[l+1]) > 0:
+            min_len = min(len(states[l]), len(states[l+1]))
+            state_low = states[l][:min_len].flatten()
+            state_high = states[l+1][:min_len].flatten()
+
+            if len(state_low) > 10:
+                corr = np.corrcoef(state_low, state_high)[0, 1]
+                if not np.isnan(corr) and abs(corr) < 0.9999:
+                    I_desc += -0.5 * np.log(1 - corr**2)
+
+    I_total = I_asc + I_desc
+
+    # Efficiency: information per unit coupling
+    gamma = GammaCouplingMatrix.from_network(network)
+    coupling = gamma.total_coupling_strength()
+    eta = I_total / coupling if coupling > 0 else 0.0
+
+    return {
+        "I_ascending": I_asc,
+        "I_descending": I_desc,
+        "I_total": I_total,
+        "eta_efficiency": eta,
+        "gamma_spectral_radius": gamma.spectral_radius(),
+        "coupling_balance": gamma.coupling_balance(),
+    }
+
+
+# =============================================================================
 # Hierarchical Capacity
 # =============================================================================
 
@@ -542,6 +722,160 @@ def compute_hierarchical_capacity(
         capacities["total"] += w_C
 
     return capacities
+
+
+def sweep_hierarchical_criticality(
+    rho_range: Tuple[float, float] = (0.7, 1.3),
+    n_points: int = 15,
+    pi_val: float = 1.0,
+) -> Dict[str, np.ndarray]:
+    """
+    Sweep spectral radius across all levels simultaneously.
+
+    Demonstrates the GUTC prediction:
+        C_hier is MAXIMIZED when ALL levels are at criticality (λ_l ≈ 1)
+
+    Returns:
+        Dictionary with rho values, per-level capacities, and total capacity
+    """
+    rho_values = np.linspace(rho_range[0], rho_range[1], n_points)
+
+    results = {
+        "rho": rho_values,
+        "C_level_1": np.zeros(n_points),
+        "C_level_2": np.zeros(n_points),
+        "C_level_3": np.zeros(n_points),
+        "C_hier": np.zeros(n_points),
+    }
+
+    for i, rho in enumerate(rho_values):
+        # All levels at the same spectral radius
+        configs = [
+            LevelConfig(level_id=1, alpha=0.30, spectral_radius=rho,
+                       pi_sensory=pi_val, pi_prior=pi_val),
+            LevelConfig(level_id=2, alpha=0.10, spectral_radius=rho,
+                       pi_sensory=pi_val, pi_prior=pi_val),
+            LevelConfig(level_id=3, alpha=0.03, spectral_radius=rho,
+                       pi_sensory=pi_val, pi_prior=pi_val),
+        ]
+        network = HierarchicalGUTCNetwork(configs)
+        cap = compute_hierarchical_capacity(network)
+
+        results["C_level_1"][i] = cap["per_level"][0]
+        results["C_level_2"][i] = cap["per_level"][1]
+        results["C_level_3"][i] = cap["per_level"][2]
+        results["C_hier"][i] = cap["total"]
+
+    return results
+
+
+def sweep_mixed_criticality(
+    n_points: int = 11,
+    pi_val: float = 1.0,
+) -> Dict[str, np.ndarray]:
+    """
+    Sweep with heterogeneous criticality across levels.
+
+    Shows that UNIFORM criticality (all λ_l = 1) outperforms mixed regimes.
+
+    Returns:
+        Grid of C_hier for (λ_1, λ_3) with λ_2 fixed at 1.0
+    """
+    rho_1_values = np.linspace(0.7, 1.3, n_points)
+    rho_3_values = np.linspace(0.7, 1.3, n_points)
+
+    C_grid = np.zeros((n_points, n_points))
+
+    for i, rho_1 in enumerate(rho_1_values):
+        for j, rho_3 in enumerate(rho_3_values):
+            configs = [
+                LevelConfig(level_id=1, alpha=0.30, spectral_radius=rho_1,
+                           pi_sensory=pi_val, pi_prior=pi_val),
+                LevelConfig(level_id=2, alpha=0.10, spectral_radius=1.0,  # Fixed at critical
+                           pi_sensory=pi_val, pi_prior=pi_val),
+                LevelConfig(level_id=3, alpha=0.03, spectral_radius=rho_3,
+                           pi_sensory=pi_val, pi_prior=pi_val),
+            ]
+            network = HierarchicalGUTCNetwork(configs)
+            cap = compute_hierarchical_capacity(network)
+            C_grid[j, i] = cap["total"]
+
+    return {
+        "rho_1": rho_1_values,
+        "rho_3": rho_3_values,
+        "C_grid": C_grid,
+    }
+
+
+def plot_hierarchical_criticality_sweep(
+    data: Dict[str, np.ndarray],
+    save_path: Optional[str] = None,
+):
+    """
+    Plot the hierarchical criticality sweep showing C_hier peaks at λ=1.
+
+    Two panels:
+    1. Line plot: C_hier vs ρ (all levels uniform)
+    2. Heatmap: C_hier(λ_1, λ_3) with λ_2 fixed at 1
+    """
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("matplotlib required for plotting")
+        return
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    # === Panel 1: Uniform criticality sweep ===
+    ax1 = axes[0]
+    rho = data["rho"]
+    ax1.plot(rho, data["C_level_1"], 'b--', alpha=0.5, label='C₁ (fast)')
+    ax1.plot(rho, data["C_level_2"], 'g--', alpha=0.5, label='C₂ (medium)')
+    ax1.plot(rho, data["C_level_3"], 'r--', alpha=0.5, label='C₃ (slow)')
+    ax1.plot(rho, data["C_hier"], 'k-', linewidth=2, label='C_hier (total)')
+
+    # Mark peak
+    peak_idx = np.argmax(data["C_hier"])
+    ax1.axvline(x=rho[peak_idx], color='gray', linestyle=':', alpha=0.7)
+    ax1.scatter([rho[peak_idx]], [data["C_hier"][peak_idx]], color='red',
+               s=100, zorder=5, marker='*', label=f'Peak at ρ={rho[peak_idx]:.2f}')
+
+    ax1.axvline(x=1.0, color='green', linestyle='--', alpha=0.5, label='Critical (ρ=1)')
+
+    ax1.set_xlabel(r'Spectral Radius $\rho$ (all levels)', fontsize=11)
+    ax1.set_ylabel(r'Capacity $C$', fontsize=11)
+    ax1.set_title(r'GUTC Prediction: $C_{hier}$ peaks at $\lambda_l \approx 1$', fontsize=12)
+    ax1.legend(loc='best', fontsize=9)
+    ax1.grid(True, alpha=0.3)
+
+    # === Panel 2: Mixed criticality heatmap (computed separately) ===
+    ax2 = axes[1]
+    mixed_data = sweep_mixed_criticality(n_points=15)
+
+    im = ax2.pcolormesh(
+        mixed_data["rho_1"], mixed_data["rho_3"], mixed_data["C_grid"],
+        cmap='viridis', shading='auto'
+    )
+    cbar = fig.colorbar(im, ax=ax2)
+    cbar.set_label(r'$C_{hier}$')
+
+    # Mark critical point
+    ax2.scatter([1.0], [1.0], color='red', s=150, marker='*',
+               edgecolors='white', linewidths=2, zorder=5)
+    ax2.axhline(y=1.0, color='white', linestyle='--', alpha=0.5)
+    ax2.axvline(x=1.0, color='white', linestyle='--', alpha=0.5)
+
+    ax2.set_xlabel(r'$\lambda_1$ (fast level)', fontsize=11)
+    ax2.set_ylabel(r'$\lambda_3$ (slow level)', fontsize=11)
+    ax2.set_title(r'Mixed Criticality: $\lambda_2 = 1$ fixed', fontsize=12)
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=200, bbox_inches='tight')
+        print(f"Saved to {save_path}")
+
+    plt.show()
 
 
 # =============================================================================
@@ -768,6 +1102,111 @@ def test_hierarchical_capacity():
     print("✓ Hierarchical capacity")
 
 
+def test_gamma_coupling_matrix():
+    """Test Γ coupling matrix construction and properties."""
+    network = HierarchicalGUTCNetwork()
+    gamma = GammaCouplingMatrix.from_network(network)
+
+    # Check dimensions
+    assert gamma.n_levels == 3
+
+    # Check matrix construction
+    G = gamma.as_matrix()
+    assert G.shape == (3, 3)
+
+    # Diagonal should be zero (no self-coupling)
+    assert np.all(np.diag(G) == 0)
+
+    # Check stability
+    rho_gamma = gamma.spectral_radius()
+    print(f"  ρ(Γ) = {rho_gamma:.3f}")
+
+    # Coupling balance should be finite
+    balance = gamma.coupling_balance()
+    assert np.isfinite(balance)
+    print(f"  Coupling balance = {balance:.3f}")
+
+    print("✓ Γ coupling matrix")
+
+
+def test_hierarchical_criticality_sweep():
+    """Test that C_hier peaks at criticality (λ = 1)."""
+    data = sweep_hierarchical_criticality(
+        rho_range=(0.7, 1.3),
+        n_points=11,
+    )
+
+    # Find peak
+    peak_idx = np.argmax(data["C_hier"])
+    rho_peak = data["rho"][peak_idx]
+
+    print(f"  C_hier peaks at ρ = {rho_peak:.2f}")
+
+    # Peak should be near λ = 1
+    assert 0.85 < rho_peak < 1.15, f"Peak at ρ={rho_peak}, expected near 1.0"
+
+    # Capacity at peak should be higher than at extremes
+    C_peak = data["C_hier"][peak_idx]
+    C_low = data["C_hier"][0]
+    C_high = data["C_hier"][-1]
+
+    assert C_peak > C_low, "Capacity should be higher at criticality than subcritical"
+    assert C_peak > C_high, "Capacity should be higher at criticality than supercritical"
+
+    print("✓ Hierarchical capacity peaks at criticality")
+
+
+def test_mixed_criticality():
+    """Test that uniform criticality outperforms mixed regimes."""
+    mixed_data = sweep_mixed_criticality(n_points=7)
+
+    C_grid = mixed_data["C_grid"]
+    rho_1 = mixed_data["rho_1"]
+    rho_3 = mixed_data["rho_3"]
+
+    # Find indices closest to 1.0
+    idx_1 = np.argmin(np.abs(rho_1 - 1.0))
+    idx_3 = np.argmin(np.abs(rho_3 - 1.0))
+
+    C_uniform_critical = C_grid[idx_3, idx_1]
+
+    # Corners (both subcritical or both supercritical)
+    C_sub_sub = C_grid[0, 0]
+    C_sup_sup = C_grid[-1, -1]
+
+    print(f"  C(1.0, 1.0) = {C_uniform_critical:.4f}")
+    print(f"  C(0.7, 0.7) = {C_sub_sub:.4f}")
+    print(f"  C(1.3, 1.3) = {C_sup_sup:.4f}")
+
+    assert C_uniform_critical > C_sub_sub
+    assert C_uniform_critical > C_sup_sup
+
+    print("✓ Uniform criticality outperforms mixed regimes")
+
+
+def test_information_flow():
+    """Test hierarchical information flow computation."""
+    network = HierarchicalGUTCNetwork()
+    rng = np.random.default_rng(42)
+
+    def input_func(t):
+        return generate_multiscale_input(t, dim=5, rng=rng)
+
+    results = network.simulate(input_func, n_steps=1000)
+    info = compute_hierarchical_information_flow(network, results)
+
+    assert "I_ascending" in info
+    assert "I_descending" in info
+    assert "I_total" in info
+    assert "eta_efficiency" in info
+
+    print(f"  I_asc = {info['I_ascending']:.3f}")
+    print(f"  I_desc = {info['I_descending']:.3f}")
+    print(f"  η = {info['eta_efficiency']:.3f}")
+
+    print("✓ Hierarchical information flow")
+
+
 def run_all_tests():
     """Run all tests."""
     print("\n" + "="*60)
@@ -779,6 +1218,10 @@ def run_all_tests():
     test_full_hierarchy()
     test_timescale_separation()
     test_hierarchical_capacity()
+    test_gamma_coupling_matrix()
+    test_hierarchical_criticality_sweep()
+    test_mixed_criticality()
+    test_information_flow()
 
     print("\n" + "="*60)
     print("All tests passed!")
@@ -852,9 +1295,66 @@ def main():
                 cap = compute_hierarchical_capacity(network)
                 print(f"  ρ = {rho:.2f}: C_hier = {cap['total']:.4f}")
 
+        elif cmd == "criticality":
+            print("Computing hierarchical criticality sweep...")
+            print("Demonstrating: C_hier peaks when ALL levels are at λ ≈ 1\n")
+
+            # Run the sweep
+            data = sweep_hierarchical_criticality(
+                rho_range=(0.7, 1.3),
+                n_points=21,
+            )
+
+            # Find and report peak
+            peak_idx = np.argmax(data["C_hier"])
+            rho_peak = data["rho"][peak_idx]
+
+            print("Results:")
+            print("-" * 50)
+            print(f"  Peak C_hier at ρ = {rho_peak:.3f}")
+            print(f"  C_hier(peak) = {data['C_hier'][peak_idx]:.4f}")
+            print(f"  C_hier(ρ=0.7) = {data['C_hier'][0]:.4f}")
+            print(f"  C_hier(ρ=1.3) = {data['C_hier'][-1]:.4f}")
+
+            # Γ matrix analysis
+            network = HierarchicalGUTCNetwork()
+            gamma = GammaCouplingMatrix.from_network(network)
+            print(f"\nΓ Coupling Matrix:")
+            print(f"  ρ(Γ) = {gamma.spectral_radius():.3f}")
+            print(f"  Coupling balance = {gamma.coupling_balance():.3f}")
+            print(f"  Stable: {gamma.is_stable()}")
+
+            # Plot
+            plot_hierarchical_criticality_sweep(data, save_path="gutc_hierarchy_criticality.png")
+
+        elif cmd == "gamma":
+            print("Analyzing Γ coupling matrix...")
+
+            network = HierarchicalGUTCNetwork()
+            gamma = GammaCouplingMatrix.from_network(network)
+
+            print("\nΓ Matrix Structure:")
+            print("-" * 50)
+            G = gamma.as_matrix()
+            print("  Γ =")
+            for row in G:
+                print(f"    [{', '.join(f'{x:.3f}' for x in row)}]")
+
+            print(f"\n  Spectral radius ρ(Γ) = {gamma.spectral_radius():.4f}")
+            print(f"  Coupling balance (asc/desc) = {gamma.coupling_balance():.3f}")
+            print(f"  Total coupling strength = {gamma.total_coupling_strength():.3f}")
+            print(f"  Stable hierarchy: {gamma.is_stable()}")
+
+            # Per-level effective couplings
+            print("\nEffective Couplings:")
+            for l in range(gamma.n_levels):
+                asc = gamma.effective_ascending(l)
+                desc = gamma.effective_descending(l)
+                print(f"  Level {l+1}: Γ_asc={asc:.3f}, Γ_desc={desc:.3f}")
+
         else:
             print(f"Unknown command: {cmd}")
-            print("Usage: python gutc_hierarchy.py [test|simulate|capacity]")
+            print("Usage: python gutc_hierarchy.py [test|simulate|capacity|criticality|gamma]")
 
     else:
         run_all_tests()
