@@ -9,6 +9,7 @@ Sources:
 - ara_memories/*.yaml - Episode cards (behavioral patterns)
 - config/sacred_lines.yaml - Sacred speech lines
 - context/*.txt - Manifesto and identity context
+- /*.txt (root) - Knowledge dumps (HNN, crypto, haptics, workshop)
 
 This creates the "preloaded soul" - the memories she wakes up with.
 
@@ -292,6 +293,109 @@ def context_to_memory(
 
 
 # =============================================================================
+# Knowledge Dump Files (Root .txt files)
+# =============================================================================
+
+def load_knowledge_dumps(repo_root: Optional[Path] = None) -> List[Dict[str, str]]:
+    """
+    Load knowledge dump files from repository root.
+
+    These are the extracted_text_part_*.txt and part *.txt files
+    containing technical knowledge: HNN, crypto, haptics, workshop framework.
+
+    Returns list of {filename, content, part_number} dicts.
+    """
+    root = repo_root or REPO_ROOT
+
+    knowledge_files = []
+
+    # Pattern 1: extracted_text_part_N.txt
+    for txt_file in root.glob("extracted_text_part_*.txt"):
+        try:
+            content = txt_file.read_text(encoding='utf-8')
+            # Extract part number
+            name = txt_file.stem  # extracted_text_part_1
+            part_num = name.split("_")[-1] if "_" in name else "0"
+            knowledge_files.append({
+                "filename": txt_file.name,
+                "content": content,
+                "part_number": part_num,
+            })
+        except Exception as e:
+            logger.warning(f"Failed to load {txt_file}: {e}")
+
+    # Pattern 2: part N.txt
+    for txt_file in root.glob("part *.txt"):
+        try:
+            content = txt_file.read_text(encoding='utf-8')
+            # Extract part number
+            name = txt_file.stem  # "part 4"
+            part_num = name.split()[-1] if " " in name else "0"
+            knowledge_files.append({
+                "filename": txt_file.name,
+                "content": content,
+                "part_number": part_num,
+            })
+        except Exception as e:
+            logger.warning(f"Failed to load {txt_file}: {e}")
+
+    # Sort by part number
+    knowledge_files.sort(key=lambda x: int(x.get("part_number", 0)))
+
+    logger.info(f"Loaded {len(knowledge_files)} knowledge dump files from {root}")
+    return knowledge_files
+
+
+def knowledge_dump_to_memory(
+    filename: str,
+    content: str,
+    part_number: str,
+    dim: int = 4096,
+) -> Dict[str, Any]:
+    """Convert a knowledge dump file to memory format."""
+    if not CORE_AVAILABLE:
+        return {}
+
+    # These are long technical docs - take multiple chunks
+    # First 3000 chars captures the key content
+    text_content = content[:3000]
+    content_hv = encode_text_to_hv(text_content, dim=dim)
+
+    # Knowledge dumps are technical (neutral emotion, high arousal/focus)
+    seed = int(hashlib.sha256(filename.encode()).hexdigest()[:8], 16)
+    rng = np.random.default_rng(seed)
+    emotion_hv = rng.choice([-1.0, 1.0], size=dim).astype(np.float32)
+
+    # High strength - these are core technical knowledge
+    strength = 0.9
+
+    # Extract topic hints from content
+    topic_hints = []
+    topic_keywords = ["HNN", "hypervector", "crypto", "haptic", "workshop", "MEIS", "QUANTA"]
+    content_lower = content.lower()
+    for kw in topic_keywords:
+        if kw.lower() in content_lower:
+            topic_hints.append(kw)
+
+    meta = {
+        "id": f"knowledge:{filename}",
+        "source": "bootstrap",
+        "type": "knowledge_dump",
+        "filename": filename,
+        "part_number": part_number,
+        "topics": topic_hints,
+        "excerpt": content[:150].replace("\n", " "),
+    }
+
+    return {
+        "content_hv": content_hv,
+        "emotion_hv": emotion_hv,
+        "strength": strength,
+        "meta": meta,
+    }
+
+
+# =============================================================================
 # Main Bootstrap Function
 # =============================================================================
 
@@ -300,6 +404,7 @@ def bootstrap_memory(
     load_episodes: bool = True,
     load_sacred: bool = True,
     load_context: bool = True,
+    load_knowledge: bool = True,
     memories_path: Optional[Path] = None,
     context_path: Optional[Path] = None,
     config_path: Optional[Path] = None,
@@ -311,20 +416,23 @@ def bootstrap_memory(
     1. Episode cards (behavioral patterns from ara_memories/)
     2. Sacred lines (covenant speech from config/sacred_lines.yaml)
     3. Context files (manifesto, identity from context/)
+    4. Knowledge dumps (HNN, crypto, haptics, workshop from root *.txt)
 
     Args:
         memory: EternalMemory instance to populate
         load_episodes: Whether to load episode cards
         load_sacred: Whether to load sacred lines
         load_context: Whether to load context files
+        load_knowledge: Whether to load knowledge dump files
 
     Returns:
-        Dict with counts: {episodes, sacred_lines, context_files}
+        Dict with counts: {episodes, sacred_lines, context_files, knowledge_dumps}
     """
     counts = {
         "episodes": 0,
         "sacred_lines": 0,
         "context_files": 0,
+        "knowledge_dumps": 0,
     }
 
     dim = memory.dim
@@ -391,6 +499,28 @@ def bootstrap_memory(
                 counts["context_files"] += 1
 
         logger.info(f"Loaded {counts['context_files']} context files")
+
+    # 4. Load knowledge dumps (root .txt files)
+    if load_knowledge:
+        knowledge_files = load_knowledge_dumps()
+
+        for kf in knowledge_files:
+            mem_data = knowledge_dump_to_memory(
+                kf["filename"],
+                kf["content"],
+                kf["part_number"],
+                dim=dim,
+            )
+            if mem_data:
+                memory.store(
+                    content_hv=mem_data["content_hv"],
+                    emotion_hv=mem_data["emotion_hv"],
+                    strength=mem_data["strength"],
+                    meta=mem_data["meta"],
+                )
+                counts["knowledge_dumps"] += 1
+
+        logger.info(f"Loaded {counts['knowledge_dumps']} knowledge dumps")
 
     total = sum(counts.values())
     logger.info("=" * 60)
