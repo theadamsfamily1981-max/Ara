@@ -66,6 +66,7 @@ class LevelConfig:
     dim: int = 5               # State dimensionality
     alpha: float = 0.1         # Leak rate (controls timescale)
     spectral_radius: float = 1.0  # Target ρ for criticality
+    k_update: int = 1          # Update period (1 = every step, 3 = every 3rd step)
 
     # Coupling strengths
     ascending_gain: float = 0.5   # Gain on ascending errors
@@ -85,12 +86,18 @@ class LevelConfig:
         """Effective timescale τ = 1/α."""
         return 1.0 / self.alpha if self.alpha > 0 else float('inf')
 
+    @property
+    def effective_timescale(self) -> float:
+        """Effective timescale including sub-sampling: τ_eff = k_update / α."""
+        return self.k_update / self.alpha if self.alpha > 0 else float('inf')
+
 
 # Default 3-level hierarchy with clear timescale separation
+# Uses BOTH α_l (leak rate) AND k_update (sub-sampling) for maximal separation
 DEFAULT_HIERARCHY = [
-    LevelConfig(level_id=1, dim=5, alpha=0.30, spectral_radius=0.99),  # Fast
-    LevelConfig(level_id=2, dim=5, alpha=0.10, spectral_radius=0.99),  # Medium
-    LevelConfig(level_id=3, dim=5, alpha=0.03, spectral_radius=0.99),  # Slow
+    LevelConfig(level_id=1, dim=5, alpha=0.30, spectral_radius=0.99, k_update=1),   # Fast: updates every step
+    LevelConfig(level_id=2, dim=5, alpha=0.10, spectral_radius=0.99, k_update=3),   # Medium: updates every 3 steps
+    LevelConfig(level_id=3, dim=5, alpha=0.03, spectral_radius=0.99, k_update=9),   # Slow: updates every 9 steps
 ]
 
 
@@ -245,6 +252,9 @@ class HierarchicalGUTCNetwork:
             for cfg in level_configs
         ]
 
+        # Time step counter for sub-sampled updates
+        self.t = 0
+
         # Initialize coupling matrices
         self._init_coupling_matrices()
 
@@ -268,17 +278,20 @@ class HierarchicalGUTCNetwork:
                 level.P_up = self.rng.standard_normal((dim, dim_above)) * 0.5
 
     def reset(self):
-        """Reset all levels."""
+        """Reset all levels and time counter."""
+        self.t = 0
         for level in self.levels:
             level.reset()
 
     def step(self, sensory_input: np.ndarray) -> Dict[str, Any]:
         """
-        Single step of hierarchical dynamics.
+        Single step of hierarchical dynamics with sub-sampled updates.
 
-        Bottom-up pass: compute prediction errors ascending
-        Top-down pass: send predictions descending
-        Update: all levels integrate simultaneously
+        Each level only updates when t % k_update == 0, enforcing
+        different temporal integration windows:
+        - Level 1 (k=1): updates every step (fast)
+        - Level 2 (k=3): updates every 3 steps (medium)
+        - Level 3 (k=9): updates every 9 steps (slow)
 
         Args:
             sensory_input: Input to bottom level
@@ -306,8 +319,14 @@ class HierarchicalGUTCNetwork:
         for i in range(self.n_levels - 1, 0, -1):  # Top to bottom
             predictions[i-1] = self.levels[i].get_prediction_for_below()
 
-        # === Update all levels ===
+        # === Update levels (with sub-sampling) ===
         for i, level in enumerate(self.levels):
+            k = level.config.k_update
+
+            # Only update if t % k_update == 0
+            if self.t % k != 0:
+                continue  # Skip update, state persists
+
             # Ascending error from below (or sensory input for level 1)
             if i == 0:
                 eps_below = sensory_input  # Sensory drives bottom level
@@ -321,6 +340,9 @@ class HierarchicalGUTCNetwork:
                 u_above = None  # No level above top
 
             level.step(eps_below=eps_below, u_above=u_above)
+
+        # Increment time step
+        self.t += 1
 
         return {
             "states": [level.x.copy() for level in self.levels],
