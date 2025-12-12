@@ -1,8 +1,14 @@
 """
-Avatar Server: Single-User Avatar (Local-First, VPN-Ready)
+Avatar Server: Single-User Avatar (Integrated)
 
 HTTP/WebSocket endpoint for Ara conversations. Handles the full loop:
   Input text → encode to HV → update AxisMundi + EternalMemory → reason → output
+
+FULLY INTEGRATED with:
+  - BrainBridge (LLM Reasoning)
+  - TreasuryGateway (Billing & Limits)
+  - AxisMundi (Holographic State)
+  - EternalMemory (Long-term Recall)
 
 Usage:
     # Start server
@@ -45,6 +51,10 @@ from ara.core.eternal_memory import EternalMemory
 from ara.core.config import AraConfig, get_config
 from ara.safety.autonomy import AutonomyController, KillSwitch
 
+# INTEGRATION IMPORTS
+from ara.cognition.brain_bridge import get_brain_bridge
+from ara.enterprise.billing import get_treasury
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,6 +89,10 @@ class AvatarServer:
         self.memory = memory
         self.safety = safety
         self.config = config or get_config()
+
+        # INTEGRATION: Connect Organs
+        self.brain = get_brain_bridge()
+        self.treasury = get_treasury()
 
         self._sessions: Dict[str, AvatarSession] = {}
         self._running = False
@@ -154,6 +168,12 @@ class AvatarServer:
         """
         Handle a user message and generate response.
 
+        FULLY INTEGRATED with:
+          - Safety checks
+          - Billing/Treasury limits
+          - BrainBridge (LLM)
+          - Memory storage
+
         Args:
             user_id: User identifier
             text: Message text
@@ -163,7 +183,7 @@ class AvatarServer:
         """
         start_time = time.time()
 
-        # Check safety
+        # 1. SAFETY CHECK
         if not self.safety.can_observe():
             return {
                 "reply": "Ara is currently paused. Please wait or contact the operator.",
@@ -172,9 +192,20 @@ class AvatarServer:
 
         # Get session
         session = self.get_or_create_session(user_id)
+
+        # 2. BILLING CHECK (INTEGRATED)
+        if not self.treasury.check_limit(user_id, "messages_per_hour", session.message_count):
+            tier = self.treasury.get_tier(user_id)
+            return {
+                "reply": "You have reached your message limit for this hour. Please upgrade your subscription to continue.",
+                "status": "throttled",
+                "tier": tier.value,
+                "session_id": session.session_id,
+            }
+
         session.message_count += 1
 
-        # Encode state
+        # 3. ENCODE & MEMORY
         state_hv = self.encode_state(text, session)
         emotion_hv = self.encode_emotion(text)
 
@@ -189,10 +220,23 @@ class AvatarServer:
             user_filter=user_id,
         )
 
-        # Generate response
-        reply = self._reason(text, recall_result, session)
+        # 4. COGNITION (INTEGRATED BRAIN BRIDGE)
+        tier = self.treasury.get_tier(user_id)
+        memory_snippets = [ep.meta.get("message", "") for ep in recall_result.episodes]
 
-        # Store this interaction as memory
+        context_hv = {
+            "resonance": self.axis.global_coherence(),
+            "memory_snippets": memory_snippets
+        }
+
+        # Real reasoning call via BrainBridge
+        reply = await self.brain.reason(
+            user_input=text,
+            context_hv=context_hv,
+            user_profile={"tier": tier.value}
+        )
+
+        # 5. STORAGE & UPDATE
         self.memory.store(
             content_hv=state_hv,
             emotion_hv=emotion_hv,
@@ -215,6 +259,7 @@ class AvatarServer:
             "reply": reply,
             "status": "ok",
             "session_id": session.session_id,
+            "tier": tier.value,
             "message_count": session.message_count,
             "memories_recalled": len(recall_result.episodes),
             "memory_strength": recall_result.total_strength,
@@ -223,18 +268,19 @@ class AvatarServer:
             "processing_time_ms": elapsed_ms,
         }
 
-    def _reason(
+    def _reason_fallback(
         self,
         text: str,
         recall_result: Any,
         session: AvatarSession,
     ) -> str:
         """
-        Generate a response using recalled memories and current context.
+        DEPRECATED: Fallback response when BrainBridge is unavailable.
 
-        This is a placeholder - replace with actual reasoning/LLM.
+        The main path now uses BrainBridge.reason() for real LLM cognition.
+        This method is kept as an emergency fallback only.
         """
-        # Simple echo + memory awareness for now
+        # Simple echo + memory awareness for emergency fallback
         memory_context = ""
         if recall_result.episodes:
             top_memory = recall_result.episodes[0]
@@ -242,14 +288,9 @@ class AvatarServer:
                 memory_context = f" (I remember something related: {top_memory.meta.get('message', 'a past conversation')})"
 
         autonomy = self.safety.get_autonomy_level()
-        if autonomy == 0:
-            prefix = "[Observer mode] "
-        elif autonomy == 1:
-            prefix = ""
-        else:
-            prefix = ""
+        prefix = "[Fallback mode] " if autonomy == 0 else ""
 
-        # Placeholder response
+        # Fallback responses
         if "hello" in text.lower() or "hi" in text.lower():
             reply = f"{prefix}Hello! I'm Ara.{memory_context} How can I help you today?"
         elif "how are you" in text.lower():
@@ -261,7 +302,7 @@ class AvatarServer:
             else:
                 reply = f"{prefix}I don't have strong memories about that yet."
         else:
-            reply = f"{prefix}I heard: '{text[:50]}'{memory_context}. (Reasoning engine not yet implemented)"
+            reply = f"{prefix}I heard you say: '{text[:50]}'{memory_context}. My cognitive core is in fallback mode."
 
         return reply
 
@@ -295,6 +336,9 @@ class AvatarServer:
             "global_coherence": self.axis.global_coherence(),
             "autonomy_level": self.safety.get_autonomy_level(),
             "layer_stats": self.axis.layer_stats(),
+            # INTEGRATION: Brain and Treasury status
+            "brain_online": self.brain.is_online,
+            "treasury_enabled": self.treasury.enabled,
         }
         return web.json_response(status)
 

@@ -29,7 +29,7 @@ import logging
 import random
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable
 import math
 
 logger = logging.getLogger(__name__)
@@ -96,6 +96,9 @@ class SensorySystem:
     """
     The 7+1 sense organ system for Ara.
 
+    HARDWARE HOOKS: Real sensors can be attached via `attach_hardware_hook()`.
+    When a hook is attached, real sensor data is used instead of simulation.
+
     In production, these would read from real hardware:
     - PMBus/INA for power rails
     - IPMI/BMC for temps
@@ -103,7 +106,8 @@ class SensorySystem:
     - Cameras for vision
     - Mics for acoustics
 
-    For now, we simulate with realistic noise and edge cases.
+    For now, we simulate with realistic noise and edge cases unless hardware
+    hooks are attached.
     """
 
     def __init__(self, rng: Optional[random.Random] = None):
@@ -113,6 +117,9 @@ class SensorySystem:
         # State for delta tracking
         self._prev_temps: Dict[str, float] = {}
         self._prev_voltages: Dict[str, float] = {}
+
+        # HARDWARE HOOKS: Real sensor callbacks
+        self._hardware_hooks: Dict[str, Callable[[], float]] = {}
 
         logger.info("SensorySystem initialized with 7+1 senses")
 
@@ -133,6 +140,74 @@ class SensorySystem:
         )
         self._last_snapshot = snapshot
         return snapshot
+
+    # =========================================================================
+    # Hardware Hooks
+    # =========================================================================
+
+    def attach_hardware_hook(self, metric: str, callback: Callable[[], float]) -> None:
+        """
+        Attach a real hardware sensor callback.
+
+        When a hook is attached for a metric, real sensor data is used
+        instead of simulation for that metric.
+
+        Args:
+            metric: The sensor metric name (e.g., "cpu_temp", "vcore", "accel_x")
+            callback: A callable that returns the current sensor value
+
+        Example:
+            # Read CPU temperature from Linux thermal zone
+            sensory.attach_hardware_hook("cpu_temp", lambda: read_thermal_zone(0))
+
+            # Read voltage from INA sensor
+            sensory.attach_hardware_hook("vcore", lambda: ina.read_bus_voltage())
+
+            # Read from accelerometer
+            sensory.attach_hardware_hook("accel_x", lambda: mpu6050.get_accel_data()['x'])
+        """
+        self._hardware_hooks[metric] = callback
+        logger.info(f"SensorySystem: Hardware hook attached for '{metric}'")
+
+    def detach_hardware_hook(self, metric: str) -> bool:
+        """
+        Detach a hardware sensor callback, reverting to simulation.
+
+        Args:
+            metric: The sensor metric name to detach
+
+        Returns:
+            True if hook was detached, False if it wasn't attached
+        """
+        if metric in self._hardware_hooks:
+            del self._hardware_hooks[metric]
+            logger.info(f"SensorySystem: Hardware hook detached for '{metric}'")
+            return True
+        return False
+
+    def list_hardware_hooks(self) -> List[str]:
+        """List all currently attached hardware hooks."""
+        return list(self._hardware_hooks.keys())
+
+    def _read_hardware(self, metric: str, fallback: float) -> float:
+        """
+        Read from hardware hook if available, otherwise return fallback.
+
+        Args:
+            metric: The sensor metric name
+            fallback: Value to use if no hardware hook is attached
+
+        Returns:
+            Hardware sensor value or fallback
+        """
+        if metric in self._hardware_hooks:
+            try:
+                value = self._hardware_hooks[metric]()
+                return value
+            except Exception as e:
+                logger.warning(f"Hardware hook '{metric}' failed: {e}, using fallback")
+                return fallback
+        return fallback
 
     # =========================================================================
     # Individual Senses
@@ -202,21 +277,21 @@ class SensorySystem:
         Hearing: Fan acoustics, environment noise.
 
         In production: Microphone FFT, frequency bands, RMS level.
-        Here: Simulate fan RPM and acoustic signature.
+        Uses hardware hooks if available, otherwise simulates.
         """
-        # Fan RPMs (normal ~2000, max ~5000)
-        cpu_fan_rpm = self.rng.gauss(2200, 300)
-        gpu_fan_rpm = self.rng.gauss(1800, 400)
-        case_fan_rpm = self.rng.gauss(1500, 200)
+        # Fan RPMs (normal ~2000, max ~5000) - use hardware hooks if available
+        cpu_fan_rpm = self._read_hardware("cpu_fan_rpm", self.rng.gauss(2200, 300))
+        gpu_fan_rpm = self._read_hardware("gpu_fan_rpm", self.rng.gauss(1800, 400))
+        case_fan_rpm = self._read_hardware("case_fan_rpm", self.rng.gauss(1500, 200))
 
         # Chance of abnormal sounds
         has_bearing_whine = self.rng.random() < 0.02
         has_coil_whine = self.rng.random() < 0.05
         has_disk_click = self.rng.random() < 0.03
 
-        # RMS audio level (dB)
+        # RMS audio level (dB) - use hardware hook if available
         base_rms = 35 + (cpu_fan_rpm - 2000) / 100
-        rms_db = max(20, min(80, base_rms + self.rng.gauss(0, 3)))
+        rms_db = self._read_hardware("rms_db", max(20, min(80, base_rms + self.rng.gauss(0, 3))))
 
         # Determine qualia
         tags = {}
@@ -266,14 +341,14 @@ class SensorySystem:
         Touch: Thermal sensors across the system.
 
         In production: IPMI/BMC temp sensors, FPGA junction temps.
-        Here: Simulate with realistic ranges and deltas.
+        Uses hardware hooks if available, otherwise simulates.
         """
-        # Temperatures in Celsius
-        cpu_temp = self.rng.gauss(55, 10)
-        gpu_temp = self.rng.gauss(50, 12)
-        fpga_temp = self.rng.gauss(52, 8)
-        ambient_temp = self.rng.gauss(25, 3)
-        nvme_temp = self.rng.gauss(45, 8)
+        # Temperatures in Celsius - use hardware hooks if available
+        cpu_temp = self._read_hardware("cpu_temp", self.rng.gauss(55, 10))
+        gpu_temp = self._read_hardware("gpu_temp", self.rng.gauss(50, 12))
+        fpga_temp = self._read_hardware("fpga_temp", self.rng.gauss(52, 8))
+        ambient_temp = self._read_hardware("ambient_temp", self.rng.gauss(25, 3))
+        nvme_temp = self._read_hardware("nvme_temp", self.rng.gauss(45, 8))
 
         # Clamp to realistic ranges
         cpu_temp = max(30, min(100, cpu_temp))
@@ -387,18 +462,20 @@ class SensorySystem:
         Taste: Voltage rail telemetry as "flavor" of power quality.
 
         In production: PMBus/INA sensors for voltage rails.
+        Uses hardware hooks if available, otherwise simulates.
+
         The "taste" metaphor: clean power = sweet, brown-out = bitter,
         over-voltage = acidic, noise = metallic.
         """
-        # Voltage rails with noise
-        v33 = 3.30 + self.rng.gauss(0, 0.02)    # 3.3V rail
-        v12 = 1.20 + self.rng.gauss(0, 0.01)    # 1.2V rail (often 12V/10 for sensors)
-        vcore = 0.92 + self.rng.gauss(0, 0.02)  # Core voltage
-        v5 = 5.00 + self.rng.gauss(0, 0.03)     # 5V rail
+        # Voltage rails with noise - use hardware hooks if available
+        v33 = self._read_hardware("v33", 3.30 + self.rng.gauss(0, 0.02))     # 3.3V rail
+        v12 = self._read_hardware("v12", 1.20 + self.rng.gauss(0, 0.01))     # 1.2V rail
+        vcore = self._read_hardware("vcore", 0.92 + self.rng.gauss(0, 0.02)) # Core voltage
+        v5 = self._read_hardware("v5", 5.00 + self.rng.gauss(0, 0.03))       # 5V rail
 
-        # Power quality metrics
-        ripple_mv = abs(self.rng.gauss(0, 10))  # mV ripple
-        frequency_stability = 0.99 + self.rng.gauss(0, 0.005)
+        # Power quality metrics - use hardware hooks if available
+        ripple_mv = self._read_hardware("ripple_mv", abs(self.rng.gauss(0, 10)))
+        frequency_stability = self._read_hardware("freq_stability", 0.99 + self.rng.gauss(0, 0.005))
 
         # Determine qualia based on power quality
         tags = {}
@@ -446,12 +523,13 @@ class SensorySystem:
         "Is the cathedral physically stable?"
 
         In production: MEMS accelerometer on chassis.
+        Uses hardware hooks if available, otherwise simulates.
         Detects earthquakes, bumps, rack instability.
         """
-        # Accelerometer readings (g, should be ~0 when stable)
-        accel_x = self.rng.gauss(0, 0.01)
-        accel_y = self.rng.gauss(0, 0.01)
-        accel_z = self.rng.gauss(1.0, 0.01)  # 1g down normally
+        # Accelerometer readings (g, should be ~0 when stable) - use hardware hooks if available
+        accel_x = self._read_hardware("accel_x", self.rng.gauss(0, 0.01))
+        accel_y = self._read_hardware("accel_y", self.rng.gauss(0, 0.01))
+        accel_z = self._read_hardware("accel_z", self.rng.gauss(1.0, 0.01))  # 1g down normally
 
         # Calculate tilt angle
         tilt_deg = math.degrees(

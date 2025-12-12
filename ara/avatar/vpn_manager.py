@@ -25,6 +25,7 @@ from __future__ import annotations
 import subprocess
 import logging
 import os
+import json
 import secrets
 import ipaddress
 from dataclasses import dataclass, field
@@ -100,6 +101,8 @@ class VPNManager:
     """
     Manages WireGuard VPN for Cathedral access.
 
+    PERSISTENCE: Peer configurations are persisted to JSON for restart survival.
+
     Requires:
     - 'wg' tools installed (wireguard-tools package)
     - sudo privileges for interface modification (or running as root)
@@ -111,15 +114,80 @@ class VPNManager:
         endpoint: str = "vpn.cathedral.ara:51820",
         config_dir: Path = Path("/etc/wireguard"),
         ip_pool: Optional[IPAddressPool] = None,
+        db_path: Optional[Path] = None,
     ):
         self.interface = interface
         self.endpoint = endpoint
         self.config_dir = config_dir
         self.ip_pool = ip_pool or IPAddressPool()
+        self.db_path = db_path or Path("data/vpn_peers.json")
         self._peers: Dict[str, VPNPeer] = {}
         self._server_public_key: Optional[str] = None
 
+        # PERSISTENCE: Load peers from disk
+        self._load_peers()
+
         logger.info(f"VPN Manager initialized: {interface} @ {endpoint}")
+
+    # =========================================================================
+    # Persistence
+    # =========================================================================
+
+    def _load_peers(self) -> None:
+        """Load peer configurations from disk."""
+        if not self.db_path.exists():
+            logger.info("VPN: No existing peer DB found, starting fresh")
+            return
+
+        try:
+            with open(self.db_path, 'r') as f:
+                data = json.load(f)
+
+            for uid, peer_data in data.items():
+                self._peers[uid] = VPNPeer(
+                    user_id=peer_data.get("user_id", uid),
+                    public_key=peer_data.get("public_key", ""),
+                    preshared_key=peer_data.get("preshared_key", ""),
+                    allowed_ips=peer_data.get("allowed_ips", ""),
+                    endpoint=peer_data.get("endpoint"),
+                    last_handshake=peer_data.get("last_handshake"),
+                )
+
+                # Restore IP allocation if present
+                if peer_data.get("allowed_ips"):
+                    ip = peer_data["allowed_ips"].split("/")[0]
+                    self.ip_pool._allocated[uid] = ip
+
+            logger.info(f"VPN: Loaded {len(self._peers)} peers from disk")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"VPN: Failed to parse peer DB JSON: {e}")
+        except Exception as e:
+            logger.error(f"VPN: Failed to load peer DB: {e}")
+
+    def _save_peers(self) -> None:
+        """Save peer configurations to disk."""
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            data = {}
+            for uid, peer in self._peers.items():
+                data[uid] = {
+                    "user_id": peer.user_id,
+                    "public_key": peer.public_key,
+                    "preshared_key": peer.preshared_key,
+                    "allowed_ips": peer.allowed_ips,
+                    "endpoint": peer.endpoint,
+                    "last_handshake": peer.last_handshake,
+                }
+
+            with open(self.db_path, 'w') as f:
+                json.dump(data, f, indent=2)
+
+            logger.debug(f"VPN: Saved {len(self._peers)} peers to disk")
+
+        except Exception as e:
+            logger.error(f"VPN: Failed to save peer DB: {e}")
 
     # =========================================================================
     # Key Generation
@@ -203,6 +271,8 @@ class VPNManager:
         """
         Add a peer to the WireGuard interface.
 
+        Auto-saves to disk for persistence across restarts.
+
         Args:
             user_id: Unique identifier for the user
             public_key: Client's public key
@@ -241,6 +311,7 @@ class VPNManager:
                 preshared_key=preshared_key or "",
                 allowed_ips=allowed_ips,
             )
+            self._save_peers()  # AUTO SAVE
 
             return True
 
@@ -252,6 +323,7 @@ class VPNManager:
                 preshared_key=preshared_key or "",
                 allowed_ips=allowed_ips,
             )
+            self._save_peers()  # AUTO SAVE
             return True
 
         except subprocess.CalledProcessError as e:
@@ -259,7 +331,7 @@ class VPNManager:
             return False
 
     def remove_peer(self, user_id: str) -> bool:
-        """Remove a peer from the WireGuard interface."""
+        """Remove a peer from the WireGuard interface. Auto-saves to disk."""
         peer = self._peers.get(user_id)
         if not peer:
             logger.warning(f"Peer not found: {user_id}")
@@ -275,10 +347,19 @@ class VPNManager:
             subprocess.run(cmd, check=True, stderr=subprocess.PIPE)
             del self._peers[user_id]
             self.ip_pool.release(user_id)
+            self._save_peers()  # AUTO SAVE
             logger.info(f"Removed VPN peer: {user_id}")
             return True
 
-        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+        except FileNotFoundError:
+            # Still remove from local state even if wg command not found
+            logger.warning("wg command not found, removing peer from local state only")
+            del self._peers[user_id]
+            self.ip_pool.release(user_id)
+            self._save_peers()  # AUTO SAVE
+            return True
+
+        except subprocess.CalledProcessError as e:
             logger.error(f"Failed to remove peer: {e}")
             return False
 

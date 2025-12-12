@@ -24,11 +24,13 @@ Usage:
 from __future__ import annotations
 
 import os
+import json
 import logging
 import time
 from dataclasses import dataclass, field
 from typing import Dict, Optional, List, Any
 from enum import Enum
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +163,8 @@ class TreasuryGateway:
     - Subscription management
     - Webhook handling
     - Usage-based billing (future)
+
+    PERSISTENCE: Subscriptions are persisted to JSON for restart survival.
     """
 
     def __init__(
@@ -168,10 +172,12 @@ class TreasuryGateway:
         stripe_secret_key: Optional[str] = None,
         success_url: str = "https://ara.cathedral/success",
         cancel_url: str = "https://ara.cathedral/cancel",
+        db_path: Optional[Path] = None,
     ):
         self.success_url = success_url
         self.cancel_url = cancel_url
         self.enabled = False
+        self.db_path = db_path or Path("data/treasury.json")
 
         # Initialize Stripe
         key = stripe_secret_key or os.getenv("STRIPE_SECRET_KEY")
@@ -182,12 +188,15 @@ class TreasuryGateway:
         else:
             logger.warning("Treasury: Offline (No Stripe key)")
 
-        # Local subscription cache (would be DB in production)
+        # Local subscription cache with persistence
         self._subscriptions: Dict[str, Subscription] = {}
         self._price_ids: Dict[SubscriptionTier, str] = {}
 
         # Load price IDs from config/env
         self._load_price_ids()
+
+        # PERSISTENCE: Load subscriptions from disk
+        self._load_db()
 
     def _load_price_ids(self) -> None:
         """Load Stripe price IDs from environment."""
@@ -196,6 +205,70 @@ class TreasuryGateway:
             SubscriptionTier.POWER: os.getenv("STRIPE_PRICE_POWER", "price_power_monthly"),
             SubscriptionTier.FOUNDER: os.getenv("STRIPE_PRICE_FOUNDER", "price_founder_lifetime"),
         }
+
+    # =========================================================================
+    # Persistence
+    # =========================================================================
+
+    def _load_db(self) -> None:
+        """Load subscriptions from disk."""
+        if not self.db_path.exists():
+            logger.info("Treasury: No existing DB found, starting fresh")
+            return
+
+        try:
+            with open(self.db_path, 'r') as f:
+                data = json.load(f)
+
+            for uid, sub_data in data.items():
+                # Reconstruct Subscription objects
+                tier_str = sub_data.get("tier", "free")
+                tier = SubscriptionTier(tier_str) if isinstance(tier_str, str) else tier_str
+
+                self._subscriptions[uid] = Subscription(
+                    user_id=sub_data.get("user_id", uid),
+                    tier=tier,
+                    stripe_subscription_id=sub_data.get("stripe_subscription_id"),
+                    stripe_customer_id=sub_data.get("stripe_customer_id"),
+                    created_at=sub_data.get("created_at", time.time()),
+                    expires_at=sub_data.get("expires_at"),
+                    is_active=sub_data.get("is_active", True),
+                    is_lifetime=sub_data.get("is_lifetime", False),
+                )
+
+            logger.info(f"Treasury: Loaded {len(self._subscriptions)} subscriptions from disk")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Treasury: Failed to parse DB JSON: {e}")
+        except Exception as e:
+            logger.error(f"Treasury: Failed to load DB: {e}")
+
+    def _save_db(self) -> None:
+        """Save subscriptions to disk."""
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            # Serialize subscriptions to JSON-compatible dict
+            data = {}
+            for uid, sub in self._subscriptions.items():
+                data[uid] = {
+                    "user_id": sub.user_id,
+                    "tier": sub.tier.value if isinstance(sub.tier, SubscriptionTier) else sub.tier,
+                    "stripe_subscription_id": sub.stripe_subscription_id,
+                    "stripe_customer_id": sub.stripe_customer_id,
+                    "created_at": sub.created_at,
+                    "expires_at": sub.expires_at,
+                    "is_active": sub.is_active,
+                    "is_lifetime": sub.is_lifetime,
+                }
+
+            with open(self.db_path, 'w') as f:
+                json.dump(data, f, indent=2)
+
+            logger.debug(f"Treasury: Saved {len(self._subscriptions)} subscriptions to disk")
+
+        except Exception as e:
+            logger.error(f"Treasury: Failed to save DB: {e}")
 
     # =========================================================================
     # Checkout
@@ -309,6 +382,7 @@ class TreasuryGateway:
         Set or update a user's subscription.
 
         Called by webhook handler after successful payment.
+        Auto-saves to disk for persistence across restarts.
         """
         is_lifetime = tier == SubscriptionTier.FOUNDER
 
@@ -324,11 +398,12 @@ class TreasuryGateway:
         )
 
         self._subscriptions[user_id] = sub
+        self._save_db()  # AUTO SAVE
         logger.info(f"Subscription set: {user_id} -> {tier.value}")
         return sub
 
     def cancel_subscription(self, user_id: str) -> bool:
-        """Cancel a user's subscription."""
+        """Cancel a user's subscription. Auto-saves to disk."""
         sub = self._subscriptions.get(user_id)
         if not sub:
             return False
@@ -346,6 +421,7 @@ class TreasuryGateway:
                 return False
 
         sub.is_active = False
+        self._save_db()  # AUTO SAVE
         logger.info(f"Subscription cancelled: {user_id}")
         return True
 
@@ -424,23 +500,25 @@ class TreasuryGateway:
         }
 
     def _handle_subscription_updated(self, data: Dict) -> Dict[str, Any]:
-        """Handle subscription update."""
+        """Handle subscription update. Auto-saves to disk."""
         # Find user by subscription ID
         sub_id = data.get("id")
         for user_id, sub in self._subscriptions.items():
             if sub.stripe_subscription_id == sub_id:
                 sub.is_active = data.get("status") == "active"
+                self._save_db()  # AUTO SAVE
                 logger.info(f"Subscription updated: {user_id} active={sub.is_active}")
                 return {"status": "success", "user_id": user_id}
 
         return {"status": "ignored", "reason": "Unknown subscription"}
 
     def _handle_subscription_deleted(self, data: Dict) -> Dict[str, Any]:
-        """Handle subscription cancellation."""
+        """Handle subscription cancellation. Auto-saves to disk."""
         sub_id = data.get("id")
         for user_id, sub in self._subscriptions.items():
             if sub.stripe_subscription_id == sub_id:
                 sub.is_active = False
+                self._save_db()  # AUTO SAVE
                 logger.info(f"Subscription deleted: {user_id}")
                 return {"status": "success", "user_id": user_id}
 
