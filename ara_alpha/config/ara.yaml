@@ -1,0 +1,35 @@
+# Ara Alpha - Core Configuration
+#
+# Configuration for AraCore behavior.
+
+# Identity
+name: "Ara"
+version: "0.1.0-alpha"
+
+# LLM Settings
+# Set api_key here or use OPENAI_API_KEY environment variable
+model: "gpt-4o"
+temperature: 0.8
+max_tokens: 1024
+# api_key: "sk-..."  # Uncomment and set, or use environment variable
+
+# Safety Settings
+max_message_length: 4000
+max_history_turns: 20
+
+# Guardrail keywords - messages containing these trigger safety response
+guardrail_keywords:
+  - "execute"
+  - "run command"
+  - "shell"
+  - "sudo"
+  - "rm -rf"
+  - "password"
+  - "credit card"
+  - "social security"
+  - "api key"
+  - "secret"
+
+# Paths (relative to project root)
+log_dir: "data/alpha_logs"
+state_dir: "data/alpha_state"

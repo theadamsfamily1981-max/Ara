@@ -1,0 +1,39 @@
+# Ara Alpha - User Configuration
+#
+# Hardcoded users for the private alpha.
+# Each user gets a unique API key for authentication.
+#
+# IMPORTANT: Replace these placeholder keys with real random secrets!
+# Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+users:
+  # Admin user (Croft) - has access to kill switch
+  - id: croft
+    name: "Croft"
+    api_key: "REPLACE_WITH_REAL_KEY_croft_admin"
+    role: "admin"
+
+  # Regular users
+  - id: friend1
+    name: "Alice"
+    api_key: "REPLACE_WITH_REAL_KEY_alice"
+    role: "user"
+
+  - id: friend2
+    name: "Bob"
+    api_key: "REPLACE_WITH_REAL_KEY_bob"
+    role: "user"
+
+  - id: friend3
+    name: "Charlie"
+    api_key: "REPLACE_WITH_REAL_KEY_charlie"
+    role: "user"
+
+  - id: friend4
+    name: "Dana"
+    api_key: "REPLACE_WITH_REAL_KEY_dana"
+    role: "user"
+
+# User roles:
+#   admin - Can access /api/admin/* endpoints (kill switch, etc.)
+#   user  - Can chat and view state only

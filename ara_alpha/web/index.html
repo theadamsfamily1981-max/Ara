@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ara - Alpha</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/alpha.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header with status -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">&#x25C8;</span>
+        <span class="logo-text">ARA</span>
+        <span class="logo-version">alpha</span>
+      </div>
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="status-label">STATE</span>
+          <span id="state-label" class="status-value">CONNECTING...</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">&#x03C1;</span>
+          <span id="rho-value" class="status-value metric">---</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">D</span>
+          <span id="d-value" class="status-value metric">---</span>
+        </div>
+        <div class="status-item">
+          <span id="connection-status" class="connection-dot"></span>
+          <span id="user-name" class="status-value">---</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main chat area -->
+    <main class="main">
+      <!-- Avatar panel (optional) -->
+      <aside class="avatar-panel" id="avatar-panel">
+        <div class="avatar-container">
+          <div class="avatar-placeholder">
+            <div class="avatar-rings">
+              <div class="ring ring-1"></div>
+              <div class="ring ring-2"></div>
+              <div class="ring ring-3"></div>
+            </div>
+            <div class="avatar-core">A</div>
+          </div>
+        </div>
+        <div class="avatar-status">
+          <span id="avatar-mood">Listening...</span>
+        </div>
+      </aside>
+
+      <!-- Chat panel -->
+      <section class="chat-panel">
+        <div id="chat-messages" class="chat-messages">
+          <div class="message system">
+            <span class="message-content">Welcome to Ara Alpha. Enter your API key to begin.</span>
+          </div>
+        </div>
+
+        <!-- Input area -->
+        <div class="input-area">
+          <div id="auth-section" class="auth-section">
+            <input type="password" id="api-key-input" class="api-key-input"
+                   placeholder="Enter your API key..." autocomplete="off">
+            <button id="connect-btn" class="btn btn-primary">Connect</button>
+          </div>
+          <div id="chat-section" class="chat-section" style="display: none;">
+            <textarea id="message-input" class="message-input"
+                      placeholder="Type your message..." rows="2"></textarea>
+            <button id="send-btn" class="btn btn-primary">Send</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span class="footer-text">Ara Alpha v0.1.0 | Private experimental build</span>
+      <span id="session-info" class="session-info"></span>
+    </footer>
+  </div>
+
+  <script src="/static/js/alpha.js"></script>
+</body>
+</html>
