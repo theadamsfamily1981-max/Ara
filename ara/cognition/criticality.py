@@ -81,6 +81,20 @@ class CriticalityRegime(str, Enum):
     SUPERCRITICAL = "supercritical" # E > ε, unstable, chaotic
 
 
+class CriticalityBand(str, Enum):
+    """
+    Traffic-light bands for MEIS mode selection.
+
+    Maps criticality state to operational guidance:
+    - GREEN: Safe for exploration, stable regime
+    - AMBER: At criticality, high sensitivity, proceed with care
+    - RED: Supercritical/unstable, must consolidate immediately
+    """
+    GREEN = "green"    # E < -ε/2 : Subcritical, stable, safe for agentic work
+    AMBER = "amber"    # -ε/2 ≤ E ≤ ε : Near criticality, heightened awareness
+    RED = "red"        # E > ε : Supercritical, must retreat
+
+
 class Phase(str, Enum):
     """MEIS phase for criticality-based control."""
     EXPLORE = "explore"         # Move toward criticality for sensitivity
@@ -132,9 +146,13 @@ class CriticalityState:
     # Regime classification
     regime: CriticalityRegime = CriticalityRegime.SUBCRITICAL
 
+    # Traffic-light band for MEIS (Green/Amber/Red)
+    band: CriticalityBand = CriticalityBand.GREEN
+
     # Control signals
     recommended_phase: Phase = Phase.MAINTAIN
     lambda_adjustment: float = 0.0  # Suggested change to adrenaline
+    recommended_meis_mode: str = "support"  # Loose coupling to MEIS
 
     # History
     curvature_trend: float = 0.0    # Rate of change of curvature_proxy
@@ -161,7 +179,9 @@ class CriticalityState:
             "curvature_proxy": self.curvature_proxy,
             "curvature": self.curvature_proxy,  # Legacy alias
             "regime": self.regime.value,
+            "band": self.band.value,
             "recommended_phase": self.recommended_phase.value,
+            "recommended_meis_mode": self.recommended_meis_mode,
             "lambda_adjustment": self.lambda_adjustment,
             "stability_score": self.stability_score,
             "timestamp": self.timestamp,
@@ -306,6 +326,320 @@ def estimate_curvature(
     return estimate_fisher_info(edge_distance, gamma, regularize)
 
 
+# =============================================================================
+# Cheap Fisher Proxy (Empirical Estimation)
+# =============================================================================
+
+class FisherProxy:
+    """
+    Cheap Fisher information proxy from gradient samples.
+
+    Instead of computing the full Fisher information matrix (expensive),
+    we estimate Tr(F) from the empirical second moment of gradients:
+
+        Tr(F) ≈ E[||∇ log p(x|θ)||²]
+              ≈ (1/B) Σ_i ||g_i||²
+
+    where g_i are per-sample gradients and B is batch size.
+
+    This gives us S(θ), the "sensitivity" used for:
+    - Fisher-aware step size: η_eff = η_0 / (1 + k√S)
+    - Criticality regularizer: β(log S - log S*)²
+
+    Usage:
+        proxy = FisherProxy(ema_decay=0.99)
+
+        # During training, feed gradient samples
+        for batch in dataloader:
+            grads = compute_gradients(batch)
+            fisher_estimate = proxy.update(grads)
+
+        # Get current estimate
+        S = proxy.get_sensitivity()
+    """
+
+    def __init__(
+        self,
+        ema_decay: float = 0.99,
+        warmup_samples: int = 100,
+        clip_max: float = 1e6,
+    ):
+        """
+        Initialize Fisher proxy.
+
+        Args:
+            ema_decay: Exponential moving average decay for smoothing
+            warmup_samples: Samples before estimate is considered valid
+            clip_max: Maximum sensitivity value (prevents explosion)
+        """
+        self.ema_decay = ema_decay
+        self.warmup_samples = warmup_samples
+        self.clip_max = clip_max
+
+        # Running statistics
+        self._ema_fisher: float = 1.0  # Tr(F) estimate
+        self._sample_count: int = 0
+        self._history: deque = deque(maxlen=1000)
+
+    def update(self, gradients: np.ndarray) -> float:
+        """
+        Update Fisher estimate with new gradient sample(s).
+
+        Args:
+            gradients: Gradient array, shape (batch, params) or (params,)
+
+        Returns:
+            Current Fisher trace estimate
+        """
+        grads = np.atleast_2d(gradients)
+
+        # Compute ||g||² for each sample
+        grad_norms_sq = np.sum(grads ** 2, axis=1)
+
+        # Batch mean
+        batch_fisher = float(np.mean(grad_norms_sq))
+
+        # Update EMA
+        if self._sample_count == 0:
+            self._ema_fisher = batch_fisher
+        else:
+            self._ema_fisher = (
+                self.ema_decay * self._ema_fisher +
+                (1 - self.ema_decay) * batch_fisher
+            )
+
+        self._sample_count += len(grads)
+        self._history.append(batch_fisher)
+
+        # Clip to prevent explosion
+        self._ema_fisher = min(self._ema_fisher, self.clip_max)
+
+        return self._ema_fisher
+
+    def update_from_norms(self, grad_norms: np.ndarray) -> float:
+        """
+        Update from pre-computed gradient norms (more efficient).
+
+        Args:
+            grad_norms: Array of ||g_i|| values
+
+        Returns:
+            Current Fisher trace estimate
+        """
+        norms = np.asarray(grad_norms)
+        norms_sq = norms ** 2
+        batch_fisher = float(np.mean(norms_sq))
+
+        if self._sample_count == 0:
+            self._ema_fisher = batch_fisher
+        else:
+            self._ema_fisher = (
+                self.ema_decay * self._ema_fisher +
+                (1 - self.ema_decay) * batch_fisher
+            )
+
+        self._sample_count += len(norms)
+        self._history.append(batch_fisher)
+        self._ema_fisher = min(self._ema_fisher, self.clip_max)
+
+        return self._ema_fisher
+
+    def get_sensitivity(self) -> float:
+        """
+        Get current sensitivity S(θ) = Tr(F).
+
+        Returns 1.0 during warmup to avoid instability.
+        """
+        if self._sample_count < self.warmup_samples:
+            return 1.0
+        return self._ema_fisher
+
+    def get_effective_lr(self, base_lr: float, scale_factor: float = 0.1) -> float:
+        """
+        Compute Fisher-aware effective learning rate.
+
+        η_eff = η_0 / (1 + k√S)
+
+        Near criticality (high S), this reduces the learning rate
+        to prevent overshooting in the high-curvature region.
+
+        Args:
+            base_lr: Base learning rate η_0
+            scale_factor: Scaling factor k
+
+        Returns:
+            Effective learning rate
+        """
+        S = self.get_sensitivity()
+        return base_lr / (1.0 + scale_factor * np.sqrt(S))
+
+    def is_warmed_up(self) -> bool:
+        """Check if enough samples for valid estimate."""
+        return self._sample_count >= self.warmup_samples
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get proxy statistics."""
+        history = list(self._history)
+        return {
+            "sensitivity": self.get_sensitivity(),
+            "sample_count": self._sample_count,
+            "warmed_up": self.is_warmed_up(),
+            "history_mean": float(np.mean(history)) if history else 0.0,
+            "history_std": float(np.std(history)) if history else 0.0,
+        }
+
+
+# =============================================================================
+# Criticality Regularizer
+# =============================================================================
+
+class CriticalityRegularizer:
+    """
+    Regularizer for criticality-aware training.
+
+    Adds two terms to the training loss:
+
+        L_total = L_task + α·E² + β·(log S - log S*)²
+
+    where:
+    - E = 1 - ρ(W) is the edge distance
+    - S = Tr(F) is the Fisher sensitivity
+    - S* is the target sensitivity
+    - α, β are regularization strengths
+
+    The first term (α·E²) penalizes deviation from criticality (E=0).
+    The second term (β·(log S - log S*)²) keeps sensitivity near target.
+
+    Together they implement "criticality-regularized learning" that:
+    - Keeps the system near the edge of chaos for maximum expressivity
+    - Prevents runaway sensitivity that leads to instability
+
+    Usage:
+        reg = CriticalityRegularizer(alpha=0.01, beta=0.1, target_sensitivity=10.0)
+
+        # During training
+        loss_task = compute_task_loss(...)
+        reg_loss = reg.compute_regularization(
+            edge_distance=E,
+            sensitivity=S,
+        )
+        total_loss = loss_task + reg_loss
+    """
+
+    def __init__(
+        self,
+        alpha: float = 0.01,
+        beta: float = 0.1,
+        target_sensitivity: float = 10.0,
+        edge_target: float = 0.0,
+        warmup_steps: int = 1000,
+    ):
+        """
+        Initialize criticality regularizer.
+
+        Args:
+            alpha: Weight for edge distance penalty (α·E²)
+            beta: Weight for sensitivity penalty (β·(log S - log S*)²)
+            target_sensitivity: Target sensitivity S*
+            edge_target: Target edge distance (0 = criticality)
+            warmup_steps: Steps before regularization is fully active
+        """
+        self.alpha = alpha
+        self.beta = beta
+        self.target_sensitivity = target_sensitivity
+        self.edge_target = edge_target
+        self.warmup_steps = warmup_steps
+
+        self._step = 0
+        self._history: List[Dict[str, float]] = []
+
+    def compute_regularization(
+        self,
+        edge_distance: float,
+        sensitivity: float,
+    ) -> float:
+        """
+        Compute regularization loss.
+
+        L_reg = α·(E - E*)² + β·(log S - log S*)²
+
+        Args:
+            edge_distance: Current E(θ) = 1 - ρ(W)
+            sensitivity: Current S(θ) = Tr(F)
+
+        Returns:
+            Regularization loss value
+        """
+        self._step += 1
+
+        # Warmup ramp (linear)
+        warmup_factor = min(1.0, self._step / self.warmup_steps)
+
+        # Edge penalty: keep near criticality
+        edge_loss = self.alpha * (edge_distance - self.edge_target) ** 2
+
+        # Sensitivity penalty: keep log S near log S*
+        # Use log scale because sensitivity can span orders of magnitude
+        log_S = np.log(max(sensitivity, 1e-8))
+        log_S_star = np.log(self.target_sensitivity)
+        sensitivity_loss = self.beta * (log_S - log_S_star) ** 2
+
+        # Total regularization
+        reg_loss = warmup_factor * (edge_loss + sensitivity_loss)
+
+        # Track history
+        self._history.append({
+            "step": self._step,
+            "edge_loss": edge_loss,
+            "sensitivity_loss": sensitivity_loss,
+            "total_reg": reg_loss,
+            "warmup_factor": warmup_factor,
+        })
+        if len(self._history) > 10000:
+            self._history = self._history[-10000:]
+
+        return float(reg_loss)
+
+    def compute_gradients(
+        self,
+        edge_distance: float,
+        sensitivity: float,
+    ) -> Tuple[float, float]:
+        """
+        Compute gradients of regularization loss.
+
+        Returns (∂L/∂E, ∂L/∂S) for manual gradient injection.
+        """
+        warmup_factor = min(1.0, self._step / self.warmup_steps)
+
+        # ∂L/∂E = 2α(E - E*)
+        dL_dE = warmup_factor * 2 * self.alpha * (edge_distance - self.edge_target)
+
+        # ∂L/∂S = 2β(log S - log S*) / S
+        log_S = np.log(max(sensitivity, 1e-8))
+        log_S_star = np.log(self.target_sensitivity)
+        dL_dS = warmup_factor * 2 * self.beta * (log_S - log_S_star) / max(sensitivity, 1e-8)
+
+        return float(dL_dE), float(dL_dS)
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get regularizer statistics."""
+        if not self._history:
+            return {"step": 0, "history_length": 0}
+
+        recent = self._history[-100:]
+        return {
+            "step": self._step,
+            "alpha": self.alpha,
+            "beta": self.beta,
+            "target_sensitivity": self.target_sensitivity,
+            "recent_edge_loss_mean": np.mean([h["edge_loss"] for h in recent]),
+            "recent_sensitivity_loss_mean": np.mean([h["sensitivity_loss"] for h in recent]),
+            "recent_total_reg_mean": np.mean([h["total_reg"] for h in recent]),
+            "warmed_up": self._step >= self.warmup_steps,
+        }
+
+
 def estimate_correlation_length(
     edge_distance: float,
     nu: float = 1.0,
@@ -331,6 +665,45 @@ def classify_regime(
         return CriticalityRegime.SUPERCRITICAL
     else:
         return CriticalityRegime.CRITICAL
+
+
+def classify_band(
+    edge_distance: float,
+    epsilon: float = 0.05,
+) -> CriticalityBand:
+    """
+    Classify criticality into Green/Amber/Red bands for MEIS.
+
+    Band boundaries:
+    - GREEN: E < -ε/2 (comfortably subcritical)
+    - AMBER: -ε/2 ≤ E ≤ ε (approaching or at criticality)
+    - RED: E > ε (supercritical, unstable)
+
+    These map directly to MEIS operational modes:
+    - GREEN → AGENTIC allowed (with consent)
+    - AMBER → SUPPORT mode (careful exploration)
+    - RED → DAMP mode (must consolidate)
+    """
+    if edge_distance > epsilon:
+        return CriticalityBand.RED
+    elif edge_distance >= -epsilon / 2:
+        return CriticalityBand.AMBER
+    else:
+        return CriticalityBand.GREEN
+
+
+def band_to_meis_mode(band: CriticalityBand) -> str:
+    """
+    Map criticality band to recommended MEIS mode.
+
+    Returns mode name string for loose coupling.
+    """
+    if band == CriticalityBand.GREEN:
+        return "agentic"  # Safe for autonomous work
+    elif band == CriticalityBand.AMBER:
+        return "support"  # Careful, heightened awareness
+    else:  # RED
+        return "damp"     # Must retreat, reduce output
 
 
 # =============================================================================
@@ -420,6 +793,10 @@ class CriticalityMonitor:
         # Classify regime
         regime = classify_regime(edge, self.config.epsilon)
 
+        # Classify band (Green/Amber/Red for MEIS)
+        band = classify_band(edge, self.config.epsilon)
+        meis_mode = band_to_meis_mode(band)
+
         # Update history (track curvature proxy for control decisions)
         self._edge_history.append(edge)
         self._curvature_history.append(r_eff)
@@ -440,7 +817,9 @@ class CriticalityMonitor:
             fisher_info=fisher,
             curvature_proxy=r_eff,
             regime=regime,
+            band=band,
             recommended_phase=phase,
+            recommended_meis_mode=meis_mode,
             lambda_adjustment=lambda_adj,
             curvature_trend=curvature_trend,
             stability_score=stability,
@@ -632,8 +1011,11 @@ class CriticalityMonitor:
             "current_phase": self._current_phase.value,
             "edge_distance": state.edge_distance if state else None,
             "spectral_radius": state.spectral_radius if state else None,
+            "fisher_info": state.fisher_info if state else None,
             "curvature": state.curvature if state else None,
             "regime": state.regime.value if state else None,
+            "band": state.band.value if state else "green",
+            "recommended_meis_mode": state.recommended_meis_mode if state else "support",
             "stability_score": state.stability_score if state else 1.0,
             "history_size": len(self._edge_history),
         }
@@ -647,12 +1029,13 @@ class CriticalityMonitor:
         # Show both g (Fisher) and R_eff (curvature proxy)
         metrics = f"E={state.edge_distance:.3f}, g={state.fisher_info:.1f}, R={state.curvature_proxy:.1f}"
 
-        if state.regime == CriticalityRegime.SUPERCRITICAL:
-            return f"🔴 SUPERCRITICAL: {metrics}"
-        elif state.regime == CriticalityRegime.CRITICAL:
-            return f"🟡 CRITICAL: {metrics}"
-        else:
-            return f"🟢 Subcritical: {metrics}"
+        # Use band colors (Green/Amber/Red)
+        if state.band == CriticalityBand.RED:
+            return f"🔴 RED [{state.recommended_meis_mode.upper()}]: {metrics}"
+        elif state.band == CriticalityBand.AMBER:
+            return f"🟡 AMBER [{state.recommended_meis_mode.upper()}]: {metrics}"
+        else:  # GREEN
+            return f"🟢 GREEN [{state.recommended_meis_mode.upper()}]: {metrics}"
 
 
 # =============================================================================

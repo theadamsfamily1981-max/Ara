@@ -476,45 +476,50 @@ class MEIS:
         """
         Select appropriate mode based on context and criticality state.
 
-        Logic:
-        - Crisis detected -> SUPPORT (with damping)
-        - High risk -> DAMP
-        - Supercritical (unstable) -> DAMP
-        - High curvature (at criticality) -> AGENTIC if safe, else SUPPORT
-        - User requests agentic -> AGENTIC (if allowed)
-        - Default -> SUPPORT
+        Uses Green/Amber/Red band system from criticality monitoring:
+        - GREEN (E < -ε/2): Safe for AGENTIC work (with consent)
+        - AMBER (-ε/2 ≤ E ≤ ε): SUPPORT mode (careful exploration)
+        - RED (E > ε): DAMP mode (must consolidate)
+
+        Risk and crisis override band recommendations.
         """
-        # Check for crisis
+        # Check for crisis - always override to SUPPORT
         if context.get("crisis_detected", False):
             return MEISMode.SUPPORT
 
-        # Check risk level
+        # Check risk level - high risk overrides band
         risk_score = context.get("risk_score", 0.0)
         if risk_score > 0.7:
             return MEISMode.DAMP
         if risk_score > 0.5:
             return MEISMode.SUPPORT
 
-        # Check criticality state (edge-of-chaos dynamics)
+        # Use criticality band for mode selection (Green/Amber/Red)
         if self._criticality_monitor:
             crit_state = self._criticality_monitor.current_state
             if crit_state:
                 # Import here to avoid circular dependency
-                from ara.cognition.criticality import CriticalityRegime, Phase
+                from ara.cognition.criticality import CriticalityBand
 
-                # Supercritical = unstable = always damp
-                if crit_state.regime == CriticalityRegime.SUPERCRITICAL:
+                # RED band = must retreat/damp
+                if crit_state.band == CriticalityBand.RED:
+                    logger.warning(f"RED band: E={crit_state.edge_distance:.3f}, forcing DAMP")
                     return MEISMode.DAMP
 
-                # At criticality with high curvature = explore/reframe opportunity
-                # But only if safe (low risk, user consent for agentic)
-                if crit_state.regime == CriticalityRegime.CRITICAL:
-                    if context.get("user_consent", False) and risk_score < 0.3:
-                        return MEISMode.AGENTIC  # High sensitivity mode
-                    # Otherwise stay in support (careful exploration)
+                # AMBER band = careful exploration (SUPPORT)
+                if crit_state.band == CriticalityBand.AMBER:
+                    logger.debug(f"AMBER band: E={crit_state.edge_distance:.3f}, using SUPPORT")
                     return MEISMode.SUPPORT
 
-        # Check if agentic is requested and allowed
+                # GREEN band = safe for agentic (if consented and low risk)
+                if crit_state.band == CriticalityBand.GREEN:
+                    if context.get("user_consent", False) and risk_score < 0.3:
+                        logger.debug(f"GREEN band: E={crit_state.edge_distance:.3f}, AGENTIC allowed")
+                        return MEISMode.AGENTIC
+                    # Green but no consent or moderate risk -> SUPPORT
+                    return MEISMode.SUPPORT
+
+        # Check if agentic is requested and allowed (fallback without criticality)
         if context.get("agentic_requested", False):
             if context.get("user_consent", False) and risk_score < 0.4:
                 return MEISMode.AGENTIC
@@ -524,6 +529,16 @@ class MEIS:
             return MEISMode.IDLE
 
         return MEISMode.SUPPORT
+
+    def get_band(self) -> str:
+        """
+        Get current criticality band (green/amber/red).
+
+        Returns 'green' if criticality monitoring is disabled.
+        """
+        if not self._criticality_monitor or not self._criticality_monitor.current_state:
+            return "green"
+        return self._criticality_monitor.current_state.band.value
 
     # =========================================================================
     # Action Evaluation
@@ -835,6 +850,7 @@ class MEIS:
                 "mode_changes": len(self._mode_history),
                 "mental_health_guard_enabled": self.enable_mental_health_guard,
                 "adrenaline": self._lambda,
+                "band": self.get_band(),
             }
 
             # Add criticality info if available
@@ -851,19 +867,23 @@ class MEIS:
         with self._lock:
             status = self.get_status()
             budget = status["budget"]
+            band = self.get_band()
+
+            # Band emoji prefix
+            band_emoji = {"green": "🟢", "amber": "🟡", "red": "🔴"}.get(band, "⚪")
 
             # Build base status
             if not budget["within_limits"]:
                 base = f"🔴 MEIS: {self.mode.value} - BUDGET EXCEEDED"
             elif self.mode == MEISMode.DAMP:
-                base = f"🟡 MEIS: {self.mode.value} - damping active"
+                base = f"{band_emoji} MEIS: {self.mode.value} [{band.upper()}] - damping"
             else:
-                base = f"🟢 MEIS: {self.mode.value}"
+                base = f"{band_emoji} MEIS: {self.mode.value} [{band.upper()}]"
 
             # Add criticality info if available
             if self._criticality_monitor and self._criticality_monitor.current_state:
                 crit = self._criticality_monitor.current_state
-                base += f" | λ={self._lambda:.2f} J={crit.curvature:.1f}"
+                base += f" | λ={self._lambda:.2f} g={crit.fisher_info:.1f}"
 
             return base
 

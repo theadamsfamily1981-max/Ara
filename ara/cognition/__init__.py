@@ -34,10 +34,21 @@ from .criticality import (
     CriticalityConfig,
     CriticalityState,
     CriticalityRegime,
+    CriticalityBand,
     Phase,
+    FisherProxy,
+    CriticalityRegularizer,
     get_criticality_monitor,
     update_criticality,
     criticality_status,
+    classify_band,
+    band_to_meis_mode,
+)
+
+from .rnn_scaling_experiment import (
+    run_experiment as run_rnn_scaling_experiment,
+    ExperimentResults as RNNScalingResults,
+    ScalingResult,
 )
 
 __all__ = [
@@ -52,8 +63,17 @@ __all__ = [
     'CriticalityConfig',
     'CriticalityState',
     'CriticalityRegime',
+    'CriticalityBand',
     'Phase',
+    'FisherProxy',
+    'CriticalityRegularizer',
     'get_criticality_monitor',
     'update_criticality',
     'criticality_status',
+    'classify_band',
+    'band_to_meis_mode',
+    # RNN Scaling Experiment
+    'run_rnn_scaling_experiment',
+    'RNNScalingResults',
+    'ScalingResult',
 ]
