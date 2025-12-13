@@ -287,31 +287,114 @@ class HierarchicalController:
    - Gradually increase environmental complexity
    - Adaptive setpoints based on overwhelm detection
 
-### 6.3 Depression
+### 6.3 Major Depressive Disorder (MDD)
 
-**Problem**: D_low high on negative self-model
+**Problem**: High D_low for negative priors + low action-outcome precision
+
+**Computational Model**:
+- Excessive Π_prior on pessimistic self-models ("I am worthless")
+- Beliefs resist updating from positive sensory evidence
+- Degraded agency model (B matrix): actions feel futile
 
 **Protocol v2.0**:
-1. Identify negative prior signatures in θ asymmetry
-2. θ-tACS to left frontal (increase positive affect priors)
-3. Cognitive audio prompts during low D_low moments
-4. Integration with behavioral activation
+1. **Phase 1 (weeks 1-2)**: Assessment
+   - Measure frontal θ asymmetry (left < right = depression marker)
+   - Identify rigid negative prior signatures
+   - Baseline anhedonia/apathy scales
 
-### 6.4 Meditation Enhancement
+2. **Phase 2 (weeks 3-8)**: Dual-target intervention
+   - **θ-tACS (6 Hz) to left DLPFC**: Reduce Π_prior on negative beliefs
+   - **β-tACS (20 Hz) to motor cortex**: Boost action-outcome precision
+   - Audio prompts: "Notice small positive prediction errors"
+   - Target: D_low_negative < 1.5, action-outcome coupling > baseline
+
+3. **Phase 3 (weeks 9-12)**: Behavioral integration
+   - Pair with behavioral activation therapy
+   - Haptic reward for completed activities
+   - Gradual tACS reduction
+
+**Key Insight**: Depression involves not just sad mood but a *computational failure to update* from positive evidence. The intervention targets belief flexibility, not just affect.
+
+### 6.4 Obsessive-Compulsive Disorder (OCD)
+
+**Problem**: Low proprioceptive prior precision + failure to resolve prediction errors
+
+**Computational Model**:
+- Excessive Π_sensory: Sensory evidence of safety not trusted
+- Low Π_prior on own state: "Did I really lock the door?"
+- Checking generates MORE uncertainty, not less (positive feedback loop)
+- Failure to reset error signal after successful action
+
+**Protocol v2.0**:
+1. **Phase 1 (weeks 1-2)**: Assessment
+   - Map checking triggers and compulsion patterns
+   - Identify specific uncertainty domains (contamination, safety, symmetry)
+   - Baseline Y-BOCS scores
+
+2. **Phase 2 (weeks 3-8)**: Proprioceptive precision boost
+   - **α/β-tACS (10-20 Hz) to somatosensory/motor cortex**: Boost Π_prior on own actions
+   - **Haptic "resolution signal"**: Distinct long pulse when checking resolves error
+   - Target: Trust in own perception, reduced re-checking
+
+3. **Phase 3 (weeks 9-12)**: Extinction training
+   - App-guided ERP (Exposure-Response Prevention)
+   - Resist re-checking after resolution signal
+   - Audio: "Your action was successful. Trust the signal."
+
+**Key Insight**: OCD is a *failure to acknowledge resolved prediction errors*. The haptic resolution signal creates a conditioned inhibitory cue against recursive checking.
+
+### 6.5 Anxiety Disorders / PTSD
+
+**Problem**: Aberrantly high Π_sensory on threat-related signals
+
+**Computational Model**:
+- Hypervigilant perception: Everything scanned for threat
+- Threat priors over-weighted even in safe contexts
+- Failed contextual modulation of precision
+
+**Protocol v2.0**:
+1. **Phase 1**: Safe environment baseline
+   - Measure threat-related gamma activity
+   - Identify trigger contexts
+
+2. **Phase 2**: Contextual precision modulation
+   - **α-tACS (10 Hz) to posterior cortex**: Reduce sensory gain globally
+   - **Audio grounding**: "Notice you are safe in this moment"
+   - Context-aware: Higher intervention intensity when HRV indicates stress
+
+3. **Phase 3**: Trauma processing (PTSD only)
+   - Integration with trauma-focused therapy (EMDR, CPT)
+   - Device provides real-time D monitoring during exposure
+   - Alert if D_high spikes beyond therapeutic window
+
+### 6.6 Meditation / Peak Performance Enhancement
 
 **Goal**: Maximize epistemic depth while maintaining stability
 
 **Protocol v2.0**:
 1. **Baseline**: Measure natural D_low/D_high trajectory
-2. **Guided**: Progressive setpoint shift
-   - D_low: 1.0 → 1.2 → 1.5 (deeper priors)
-   - D_high: 1.0 → 0.8 → 0.5 (reduced sensory)
+2. **Guided progression**:
+   - D_low: 1.0 → 1.2 → 1.5 (deeper priors, abstraction)
+   - D_high: 1.0 → 0.8 → 0.5 (reduced sensory, internal focus)
 3. **Feedback**: Audio tone tracks epistemic depth
-4. **Safety**: Alert if depth collapses (falling asleep)
+4. **Safety**: Alert if depth collapses (sleep onset) or destabilizes (anxiety)
 
 ---
 
-## 7. Hardware BOM Update
+## 7. Clinical Protocol Summary
+
+| Condition | D_low Target | D_high Target | Primary tACS | Key Insight |
+|-----------|--------------|---------------|--------------|-------------|
+| Schizophrenia | ↓ to <2.0 | Maintain | θ (6Hz) frontal | Reduce prior rigidity |
+| ASD | ↑ to >0.5 | ↓ to <1.5 | γ (40Hz) posterior | Balance hierarchy |
+| Depression | ↓ negative priors | Maintain | θ (6Hz) left DLPFC + β motor | Update from positive evidence |
+| OCD | ↑ proprioceptive | ↓ uncertainty | α/β (10-20Hz) motor | Trust resolved errors |
+| Anxiety/PTSD | Maintain | ↓ threat | α (10Hz) posterior | Contextual safety |
+| Meditation | ↑ to 1.5 | ↓ to 0.5 | None (feedback only) | Deepen epistemic depth |
+
+---
+
+## 8. Hardware BOM Update
 
 | Component | v1.0 | v2.0 | Change |
 |-----------|------|------|--------|
@@ -382,6 +465,73 @@ v2.0 with tACS requires:
 - Class II medical device pathway (not wellness)
 - Clinical trial data before approval
 - Physician prescription required
+
+---
+
+## 11. Ethical Implications
+
+### 11.1 The Power to Modify Belief-Reality Balance
+
+A device that measures and modifies D—the balance between prior beliefs and sensory reality—raises profound ethical questions:
+
+| Concern | Description | Mitigation |
+|---------|-------------|------------|
+| **Autonomy** | Who decides what D is "correct"? | User always controls targets; no forced intervention |
+| **Authenticity** | Is a modified belief system still "you"? | Frame as expanding flexibility, not changing identity |
+| **Consent** | Can vulnerable populations truly consent? | Capacity assessment; caregiver involvement |
+| **Enhancement** | Should we allow D modification for "optimization"? | Restrict clinical protocols; wellness modes limited |
+
+### 11.2 Dual-Use Risks
+
+| Risk | Scenario | Safeguard |
+|------|----------|-----------|
+| **Coercive use** | Employer requires "optimal" D | Prescription-only; anti-coercion policy |
+| **Manipulation** | Marketing to increase prior on brand | No third-party control; user data private |
+| **Weaponization** | Military uses to reduce soldier uncertainty | Ethical review for defense contracts |
+| **Addiction** | Dependence on device for "normal" function | Built-in tapering protocols; session limits |
+
+### 11.3 Epistemic Justice
+
+If precision imbalances correlate with socioeconomic factors:
+- **Access equity**: Ensure device available to underserved populations
+- **Cultural sensitivity**: D targets may vary across cultures
+- **Avoid pathologizing difference**: ASD and other conditions have value; don't enforce neurotypical D
+
+### 11.4 The "Delusion Index" Name
+
+The term "Delusion Index" is scientifically descriptive but potentially stigmatizing:
+- Consider alternative: "Belief-Evidence Balance" (BEB)
+- Avoid implying that high D = "crazy"
+- Frame deviations as *computational states*, not moral failings
+
+### 11.5 Transparency Principles
+
+1. **Open source**: Algorithms for D estimation should be auditable
+2. **No hidden modification**: User always knows when intervention is active
+3. **Data sovereignty**: User owns their precision data
+4. **Research access**: Anonymized data available for independent study
+
+### 11.6 Philosophical Implications
+
+If D can be measured and modified:
+- What does this say about "free will"?
+- Is belief a computation that can be "corrected"?
+- Where is the line between therapy and mind control?
+
+These questions have no easy answers. The framework should:
+- Engage philosophers, ethicists, and affected communities
+- Proceed incrementally with extensive oversight
+- Prioritize human dignity over optimization metrics
+
+---
+
+## 12. Future Directions
+
+1. **Multi-modal integration**: Combine with fMRI for source localization
+2. **Genetic markers**: Personalize protocols based on precision-related SNPs
+3. **Social precision**: Model interpersonal belief dynamics (shared D)
+4. **AI integration**: LLM-guided cognitive restructuring paired with tACS
+5. **Longitudinal studies**: Does D modification produce lasting change?
 
 ---
 
