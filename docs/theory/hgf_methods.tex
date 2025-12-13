@@ -368,6 +368,118 @@ We distinguish between what is established and what requires validation:
 The \texttt{ara.hgf} package provides simulation infrastructure for levels 1-4, enabling hypothesis development and pipeline validation before empirical testing.
 
 %==============================================================================
+\section{Variational Autoencoders for Phenotype Representation}
+%==============================================================================
+
+\subsection{Motivation: Learning Latent Structure}
+
+Beyond fitting HGF parameters to individual trajectories, we seek a \emph{generative model} of computational phenotypes---a low-dimensional representation that:
+\begin{enumerate}
+    \item Captures the essential structure of HGF trajectories
+    \item Enables phenotype classification and clustering
+    \item Supports generation of new synthetic trajectories
+    \item Provides interpretable dimensions corresponding to model parameters
+\end{enumerate}
+
+Variational Autoencoders (VAEs) provide a principled approach to learning such representations via amortized variational inference.
+
+\subsection{VAE Architecture for HGF Trajectories}
+
+A VAE consists of two components:
+\begin{itemize}
+    \item \textbf{Encoder} $q_\phi(z \mid x)$: Maps trajectories to latent distributions
+    \item \textbf{Decoder} $p_\theta(x \mid z)$: Reconstructs trajectories from latent codes
+\end{itemize}
+
+For HGF trajectories, we encode the sequence:
+\begin{equation}
+    x = \left[\mu_2^{(1)}, \sigma_2^{(1)}, \delta_1^{(1)}, \ldots, \mu_2^{(T)}, \sigma_2^{(T)}, \delta_1^{(T)}\right]
+\end{equation}
+
+The encoder outputs parameters of a Gaussian:
+\begin{equation}
+    q_\phi(z \mid x) = \mathcal{N}\left(\mu_\phi(x), \text{diag}(\sigma^2_\phi(x))\right)
+\end{equation}
+
+Training maximizes the Evidence Lower Bound (ELBO):
+\begin{equation}
+    \mathcal{L}(\theta, \phi; x) = \mathbb{E}_{z \sim q_\phi}[\log p_\theta(x \mid z)] - \beta \cdot D_{\text{KL}}(q_\phi(z \mid x) \,\|\, p(z))
+\end{equation}
+where $p(z) = \mathcal{N}(0, I)$ is the prior and $\beta \geq 1$ encourages disentanglement.
+
+\subsection{Disentanglement: The Goal}
+
+A \textbf{disentangled} representation has three properties:
+\begin{enumerate}
+    \item \textbf{Modularity}: Each latent dimension encodes at most one generative factor
+    \item \textbf{Compactness}: Each generative factor is encoded by few dimensions
+    \item \textbf{Explicitness}: Factors can be read out by simple predictors
+\end{enumerate}
+
+For HGF trajectories, the ideal is:
+\begin{align}
+    z_1 &\approx \omega_2 \quad \text{(tonic volatility)} \\
+    z_2 &\approx \kappa_1 \quad \text{(coupling strength)} \\
+    z_3 &\approx \theta \quad \text{(response temperature)}
+\end{align}
+
+If achieved, the latent space naturally separates phenotypes.
+
+\subsection{Disentanglement Metrics}
+
+We evaluate latent structure using three families of metrics:
+
+\paragraph{Predictor-Based (DCI):}
+Train classifiers to predict factors from latents. The \textbf{DCI score} decomposes into:
+\begin{itemize}
+    \item \textbf{Disentanglement}: $1 - H(R_{\cdot,j}) / \log K$ for each latent dimension
+    \item \textbf{Completeness}: $1 - H(R_{i,\cdot}) / \log D$ for each factor
+    \item \textbf{Informativeness}: Average prediction accuracy
+\end{itemize}
+where $R_{ij}$ is the importance of latent $j$ for factor $i$.
+
+\paragraph{Information-Based (MIG):}
+The \textbf{Mutual Information Gap} measures, for each factor, the difference between the two latent dimensions with highest mutual information:
+\begin{equation}
+    \text{MIG} = \frac{1}{K} \sum_{k=1}^{K} \frac{1}{H(v_k)} \left( I(z_{j^*}; v_k) - \max_{j \neq j^*} I(z_j; v_k) \right)
+\end{equation}
+where $j^* = \arg\max_j I(z_j; v_k)$.
+
+\paragraph{Exclusivity-Based (EDI):}
+The \textbf{Exclusivity Disentanglement Index} addresses limitations of MIG by measuring how exclusively each latent dimension captures information about factors:
+\begin{equation}
+    \text{EDI}_{\text{mod}} = \max_i \frac{I(z_j; v_i)}{\sum_k I(z_j; v_k)} - \frac{1}{K-1} \sum_{k \neq i^*} \frac{I(z_j; v_k)}{\sum_k I(z_j; v_k)}
+\end{equation}
+
+\subsection{Evaluation Protocol}
+
+\paragraph{Synthetic Benchmarks:}
+For simulated trajectories where ground-truth HGF parameters are known:
+\begin{quote}
+We compute predictor-based (DCI, SAP) and information-based (MIG, EDI) metrics to quantify modularity, compactness, and explicitness. Architectures and hyperparameters are selected based on these scores.
+\end{quote}
+
+\paragraph{Real Behavioral Data:}
+For empirical data where true generative factors are unknown:
+\begin{quote}
+We use a DCI-style predictor analysis on available labels (task condition, clinical group, fitted HGF parameters) and evaluate utility via downstream tasks (phenotype classification, parameter recovery accuracy), rather than claiming absolute disentanglement.
+\end{quote}
+
+\begin{notebox}
+\textbf{Key Constraint}: Almost all disentanglement metrics assume known ground-truth factors. For real data, we can only validate approximate structure using proxy labels and downstream task performance.
+\end{notebox}
+
+\subsection{Implementation}
+
+The \texttt{ara.vae} package provides:
+\begin{itemize}
+    \item \texttt{TrajectoryVAE}: LSTM-based encoder/decoder for HGF sequences
+    \item \texttt{compute\_dci}, \texttt{compute\_mig}, \texttt{compute\_sap}, \texttt{compute\_edi}: Standard metrics
+    \item \texttt{generate\_phenotype\_dataset}: Trajectory generation from pathological presets
+    \item \texttt{evaluate\_disentanglement}: Comprehensive report with all metrics
+\end{itemize}
+
+%==============================================================================
 \section{Summary}
 %==============================================================================
 
@@ -379,11 +491,19 @@ The Hierarchical Gaussian Filter provides:
     \item Testable predictions for neural correlates of Bayesian inference
 \end{enumerate}
 
-For Ara and NeuroBalance, the HGF serves as:
+Combined with Variational Autoencoders for latent representation:
+\begin{enumerate}
+    \item Disentangled latent spaces can separate computational phenotypes
+    \item Standard metrics (DCI, MIG, EDI) quantify representation quality
+    \item Generative models enable synthetic data creation and parameter recovery
+\end{enumerate}
+
+For Ara and NeuroBalance, these tools serve as:
 \begin{itemize}
     \item The mathematical backbone for belief dynamics
     \item A bridge between behavior, parameters, and neural signals
     \item A testbed for computational psychiatry hypotheses
+    \item A generative framework for phenotype modeling and clustering
 \end{itemize}
 
 %==============================================================================
@@ -417,6 +537,21 @@ Lawson, R.~P., Mathys, C., \& Rees, G. (2017).
 Friston, K. (2010).
 \newblock The free-energy principle: a unified brain theory?
 \newblock \emph{Nature Reviews Neuroscience}, 11(2), 127--138.
+
+\bibitem{kingma2014}
+Kingma, D.~P., \& Welling, M. (2014).
+\newblock Auto-encoding variational {B}ayes.
+\newblock In \emph{Proceedings of ICLR}.
+
+\bibitem{higgins2017}
+Higgins, I., Matthey, L., Pal, A., Burgess, C., Glorot, X., Botvinick, M., Mohamed, S., \& Lerchner, A. (2017).
+\newblock $\beta$-{VAE}: Learning basic visual concepts with a constrained variational framework.
+\newblock In \emph{Proceedings of ICLR}.
+
+\bibitem{eastwood2018}
+Eastwood, C., \& Williams, C.~K.~I. (2018).
+\newblock A framework for the quantitative evaluation of disentangled representations.
+\newblock In \emph{Proceedings of ICLR}.
 
 \end{thebibliography}
 
