@@ -51,6 +51,17 @@ from .rnn_scaling_experiment import (
     ScalingResult,
 )
 
+from .avalanche_analysis import (
+    AvalancheAnalyzer,
+    AnalysisResult as AvalancheResult,
+    CriticalityMetrics,
+    Avalanche,
+    PowerLawFit,
+    FisherEstimate,
+    analyze_fim_vs_criticality,
+    simulate_critical_dynamics,
+)
+
 __all__ = [
     # Brain Bridge
     'BrainBridge',
@@ -76,4 +87,13 @@ __all__ = [
     'run_rnn_scaling_experiment',
     'RNNScalingResults',
     'ScalingResult',
+    # Avalanche Analysis
+    'AvalancheAnalyzer',
+    'AvalancheResult',
+    'CriticalityMetrics',
+    'Avalanche',
+    'PowerLawFit',
+    'FisherEstimate',
+    'analyze_fim_vs_criticality',
+    'simulate_critical_dynamics',
 ]
