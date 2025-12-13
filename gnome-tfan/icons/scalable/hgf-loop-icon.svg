@@ -1,0 +1,75 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Layer gradients: deep to surface -->
+    <linearGradient id="l1Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00c896;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00a880;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="l2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#cc66ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#aa44dd;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="l3Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#64c8ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#44a8dd;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="l4Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffaa00;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dd8800;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="l5Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6688;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dd4466;stop-opacity:1" />
+    </linearGradient>
+    <filter id="hgfGlow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Central hierarchical stack (L1 at bottom = homeostasis, L5 at top = meta-learning) -->
+
+  <!-- L1: Homeostatic Core (bottom layer) - largest ring -->
+  <ellipse cx="128" cy="185" rx="95" ry="25" fill="none" stroke="url(#l1Grad)" stroke-width="4" filter="url(#hgfGlow)"/>
+  <text x="128" y="218" font-family="monospace" font-size="9" fill="#00c896" text-anchor="middle" opacity="0.8">L1 HOMEO</text>
+
+  <!-- L2: Appraisal Engine -->
+  <ellipse cx="128" cy="155" rx="75" ry="20" fill="none" stroke="url(#l2Grad)" stroke-width="4" filter="url(#hgfGlow)"/>
+  <text x="40" y="158" font-family="monospace" font-size="8" fill="#cc66ff" opacity="0.7">L2</text>
+
+  <!-- L3: Gating Controller -->
+  <ellipse cx="128" cy="125" rx="55" ry="16" fill="none" stroke="url(#l3Grad)" stroke-width="4" filter="url(#hgfGlow)"/>
+  <text x="65" y="128" font-family="monospace" font-size="8" fill="#64c8ff" opacity="0.7">L3</text>
+
+  <!-- L4: Memory & Identity -->
+  <ellipse cx="128" cy="98" rx="40" ry="12" fill="none" stroke="url(#l4Grad)" stroke-width="4" filter="url(#hgfGlow)"/>
+  <text x="82" y="101" font-family="monospace" font-size="8" fill="#ffaa00" opacity="0.7">L4</text>
+
+  <!-- L5: Meta-Learning (top layer) - smallest ring -->
+  <ellipse cx="128" cy="75" rx="25" ry="8" fill="none" stroke="url(#l5Grad)" stroke-width="4" filter="url(#hgfGlow)"/>
+  <text x="98" y="78" font-family="monospace" font-size="8" fill="#ff6688" opacity="0.7">L5</text>
+
+  <!-- Prediction flow arrows (top-down) -->
+  <path d="M 155 80 C 175 95 180 115 175 135" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.4"/>
+  <polygon points="175,135 171,127 179,129" fill="#ffffff" opacity="0.4"/>
+  <text x="185" y="110" font-family="monospace" font-size="7" fill="#ffffff" opacity="0.5">μ↓</text>
+
+  <!-- Prediction error arrows (bottom-up) -->
+  <path d="M 85 175 C 65 160 60 140 65 120" fill="none" stroke="#00ffaa" stroke-width="2" opacity="0.5"/>
+  <polygon points="65,120 61,128 69,126" fill="#00ffaa" opacity="0.5"/>
+  <text x="50" y="145" font-family="monospace" font-size="7" fill="#00ffaa" opacity="0.5">ε↑</text>
+
+  <!-- Central column (belief state flow) -->
+  <line x1="128" y1="195" x2="128" y2="70" stroke="#ffffff" stroke-width="1" opacity="0.15"/>
+
+  <!-- Precision weighting indicator -->
+  <circle cx="128" cy="55" r="10" fill="none" stroke="#ffdd44" stroke-width="2" filter="url(#hgfGlow)"/>
+  <text x="128" y="58" font-family="monospace" font-size="8" fill="#ffdd44" text-anchor="middle">π</text>
+  <text x="128" y="42" font-family="monospace" font-size="7" fill="#ffffff" text-anchor="middle" opacity="0.5">precision</text>
+
+  <!-- Title -->
+  <text x="128" y="245" font-family="monospace" font-size="11" fill="#ffffff" text-anchor="middle" opacity="0.7">HGF • BEAUTIFUL LOOP</text>
+</svg>

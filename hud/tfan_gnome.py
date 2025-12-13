@@ -25,7 +25,15 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango
+
+# Import icon loader
+try:
+    from hud.icons import get_icon_loader, IconLoader
+    ICONS_AVAILABLE = True
+except ImportError:
+    ICONS_AVAILABLE = False
+    IconLoader = None
 
 
 # ============================================================================
@@ -596,6 +604,9 @@ class TFANWindow(Adw.ApplicationWindow):
 
     def _build_ui(self) -> None:
         """Build the main UI structure."""
+        # Initialize icon loader
+        self.icon_loader = get_icon_loader() if ICONS_AVAILABLE else None
+
         # Main horizontal split
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
 
@@ -623,6 +634,7 @@ class TFANWindow(Adw.ApplicationWindow):
         # Add views
         self.content_stack.add_titled(self._build_dashboard_view(), "dashboard", "Dashboard")
         self.content_stack.add_titled(self._build_brain_view(), "brain", "Brain HUD")
+        self.content_stack.add_titled(self._build_sanity_view(), "sanity", "Sanity Monitor")
         self.content_stack.add_titled(self._build_training_view(), "training", "Training")
         self.content_stack.add_titled(self._build_config_view(), "config", "Config")
 
@@ -635,48 +647,66 @@ class TFANWindow(Adw.ApplicationWindow):
         """Build the sidebar navigation."""
         sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         sidebar.add_css_class("sidebar")
-        sidebar.set_size_request(200, -1)
+        sidebar.set_size_request(220, -1)
 
-        # Logo / Title area
-        logo_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        # Logo / Title area with Ara avatar
+        logo_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         logo_box.set_margin_top(20)
         logo_box.set_margin_bottom(20)
         logo_box.set_margin_start(16)
         logo_box.set_margin_end(16)
 
-        logo_label = Gtk.Label(label="🧠 ARA")
+        # Try to load Ara avatar icon
+        if self.icon_loader:
+            ara_icon = self.icon_loader.load_picture("ara", size=64)
+            if ara_icon:
+                ara_icon.set_halign(Gtk.Align.CENTER)
+                logo_box.append(ara_icon)
+
+        logo_label = Gtk.Label(label="ARA")
         logo_label.add_css_class("metric-value-large")
         logo_box.append(logo_label)
 
-        subtitle = Gtk.Label(label="T-FAN Monitor")
+        subtitle = Gtk.Label(label="T-FAN Cockpit")
         subtitle.add_css_class("metric-label")
         logo_box.append(subtitle)
 
         sidebar.append(logo_box)
         sidebar.append(Gtk.Separator())
 
-        # Navigation items
+        # Navigation items with icons
         nav_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         nav_box.set_margin_top(12)
         nav_box.set_margin_start(8)
         nav_box.set_margin_end(8)
 
+        # View definitions: (icon_name, emoji_fallback, label, view_name)
         views = [
-            ("📊", "Dashboard", "dashboard"),
-            ("🧠", "Brain HUD", "brain"),
-            ("🚀", "Training", "training"),
-            ("⚙️", "Config", "config"),
+            ("metrics", "📊", "Dashboard", "dashboard"),
+            ("hgf", "🧠", "Brain HUD", "brain"),
+            ("sanity", "🛡️", "Sanity Monitor", "sanity"),
+            ("training", "🚀", "Training", "training"),
+            ("topology", "⚙️", "Config", "config"),
         ]
 
-        for icon, label, view_name in views:
+        for icon_name, emoji, label, view_name in views:
             row = Gtk.Button()
             row.add_css_class("sidebar-row")
             row.set_can_focus(False)
 
             row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
 
-            icon_label = Gtk.Label(label=icon)
-            row_box.append(icon_label)
+            # Try to load SVG icon, fall back to emoji
+            icon_widget = None
+            if self.icon_loader:
+                icon_widget = self.icon_loader.load_picture(icon_name, size=24)
+
+            if icon_widget:
+                icon_widget.set_size_request(24, 24)
+                row_box.append(icon_widget)
+            else:
+                icon_label = Gtk.Label(label=emoji)
+                row_box.append(icon_label)
 
             text_label = Gtk.Label(label=label)
             text_label.set_halign(Gtk.Align.START)
@@ -1136,6 +1166,227 @@ class TFANWindow(Adw.ApplicationWindow):
         antifragility_section.append(self.dau_reason_label)
 
         box.append(antifragility_section)
+
+        scroll.set_child(box)
+        return scroll
+
+    def _build_sanity_view(self) -> Gtk.Widget:
+        """Build the Sanity Monitor view - criticality, HGF, and stability metrics."""
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
+        box.set_margin_start(24)
+        box.set_margin_end(24)
+        box.set_margin_top(24)
+        box.set_margin_bottom(24)
+
+        # Header with sanity icon
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        header_box.set_halign(Gtk.Align.CENTER)
+
+        if self.icon_loader:
+            sanity_icon = self.icon_loader.load_picture("sanity", size=80)
+            if sanity_icon:
+                header_box.append(sanity_icon)
+
+        header_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        title = Gtk.Label(label="Sanity Monitor")
+        title.add_css_class("metric-value-large")
+        header_text.append(title)
+
+        desc = Gtk.Label(label="Criticality gauges, stability metrics, and safety daemon status")
+        desc.add_css_class("metric-label")
+        desc.set_wrap(True)
+        header_text.append(desc)
+
+        header_box.append(header_text)
+        box.append(header_box)
+
+        box.append(Gtk.Separator())
+
+        # === Criticality Section ===
+        crit_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        crit_section.add_css_class("homeo-section")
+
+        crit_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        if self.icon_loader:
+            crit_icon = self.icon_loader.load_picture("criticality", size=32)
+            if crit_icon:
+                crit_header.append(crit_icon)
+
+        crit_title = Gtk.Label(label="CRITICALITY GAUGES")
+        crit_title.add_css_class("homeo-section-title")
+        crit_title.set_halign(Gtk.Align.START)
+        crit_header.append(crit_title)
+        crit_section.append(crit_header)
+
+        # Criticality metrics grid
+        crit_grid = Gtk.Grid()
+        crit_grid.set_column_spacing(16)
+        crit_grid.set_row_spacing(12)
+        crit_grid.set_column_homogeneous(True)
+
+        # Risk level
+        risk_card = MetricCard("RISK LEVEL", "NOMINAL", None, "brain-metric-card", "brain-value")
+        self.metric_cards["sanity_risk_level"] = risk_card.value_label
+        crit_grid.attach(risk_card, 0, 0, 1, 1)
+
+        # Criticality index
+        crit_idx_card = MetricCard("CRITICALITY", "0.15", None, "brain-metric-card", "brain-value")
+        self.metric_cards["sanity_criticality"] = crit_idx_card.value_label
+        crit_grid.attach(crit_idx_card, 1, 0, 1, 1)
+
+        # EPR-CV (homeostatic stability)
+        epr_card = MetricCard("EPR-CV", "0.08", None, "brain-metric-card", "brain-value")
+        self.metric_cards["sanity_epr_cv"] = epr_card.value_label
+        crit_grid.attach(epr_card, 2, 0, 1, 1)
+
+        crit_section.append(crit_grid)
+
+        # Stability bars
+        self.brain_bars["sanity_stability_margin"] = BrainMetricBar(
+            "Stability Margin (distance to instability)", 0.0, 1.0, "{:.3f}"
+        )
+        crit_section.append(self.brain_bars["sanity_stability_margin"])
+
+        self.brain_bars["sanity_entropy_budget"] = BrainMetricBar(
+            "Entropy Budget (remaining capacity)", 0.0, 1.0, "{:.3f}"
+        )
+        crit_section.append(self.brain_bars["sanity_entropy_budget"])
+
+        box.append(crit_section)
+        box.append(Gtk.Separator())
+
+        # === Antifragility Section ===
+        af_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        af_section.add_css_class("antifragility-section")
+
+        af_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        if self.icon_loader:
+            af_icon = self.icon_loader.load_picture("antifragility", size=32)
+            if af_icon:
+                af_header.append(af_icon)
+
+        af_title = Gtk.Label(label="ANTIFRAGILITY STATUS")
+        af_title.add_css_class("antifragility-section-title")
+        af_title.set_halign(Gtk.Align.START)
+        af_header.append(af_title)
+        af_section.append(af_header)
+
+        # Antifragility metrics grid
+        af_grid = Gtk.Grid()
+        af_grid.set_column_spacing(16)
+        af_grid.set_row_spacing(12)
+        af_grid.set_column_homogeneous(True)
+
+        af_idx_card = MetricCard("AF INDEX", "+0.45", None, "brain-metric-card", "brain-value")
+        self.metric_cards["sanity_af_index"] = af_idx_card.value_label
+        af_grid.attach(af_idx_card, 0, 0, 1, 1)
+
+        convex_card = MetricCard("CONVEXITY", "+0.12", None, "brain-metric-card", "brain-value")
+        self.metric_cards["sanity_convexity"] = convex_card.value_label
+        af_grid.attach(convex_card, 1, 0, 1, 1)
+
+        lyap_card = MetricCard("LYAPUNOV", "-0.03", None, "brain-metric-card", "brain-value")
+        self.metric_cards["sanity_lyapunov"] = lyap_card.value_label
+        af_grid.attach(lyap_card, 2, 0, 1, 1)
+
+        af_section.append(af_grid)
+
+        # Antifragility bar
+        self.brain_bars["sanity_payoff_asymmetry"] = BrainMetricBar(
+            "Payoff Asymmetry (gains/losses ratio)", -1.0, 1.0, "{:+.3f}"
+        )
+        af_section.append(self.brain_bars["sanity_payoff_asymmetry"])
+
+        box.append(af_section)
+        box.append(Gtk.Separator())
+
+        # === HGF Beautiful Loop Section ===
+        hgf_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        hgf_section.add_css_class("appraisal-section")
+
+        hgf_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        if self.icon_loader:
+            hgf_icon = self.icon_loader.load_picture("hgf", size=32)
+            if hgf_icon:
+                hgf_header.append(hgf_icon)
+
+        hgf_title = Gtk.Label(label="HGF LAYER HEALTH")
+        hgf_title.add_css_class("appraisal-section-title")
+        hgf_title.set_halign(Gtk.Align.START)
+        hgf_header.append(hgf_title)
+        hgf_section.append(hgf_header)
+
+        # HGF layer bars
+        self.brain_bars["hgf_l1_health"] = BrainMetricBar("L1: Homeostatic Core", 0.0, 1.0, "{:.2f}")
+        hgf_section.append(self.brain_bars["hgf_l1_health"])
+
+        self.brain_bars["hgf_l2_health"] = BrainMetricBar("L2: Appraisal Engine", 0.0, 1.0, "{:.2f}")
+        hgf_section.append(self.brain_bars["hgf_l2_health"])
+
+        self.brain_bars["hgf_l3_health"] = BrainMetricBar("L3: Gating Controller", 0.0, 1.0, "{:.2f}")
+        hgf_section.append(self.brain_bars["hgf_l3_health"])
+
+        self.brain_bars["hgf_l4_health"] = BrainMetricBar("L4: Memory & Identity", 0.0, 1.0, "{:.2f}")
+        hgf_section.append(self.brain_bars["hgf_l4_health"])
+
+        self.brain_bars["hgf_l5_health"] = BrainMetricBar("L5: Meta-Learning (π precision)", 0.0, 1.0, "{:.2f}")
+        hgf_section.append(self.brain_bars["hgf_l5_health"])
+
+        box.append(hgf_section)
+        box.append(Gtk.Separator())
+
+        # === DAU (Defensive Autonomous Unit) Section ===
+        dau_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        dau_section.add_css_class("uncertainty-section")
+        self.sanity_dau_section = dau_section
+
+        dau_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        if self.icon_loader:
+            dau_icon = self.icon_loader.load_picture("dau", size=32)
+            if dau_icon:
+                self.sanity_dau_icon_box = Gtk.Box()
+                self.sanity_dau_icon_box.append(dau_icon)
+                dau_header.append(self.sanity_dau_icon_box)
+
+        dau_title = Gtk.Label(label="DEFENSIVE AUTONOMOUS UNIT")
+        dau_title.add_css_class("uncertainty-section-title")
+        dau_title.set_halign(Gtk.Align.START)
+        dau_header.append(dau_title)
+        dau_section.append(dau_header)
+
+        # DAU status grid
+        dau_grid = Gtk.Grid()
+        dau_grid.set_column_spacing(16)
+        dau_grid.set_row_spacing(12)
+        dau_grid.set_column_homogeneous(True)
+
+        dau_status_card = MetricCard("DAU STATUS", "STANDBY", None, "brain-metric-card", "brain-value")
+        self.metric_cards["dau_status"] = dau_status_card.value_label
+        self.dau_status_card = dau_status_card
+        dau_grid.attach(dau_status_card, 0, 0, 1, 1)
+
+        dau_triggers_card = MetricCard("TRIGGERS", "0", None, "brain-metric-card", "brain-value")
+        self.metric_cards["dau_trigger_count"] = dau_triggers_card.value_label
+        dau_grid.attach(dau_triggers_card, 1, 0, 1, 1)
+
+        dau_uptime_card = MetricCard("UPTIME", "24:00:00", None, "brain-metric-card", "brain-value")
+        self.metric_cards["dau_uptime"] = dau_uptime_card.value_label
+        dau_grid.attach(dau_uptime_card, 2, 0, 1, 1)
+
+        dau_section.append(dau_grid)
+
+        # DAU reason label
+        self.sanity_dau_reason = Gtk.Label(label="All systems nominal. No defensive actions required.")
+        self.sanity_dau_reason.set_halign(Gtk.Align.START)
+        self.sanity_dau_reason.set_wrap(True)
+        self.sanity_dau_reason.set_opacity(0.7)
+        self.sanity_dau_reason.set_margin_top(8)
+        dau_section.append(self.sanity_dau_reason)
+
+        box.append(dau_section)
 
         scroll.set_child(box)
         return scroll

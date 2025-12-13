@@ -1,0 +1,52 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dauGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff4466;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff8844;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="alertGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffcc00;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff8800;stop-opacity:1" />
+    </linearGradient>
+    <filter id="dauGlow">
+      <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="pulsingGlow">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Outer warning rings (pulsing effect) -->
+  <circle cx="128" cy="128" r="110" fill="none" stroke="#ff4466" stroke-width="3" filter="url(#pulsingGlow)" opacity="0.3"/>
+  <circle cx="128" cy="128" r="95" fill="none" stroke="#ff4466" stroke-width="2" filter="url(#pulsingGlow)" opacity="0.4"/>
+  <circle cx="128" cy="128" r="80" fill="none" stroke="#ff4466" stroke-width="2" filter="url(#dauGlow)" opacity="0.5"/>
+
+  <!-- Shield shape (defensive) -->
+  <path d="M 128 45 L 185 70 L 190 140 L 128 195 L 66 140 L 71 70 Z"
+        fill="none" stroke="url(#dauGrad)" stroke-width="4" filter="url(#dauGlow)"/>
+
+  <!-- Inner shield -->
+  <path d="M 128 60 L 170 80 L 174 130 L 128 175 L 82 130 L 86 80 Z"
+        fill="url(#dauGrad)" opacity="0.2"/>
+
+  <!-- Exclamation mark (alert) -->
+  <rect x="120" y="80" width="16" height="50" rx="4" fill="url(#alertGrad)" filter="url(#dauGlow)"/>
+  <circle cx="128" cy="150" r="10" fill="url(#alertGrad)" filter="url(#dauGlow)"/>
+
+  <!-- Corner warning indicators -->
+  <polygon points="40,40 60,40 50,55" fill="#ff4466" filter="url(#dauGlow)"/>
+  <polygon points="216,40 196,40 206,55" fill="#ff4466" filter="url(#dauGlow)"/>
+  <polygon points="40,216 60,216 50,201" fill="#ff4466" filter="url(#dauGlow)"/>
+  <polygon points="216,216 196,216 206,201" fill="#ff4466" filter="url(#dauGlow)"/>
+
+  <!-- Status label -->
+  <text x="128" y="230" font-family="monospace" font-size="12" fill="#ff4466" text-anchor="middle" font-weight="bold" filter="url(#dauGlow)">DAU ACTIVE</text>
+</svg>

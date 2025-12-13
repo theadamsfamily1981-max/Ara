@@ -1,0 +1,38 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="negGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6644;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#cc4422;stop-opacity:1" />
+    </linearGradient>
+    <filter id="negGlow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Muted background -->
+  <circle cx="128" cy="128" r="90" fill="none" stroke="#ff6644" stroke-width="2" filter="url(#negGlow)" opacity="0.3"/>
+  <circle cx="128" cy="128" r="70" fill="url(#negGrad)" opacity="0.1" filter="url(#negGlow)"/>
+
+  <!-- Sad face -->
+  <circle cx="128" cy="128" r="60" fill="none" stroke="url(#negGrad)" stroke-width="4" filter="url(#negGlow)"/>
+
+  <!-- Eyes (downward looking) -->
+  <circle cx="105" cy="115" r="8" fill="none" stroke="#ff6644" stroke-width="3"/>
+  <circle cx="151" cy="115" r="8" fill="none" stroke="#ff6644" stroke-width="3"/>
+  <circle cx="105" cy="117" r="3" fill="#ff6644"/>
+  <circle cx="151" cy="117" r="3" fill="#ff6644"/>
+
+  <!-- Frown -->
+  <path d="M 95 165 Q 128 145 161 165" fill="none" stroke="#ff6644" stroke-width="4" stroke-linecap="round" filter="url(#negGlow)"/>
+
+  <!-- Tear drops -->
+  <path d="M 100 130 Q 98 140 100 145 Q 102 140 100 130" fill="#6688ff" opacity="0.6"/>
+  <path d="M 156 130 Q 154 140 156 145 Q 158 140 156 130" fill="#6688ff" opacity="0.6"/>
+
+  <!-- V- label -->
+  <text x="128" y="230" font-family="monospace" font-size="14" fill="#ff6644" text-anchor="middle" font-weight="bold">V−</text>
+</svg>

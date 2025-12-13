@@ -1,0 +1,74 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Phoenix flame gradient: orange to gold -->
+    <linearGradient id="flameGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#ff6600;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#ffaa00;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ffdd44;stop-opacity:1" />
+    </linearGradient>
+    <!-- Convexity curve gradient: green for gains -->
+    <linearGradient id="convexGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00ff88;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00ffaa;stop-opacity:1" />
+    </linearGradient>
+    <!-- Fragile side gradient: red for losses -->
+    <linearGradient id="fragileGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff4466;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff2244;stop-opacity:1" />
+    </linearGradient>
+    <filter id="afGlow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Convexity payoff curve (the key antifragility visual) -->
+  <!-- Negative side (losses) - convex = limited downside -->
+  <path d="M 30 160 Q 60 155 90 140 Q 110 130 128 110"
+        fill="none" stroke="url(#fragileGrad)" stroke-width="4"
+        stroke-linecap="round" filter="url(#softGlow)"/>
+
+  <!-- Positive side (gains) - convex = unlimited upside -->
+  <path d="M 128 110 Q 146 90 165 60 Q 185 25 220 15"
+        fill="none" stroke="url(#convexGrad)" stroke-width="4"
+        stroke-linecap="round" filter="url(#afGlow)"/>
+
+  <!-- Origin point (current state) -->
+  <circle cx="128" cy="110" r="8" fill="#ffaa00" filter="url(#afGlow)"/>
+
+  <!-- Axis lines -->
+  <line x1="20" y1="180" x2="240" y2="180" stroke="#ffffff" stroke-width="1" opacity="0.2"/>
+  <line x1="128" y1="200" x2="128" y2="10" stroke="#ffffff" stroke-width="1" opacity="0.2"/>
+
+  <!-- Axis labels -->
+  <text x="235" y="195" font-family="monospace" font-size="9" fill="#ffffff" opacity="0.5">stress</text>
+  <text x="135" y="20" font-family="monospace" font-size="9" fill="#ffffff" opacity="0.5">payoff</text>
+
+  <!-- Phoenix rising symbol (stylized wings) -->
+  <path d="M 128 220 L 115 200 L 95 210 L 110 190 L 90 195 L 108 175 L 128 180
+           L 148 175 L 166 195 L 146 190 L 161 210 L 141 200 L 128 220"
+        fill="url(#flameGrad)" filter="url(#afGlow)" opacity="0.8"/>
+
+  <!-- Inner flame -->
+  <path d="M 128 215 L 118 200 L 128 185 L 138 200 L 128 215"
+        fill="#ffdd44" filter="url(#softGlow)"/>
+
+  <!-- Asymmetry arrows showing gains > losses -->
+  <path d="M 75 145 L 65 155" stroke="#ff4466" stroke-width="2" opacity="0.6" marker-end="none"/>
+  <path d="M 180 50 L 195 30" stroke="#00ff88" stroke-width="3" filter="url(#softGlow)"/>
+  <polygon points="195,30 190,42 202,38" fill="#00ff88" filter="url(#softGlow)"/>
+
+  <!-- Labels -->
+  <text x="50" y="175" font-family="monospace" font-size="8" fill="#ff4466" opacity="0.7">bounded loss</text>
+  <text x="165" y="45" font-family="monospace" font-size="8" fill="#00ff88" opacity="0.7">unbounded gain</text>
+</svg>

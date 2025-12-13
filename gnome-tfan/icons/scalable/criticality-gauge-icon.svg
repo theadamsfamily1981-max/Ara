@@ -1,0 +1,67 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient from safe (cyan) through warning (yellow) to critical (red) -->
+    <linearGradient id="criticalityArc" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00ffaa;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#ffcc00;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff4466;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="needleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00ffaa;stop-opacity:1" />
+    </linearGradient>
+    <filter id="critGlow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="needleGlow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Outer gauge arc (semicircle) -->
+  <path d="M 40 160 A 88 88 0 0 1 216 160"
+        fill="none" stroke="url(#criticalityArc)" stroke-width="12"
+        stroke-linecap="round" filter="url(#critGlow)"/>
+
+  <!-- Inner arc (background) -->
+  <path d="M 55 160 A 73 73 0 0 1 201 160"
+        fill="none" stroke="#1a1a2e" stroke-width="6"
+        stroke-linecap="round"/>
+
+  <!-- Tick marks -->
+  <line x1="48" y1="130" x2="58" y2="138" stroke="#00ffaa" stroke-width="2" opacity="0.8"/>
+  <line x1="75" y1="85" x2="82" y2="95" stroke="#00ffaa" stroke-width="2" opacity="0.8"/>
+  <line x1="128" y1="65" x2="128" y2="78" stroke="#ffcc00" stroke-width="2" opacity="0.8"/>
+  <line x1="181" y1="85" x2="174" y2="95" stroke="#ffcc00" stroke-width="2" opacity="0.8"/>
+  <line x1="208" y1="130" x2="198" y2="138" stroke="#ff4466" stroke-width="2" opacity="0.8"/>
+
+  <!-- Zone labels -->
+  <text x="52" y="175" font-family="monospace" font-size="10" fill="#00ffaa" opacity="0.7">SAFE</text>
+  <text x="115" y="55" font-family="monospace" font-size="10" fill="#ffcc00" opacity="0.7">MED</text>
+  <text x="188" y="175" font-family="monospace" font-size="10" fill="#ff4466" opacity="0.7">CRIT</text>
+
+  <!-- Needle pivot point -->
+  <circle cx="128" cy="160" r="12" fill="#0a0a12" stroke="#00ffaa" stroke-width="2" filter="url(#needleGlow)"/>
+  <circle cx="128" cy="160" r="6" fill="url(#needleGrad)" filter="url(#needleGlow)"/>
+
+  <!-- Needle pointing to safe zone (rotatable in code) -->
+  <line x1="128" y1="160" x2="70" y2="120" stroke="url(#needleGrad)" stroke-width="3"
+        stroke-linecap="round" filter="url(#needleGlow)"/>
+
+  <!-- Value display -->
+  <rect x="88" y="190" width="80" height="28" rx="6" fill="#0a0a12" stroke="#00ffaa" stroke-width="1" opacity="0.8"/>
+  <text x="128" y="210" font-family="monospace" font-size="14" fill="#00ffaa"
+        text-anchor="middle" font-weight="bold" filter="url(#needleGlow)">0.23</text>
+
+  <!-- Title -->
+  <text x="128" y="240" font-family="monospace" font-size="11" fill="#ffffff"
+        text-anchor="middle" opacity="0.6">CRITICALITY</text>
+</svg>

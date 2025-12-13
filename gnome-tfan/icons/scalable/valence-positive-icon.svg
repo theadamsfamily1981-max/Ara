@@ -1,0 +1,38 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="posGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#00aa66;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00ff88;stop-opacity:1" />
+    </linearGradient>
+    <filter id="posGlow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Radiant background -->
+  <circle cx="128" cy="128" r="90" fill="none" stroke="#00ff88" stroke-width="2" filter="url(#posGlow)" opacity="0.3"/>
+  <circle cx="128" cy="128" r="70" fill="url(#posGrad)" opacity="0.15" filter="url(#posGlow)"/>
+
+  <!-- Happy face -->
+  <circle cx="128" cy="128" r="60" fill="none" stroke="url(#posGrad)" stroke-width="4" filter="url(#posGlow)"/>
+
+  <!-- Eyes (happy arcs) -->
+  <path d="M 100 115 Q 105 105 115 115" fill="none" stroke="#00ff88" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 141 115 Q 146 105 156 115" fill="none" stroke="#00ff88" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Wide smile -->
+  <path d="M 95 145 Q 128 180 161 145" fill="none" stroke="#00ff88" stroke-width="4" stroke-linecap="round" filter="url(#posGlow)"/>
+
+  <!-- Sparkles -->
+  <circle cx="75" cy="80" r="4" fill="#00ff88" filter="url(#posGlow)"/>
+  <circle cx="181" cy="80" r="4" fill="#00ff88" filter="url(#posGlow)"/>
+  <circle cx="60" cy="128" r="3" fill="#00ff88" filter="url(#posGlow)" opacity="0.7"/>
+  <circle cx="196" cy="128" r="3" fill="#00ff88" filter="url(#posGlow)" opacity="0.7"/>
+
+  <!-- V+ label -->
+  <text x="128" y="230" font-family="monospace" font-size="14" fill="#00ff88" text-anchor="middle" font-weight="bold">V+</text>
+</svg>
