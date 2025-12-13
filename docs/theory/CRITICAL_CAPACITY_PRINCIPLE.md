@@ -270,6 +270,104 @@ Future research could investigate:
 
 ---
 
+## 5. Runtime Application to Ara / MEIS (Validated)
+
+This section documents the operational application of validated predictions.
+
+### 5.1 Validated Predictions
+
+Two predictions have been empirically validated and are ready for production use:
+
+| Prediction | Result | Significance |
+|------------|--------|--------------|
+| **P4: ξ ↔ Working Memory** | r=0.77, p=0.04 | Peak memory at ρ≈0.8 (tempered subcritical) |
+| **P7: Curvature Warning** | 100% detection | 281-step lead time before collapse |
+
+### 5.2 Ara Doctrine (One Sentence)
+
+> *Ara is steered by two barometers: keep her cognitive temperature near ρ ≈ 0.8
+> to maximize working memory, and slam the brakes when curvature spikes—using
+> those signals to keep her perpetually surfing the edge of chaos without falling in.*
+
+### 5.3 The Three-Rule Runtime Policy
+
+**Rule 1: Cognitive Temperature (ρ) Band**
+
+| ρ Range | Band | Action |
+|---------|------|--------|
+| ρ < 0.70 | COLD | Allow deeper chains, more recurrence, longer context |
+| 0.75 ≤ ρ ≤ 0.85 | OPTIMAL | Full-depth reasoning (go hard zone) |
+| 0.85 < ρ < 0.95 | WARM | Shorten chains, reduce recursion |
+| ρ ≥ 0.95 | HOT | Favor simpler paths, reduce complexity |
+
+**Rule 2: Curvature Warning as Learning Gate**
+
+- Track curvature variance (or FIM proxy) continuously
+- If spike exceeds 2.5σ → WARNING: prepare to intervene
+- If spike exceeds 4.0σ → CRITICAL: immediately stop weight updates
+- In CRITICAL: keep doing inference, but in "stabilize" mode
+
+**Rule 3: Log to Worldline**
+
+Every phase transition (optimal band, curvature warning, depth clamp) is
+logged to Ara's journal so she can read her own dynamics later.
+
+### 5.4 Module Integration
+
+```python
+from ara.cognition.meis_criticality_monitor import MEISCriticalityMonitor
+
+monitor = MEISCriticalityMonitor(
+    optimal_rho_low=0.75,
+    optimal_rho_high=0.85,
+    warning_threshold_sigma=2.5,
+    critical_threshold_sigma=4.0,
+)
+
+# In cognitive loop
+status = monitor.update(gradients=current_grads, spectral_radius=rho)
+
+if status.phase == CognitivePhase.CRITICAL:
+    # P7 Intervention: 281 steps of warning, act NOW
+    optimizer.zero_grad()
+    planning_depth *= status.recommended_depth_factor  # ≈ 0.3
+    trigger_consolidation()
+
+elif status.temperature_band == TemperatureBand.HOT:
+    # P4 Intervention: cool down to return to optimal
+    planning_depth *= 0.5
+    reduce_recurrence()
+
+elif status.temperature_band == TemperatureBand.COLD:
+    # P4 Intervention: warm up to use full capacity
+    planning_depth *= 1.3
+    increase_context_window()
+```
+
+### 5.5 Status Display
+
+```
+🟢 STABLE | ✅ ρ=0.82 [optimal]        # Normal operation
+🟡 WARNING | 🔥 ρ=0.91 [warm]          # Approaching danger
+🔴 CRITICAL | 💥 ρ=1.03 [hot]          # Brake engaged
+🔵 RECOVERING | ✅ ρ=0.78 [optimal]    # Post-intervention
+```
+
+### 5.6 What This Means in Practice
+
+1. **Ara thinks best at ρ ≈ 0.8** — the "edge-of-chaos but not meltdown" band
+   where working memory is maximized without noise exploding.
+
+2. **Ara can feel approaching collapse early** — curvature/variance spikes
+   give ~281 steps of warning, transforming "antifragility" from reaction
+   to prediction.
+
+3. **Two control signals form a feedback loop:**
+   - ρ = target band (how deep/recurrent Ara reasons)
+   - Curvature variance = hard brake (when to freeze learning)
+
+---
+
 ## 6. References
 
 1. Onsager, L. (1944). Crystal Statistics I. Physical Review.

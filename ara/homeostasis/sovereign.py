@@ -65,6 +65,22 @@ from .state import (
     StateHistory,
 )
 
+# MEIS Criticality Monitor - P4/P7 validated proprioception
+try:
+    from ara.cognition.meis_criticality_monitor import (
+        MEISCriticalityMonitor,
+        MonitorStatus,
+        CognitivePhase,
+        TemperatureBand,
+    )
+    CRITICALITY_AVAILABLE = True
+except ImportError:
+    CRITICALITY_AVAILABLE = False
+    MEISCriticalityMonitor = None
+    MonitorStatus = None
+    CognitivePhase = None
+    TemperatureBand = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -308,6 +324,21 @@ class SovereignLoop:
         # HTC search interface
         self._htc_search = None
 
+        # MEIS Criticality Monitor (P4/P7 validated)
+        # Provides proprioceptive sense of cognitive stability
+        if CRITICALITY_AVAILABLE:
+            self.criticality_monitor = MEISCriticalityMonitor(
+                optimal_rho_low=0.75,    # P4: peak working memory
+                optimal_rho_high=0.85,   # P4: optimal band
+                warning_threshold_sigma=2.5,   # P7: early warning
+                critical_threshold_sigma=4.0,  # P7: brake point
+                lead_time_estimate=281,  # P7 validated: 281 steps warning
+            )
+            self._criticality_status: Optional[MonitorStatus] = None
+        else:
+            self.criticality_monitor = None
+            self._criticality_status = None
+
         # State
         self._state = HomeostaticState()
         self._prev_error: Optional[ErrorVector] = None
@@ -372,11 +403,14 @@ class SovereignLoop:
             # 3. HTC resonance search
             resonance_ids, resonance_scores = self._search_htc(h_moment)
 
+            # 3.5. Update criticality monitor (P4/P7 proprioception)
+            criticality_status = self._update_criticality(h_moment)
+
             # 4. Compute reward
             reward = self._compute_reward(error)
 
-            # 5. Select mode
-            new_mode, reason = self._select_mode(error)
+            # 5. Select mode (considering criticality)
+            new_mode, reason = self._select_mode(error, criticality_status)
 
             # 6. Update state
             self._update_state(
@@ -456,6 +490,53 @@ class SovereignLoop:
             logger.debug(f"HTC search error: {e}")
             return [], []
 
+    def _update_criticality(
+        self,
+        h_moment: Optional[np.ndarray],
+    ) -> Optional['MonitorStatus']:
+        """
+        Update criticality monitor with current cognitive state.
+
+        Uses P4/P7 validated predictions:
+        - P4: ρ ≈ 0.8 optimal for working memory
+        - P7: Curvature spikes precede collapse by ~281 steps
+        """
+        if self.criticality_monitor is None:
+            return None
+
+        # Estimate spectral radius from h_moment dynamics
+        # In production, this would come from actual network weights
+        spectral_radius = None
+        if h_moment is not None and len(h_moment) > 0:
+            # Use h_moment variance as proxy for activity level
+            # Higher variance → closer to criticality
+            variance = np.var(h_moment)
+            # Map variance to approximate spectral radius
+            # This is a heuristic; real implementation would compute from weights
+            spectral_radius = 0.7 + 0.4 * min(variance, 1.0)
+
+        # Update monitor
+        status = self.criticality_monitor.update(
+            spectral_radius=spectral_radius,
+            states=h_moment,
+        )
+
+        self._criticality_status = status
+
+        # Log phase transitions
+        if status.phase == CognitivePhase.CRITICAL:
+            logger.warning(
+                f"CRITICALITY BRAKE: phase={status.phase.value}, "
+                f"band={status.temperature_band.value}, ρ={spectral_radius:.3f}"
+            )
+        elif status.phase == CognitivePhase.WARNING:
+            logger.info(
+                f"Criticality warning: approaching instability, "
+                f"~{status.steps_to_collapse} steps remaining"
+            )
+
+        return status
+
     def _compute_reward(self, error: ErrorVector) -> float:
         """Compute reward from error vector."""
         reward = compute_reward(
@@ -474,8 +555,46 @@ class SovereignLoop:
 
         return self._state.telemetry.smoothed_reward
 
-    def _select_mode(self, error: ErrorVector) -> Tuple[OperationalMode, str]:
-        """Select operational mode."""
+    def _select_mode(
+        self,
+        error: ErrorVector,
+        criticality_status: Optional['MonitorStatus'] = None,
+    ) -> Tuple[OperationalMode, str]:
+        """
+        Select operational mode, considering criticality state.
+
+        Criticality Override Logic (P7 validated):
+        - CRITICAL phase → force EMERGENCY mode (brake engaged)
+        - WARNING phase → force REST if currently high activity
+        - HOT temperature → prefer lower activity modes
+        """
+        # Check for criticality overrides first (P7: curvature warning)
+        if criticality_status is not None and CRITICALITY_AVAILABLE:
+            if criticality_status.phase == CognitivePhase.CRITICAL:
+                # P7: Curvature spike detected, ~30 steps to collapse
+                # EMERGENCY BRAKE - stop all high-activity modes
+                if self._state.mode != OperationalMode.EMERGENCY:
+                    return OperationalMode.EMERGENCY, "criticality_brake"
+                return OperationalMode.EMERGENCY, "criticality_brake_hold"
+
+            if criticality_status.phase == CognitivePhase.WARNING:
+                # P7: Early warning, ~100 steps to collapse
+                # Force consolidation if in high-activity mode
+                if self._state.mode.value >= OperationalMode.ACTIVE.value:
+                    return OperationalMode.REST, "criticality_warning"
+
+            # P4: Temperature band adjustments
+            if criticality_status.temperature_band == TemperatureBand.HOT:
+                # Too close to edge of chaos, cool down
+                if self._state.mode.value > OperationalMode.IDLE.value:
+                    return OperationalMode.IDLE, "criticality_hot"
+
+            if criticality_status.temperature_band == TemperatureBand.COLD:
+                # Room to increase activity (not near chaos)
+                # Let normal mode selection handle this
+                pass
+
+        # Normal mode selection
         new_mode, reason = self.mode_selector.select_mode(
             self._state.mode,
             error,
@@ -546,6 +665,15 @@ class SovereignLoop:
             'timestamp': time.time(),
         }
 
+        # Add criticality status for downstream effectors (P4/P7)
+        if self._criticality_status is not None:
+            command['criticality'] = {
+                'phase': self._criticality_status.phase.value,
+                'temperature_band': self._criticality_status.temperature_band.value,
+                'should_brake': self._criticality_status.should_brake,
+                'depth_factor': self._criticality_status.recommended_depth_factor,
+            }
+
         try:
             self.output_queue.put_nowait(command)
         except:
@@ -559,7 +687,7 @@ class SovereignLoop:
     def get_stats(self) -> Dict[str, Any]:
         """Get sovereign loop statistics."""
         avg_loop_time = self._total_time / max(self._loop_count, 1)
-        return {
+        stats = {
             'loop_count': self._loop_count,
             'avg_loop_time_ms': avg_loop_time * 1000,
             'max_loop_time_ms': self._max_loop_time * 1000,
@@ -571,6 +699,19 @@ class SovereignLoop:
             'current_reward': self._state.reward,
             'current_error': self._state.error.e_total,
         }
+
+        # Add criticality status if available (P4/P7 proprioception)
+        if self._criticality_status is not None:
+            stats['criticality'] = {
+                'phase': self._criticality_status.phase.value,
+                'temperature_band': self._criticality_status.temperature_band.value,
+                'spectral_radius': self._criticality_status.spectral_radius,
+                'variance_zscore': self._criticality_status.variance_zscore,
+                'steps_to_collapse': self._criticality_status.steps_to_collapse,
+                'should_brake': self._criticality_status.should_brake,
+            }
+
+        return stats
 
     def trigger_mode(self, mode: OperationalMode, reason: str = "manual") -> None:
         """Manually trigger a mode change."""

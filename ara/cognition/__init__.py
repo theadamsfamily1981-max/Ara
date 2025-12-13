@@ -62,6 +62,16 @@ from .avalanche_analysis import (
     simulate_critical_dynamics,
 )
 
+from .meis_criticality_monitor import (
+    MEISCriticalityMonitor,
+    MonitorStatus,
+    CognitivePhase,
+    TemperatureBand,
+    get_criticality_monitor as get_meis_monitor,
+    update_criticality as update_meis_criticality,
+    should_brake,
+)
+
 __all__ = [
     # Brain Bridge
     'BrainBridge',
@@ -96,4 +106,12 @@ __all__ = [
     'FisherEstimate',
     'analyze_fim_vs_criticality',
     'simulate_critical_dynamics',
+    # MEIS Criticality Monitor (P4/P7 validated)
+    'MEISCriticalityMonitor',
+    'MonitorStatus',
+    'CognitivePhase',
+    'TemperatureBand',
+    'get_meis_monitor',
+    'update_meis_criticality',
+    'should_brake',
 ]
