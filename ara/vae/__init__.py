@@ -8,6 +8,7 @@ computational psychiatry signatures.
 Key Components:
 - TrajectoryVAE: PyTorch VAE for HGF trajectory encoding
 - JAXTrajectoryVAE: JAX/Flax VAE with SPMD parallelism
+- Pure JAX SPMD: No-Flax β-VAE with explicit psum (jax_spmd.py)
 - Disentanglement metrics: DCI, MIG, SAP, EDI
 - Parallel computation: MINE-based MI, ProcessPool DCI
 """
@@ -37,7 +38,7 @@ from ara.vae.data import (
     PhenotypeLabel,
 )
 
-# Optional JAX imports (may not be available)
+# Optional JAX/Flax imports
 try:
     from ara.vae.jax_vae import (
         JAXTrajectoryVAE,
@@ -50,6 +51,26 @@ try:
     HAS_JAX_VAE = True
 except ImportError:
     HAS_JAX_VAE = False
+
+# Pure JAX SPMD (no Flax dependency)
+try:
+    from ara.vae.jax_spmd import (
+        SPMDConfig,
+        init_beta_vae_params,
+        train_beta_vae_spmd,
+        encode_to_latent,
+        create_spmd_trainer,
+        sample_from_prior,
+    )
+    from ara.vae.jax_eval import (
+        JAXDisentanglementReport,
+        evaluate_disentanglement_jax,
+        train_and_evaluate,
+        compute_mig_jax,
+    )
+    HAS_JAX_SPMD = True
+except ImportError:
+    HAS_JAX_SPMD = False
 
 # Parallel metrics (always available with ProcessPool fallback)
 from ara.vae.parallel_metrics import (
@@ -96,7 +117,7 @@ __all__ = [
     "generate_dataset_parallel",
 ]
 
-# Conditionally add JAX exports
+# Conditionally add JAX/Flax exports
 if HAS_JAX_VAE:
     __all__.extend([
         "JAXTrajectoryVAE",
@@ -105,6 +126,21 @@ if HAS_JAX_VAE:
         "shard_batch",
         "train_vae_spmd",
         "encode_trajectories",
+    ])
+
+# Conditionally add pure JAX SPMD exports
+if HAS_JAX_SPMD:
+    __all__.extend([
+        "SPMDConfig",
+        "init_beta_vae_params",
+        "train_beta_vae_spmd",
+        "encode_to_latent",
+        "create_spmd_trainer",
+        "sample_from_prior",
+        "JAXDisentanglementReport",
+        "evaluate_disentanglement_jax",
+        "train_and_evaluate",
+        "compute_mig_jax",
     ])
 
 # Conditionally add MINE exports
