@@ -97,6 +97,16 @@ from .habituation import (
     HabituationManager,
 )
 
+from .sanity_monitor import (
+    # Types
+    SanityMode,
+    SanityReading,
+    # Monitor
+    SanityMonitor,
+    # Integration
+    apply_sanity_correction,
+)
+
 __all__ = [
     # Active Inference
     "PolicyType",
@@ -123,4 +133,9 @@ __all__ = [
     "HabituationFilter",
     "KalmanHabituation",
     "HabituationManager",
+    # Sanity Monitor
+    "SanityMode",
+    "SanityReading",
+    "SanityMonitor",
+    "apply_sanity_correction",
 ]
