@@ -96,6 +96,13 @@ from .neurostate import (
     get_current_state,
 )
 
+# Visual Cortex - GUTC-integrated ViT criticality monitoring
+from .visual_cortex import (
+    VisualCortexMonitor,
+    VisualCriticalityMetrics,
+    CrossModalBridge,
+)
+
 __all__ = [
     # Sensory
     'SenseReading',
@@ -145,4 +152,8 @@ __all__ = [
     'NeuroState',
     'get_neurostate',
     'get_current_state',
+    # Visual Cortex (GUTC)
+    'VisualCortexMonitor',
+    'VisualCriticalityMetrics',
+    'CrossModalBridge',
 ]

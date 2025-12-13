@@ -771,6 +771,309 @@ class CriticalityController:
 
 
 # =============================================================================
+# Gradient-Based Criticality Monitor (for LM/Training Loops)
+# =============================================================================
+
+@dataclass
+class GradientCriticalityState:
+    """
+    Criticality state based on gradient/activation dynamics.
+
+    Used for monitoring LM training loops where we have access to
+    gradients and hidden states rather than spike cascades.
+    """
+    rho: float              # Branching ratio / spectral radius proxy
+    xi: float               # Correlation length (placeholder)
+    curvature_var: float    # Curvature variance from gradient direction changes
+    status: str             # "WARMUP", "COLD", "OPTIMAL", "HOT", "CRITICAL"
+
+
+class GradientCriticalityMonitor:
+    """
+    Gradient-based criticality monitor for LM training loops.
+
+    Instead of monitoring spike cascades, this variant uses:
+    - Gradient norms and directions for curvature estimation
+    - Activation norms for branching ratio proxy
+
+    This is the "thermostat for thought" - it monitors whether the LM
+    is operating at the edge of chaos (ρ ≈ 0.8 for tempered criticality).
+
+    Usage:
+        monitor = GradientCriticalityMonitor()
+
+        for step in training_loop:
+            grads = flatten_gradients(model)
+            acts = model_hidden_states
+
+            state = monitor.update(grads, acts)
+
+            if state.status == "CRITICAL":
+                # Emergency brake
+                optimizer.zero_grad()
+                continue
+            elif state.status == "HOT":
+                # Cool down
+                for g in optimizer.param_groups:
+                    g["lr"] *= 0.9
+
+    GUTC Integration:
+        - ρ < 0.7 → COLD → increase temperature, allow more exploration
+        - 0.7 ≤ ρ ≤ 0.85 → OPTIMAL → healthy corridor
+        - ρ > 0.9 → HOT → decrease temperature, enforce grounding
+        - curvature spike → CRITICAL → emergency intervention
+    """
+
+    # Target ρ for tempered criticality (slightly below exact λ=1)
+    TARGET_RHO = 0.8
+    COLD_THRESHOLD = 0.7
+    HOT_THRESHOLD = 0.9
+
+    def __init__(
+        self,
+        history_window: int = 500,
+        alert_threshold: float = 3.0,
+        ema_alpha: float = 0.1,
+    ):
+        """
+        Initialize gradient-based criticality monitor.
+
+        Args:
+            history_window: Number of samples to keep in rolling buffers
+            alert_threshold: Multiplier on baseline curvature for CRITICAL
+            ema_alpha: Smoothing factor for ρ EMA (0-1, higher = more responsive)
+        """
+        self.history_window = history_window
+        self.alert_threshold = alert_threshold
+        self._ema_alpha = ema_alpha
+
+        # Rolling buffers
+        self.gradients: deque = deque(maxlen=history_window)
+        self.activations: deque = deque(maxlen=history_window)
+        self.curv_history: deque = deque(maxlen=64)
+
+        # Calibration baseline (learned over time)
+        self.baseline_curvature_var: Optional[float] = None
+
+        # Smoothed ρ
+        self._rho_ema: Optional[float] = None
+
+    @staticmethod
+    def _to_numpy(x) -> np.ndarray:
+        """Flatten torch/list/np into a 1D float32 array."""
+        # Handle PyTorch tensors
+        if hasattr(x, "detach") and hasattr(x, "cpu"):
+            x = x.detach().cpu().numpy()
+        return np.asarray(x, dtype=np.float32).ravel()
+
+    def update(self, new_grads, new_acts) -> GradientCriticalityState:
+        """
+        Update monitor with new gradients and activations.
+
+        Args:
+            new_grads: Gradient tensor/array (flattened or nested)
+            new_acts: Activation/hidden state tensor/array
+
+        Returns:
+            GradientCriticalityState with current diagnostics
+        """
+        g = self._to_numpy(new_grads)
+        a = self._to_numpy(new_acts)
+
+        # Handle empty tensors gracefully
+        if g.size == 0 or a.size == 0:
+            return GradientCriticalityState(
+                rho=self._rho_ema or 0.0,
+                xi=0.0,
+                curvature_var=0.0,
+                status="WARMUP",
+            )
+
+        self.gradients.append(g)
+        self.activations.append(a)
+
+        # Need enough history for meaningful estimates
+        if len(self.activations) < 3 or len(self.gradients) < 3:
+            rho = self._update_rho_ema(self._estimate_branching_ratio())
+            return GradientCriticalityState(rho, 0.0, 0.0, "WARMUP")
+
+        # 1. Estimate ρ (branching ratio / temperature)
+        rho = self._update_rho_ema(self._estimate_branching_ratio())
+
+        # 2. Estimate curvature variance (instability proxy)
+        curvature_var = self._estimate_curvature_variance()
+
+        # 3. Auto-calibrate baseline during stable phase
+        if self.baseline_curvature_var is None and len(self.curv_history) > 16:
+            if self.COLD_THRESHOLD <= rho <= self.HOT_THRESHOLD:
+                self.baseline_curvature_var = np.var(self.curv_history) + 1e-8
+
+        # 4. Classify status
+        status = self._classify_status(rho, curvature_var)
+
+        return GradientCriticalityState(rho, 0.0, curvature_var, status)
+
+    def _update_rho_ema(self, rho_raw: float) -> float:
+        """Apply exponential moving average to smooth ρ estimates."""
+        if self._rho_ema is None:
+            self._rho_ema = rho_raw
+        else:
+            self._rho_ema = self._ema_alpha * rho_raw + (1 - self._ema_alpha) * self._rho_ema
+        return self._rho_ema
+
+    def _estimate_branching_ratio(self) -> float:
+        """
+        Estimate branching ratio from activation norm propagation.
+
+        ρ_t = ||a_t|| / (||a_{t-1}|| + ε)
+
+        This measures how much activity propagates between steps.
+        """
+        if len(self.activations) < 2:
+            return self._rho_ema or 0.0
+
+        a_prev = self.activations[-2]
+        a_now = self.activations[-1]
+
+        norm_prev = np.linalg.norm(a_prev)
+        norm_now = np.linalg.norm(a_now)
+        eps = 1e-8
+
+        if norm_prev < eps and norm_now < eps:
+            return 0.0  # Silent
+
+        rho = norm_now / (norm_prev + eps)
+
+        # Clamp to sane range
+        return float(np.clip(rho, 0.0, 2.0))
+
+    def _estimate_curvature_variance(self) -> float:
+        """
+        Estimate curvature from gradient direction changes.
+
+        c_t = 1 - cos(θ) = 1 - (g_{t-1} · g_t) / (||g_{t-1}|| ||g_t||)
+
+        High variance in c_t indicates unstable optimization landscape.
+        """
+        if len(self.gradients) < 3:
+            self.curv_history.append(0.0)
+            return 0.0
+
+        g_prev = self.gradients[-2]
+        g_now = self.gradients[-1]
+
+        norm_prev = np.linalg.norm(g_prev)
+        norm_now = np.linalg.norm(g_now)
+        eps = 1e-8
+
+        if norm_prev < eps or norm_now < eps:
+            c_t = 0.0
+        else:
+            cos_sim = float(np.dot(g_prev, g_now) / (norm_prev * norm_now + eps))
+            cos_sim = np.clip(cos_sim, -1.0, 1.0)
+            c_t = 1.0 - cos_sim  # 0 = straight, 2 = exact flip
+
+        self.curv_history.append(c_t)
+
+        if len(self.curv_history) < 2:
+            return 0.0
+
+        return float(np.var(self.curv_history))
+
+    def _classify_status(self, rho: float, curvature_var: float) -> str:
+        """
+        Classify brain state from ρ and curvature variance.
+
+        Maps to GUTC regimes:
+        - COLD: subcritical, activity dies out
+        - OPTIMAL: tempered criticality, healthy corridor
+        - HOT: approaching supercritical, risk of runaway
+        - CRITICAL: curvature spike, emergency intervention needed
+        """
+        # Check for curvature spike (phase transition)
+        if self.baseline_curvature_var is not None:
+            if curvature_var > self.baseline_curvature_var * self.alert_threshold:
+                return "CRITICAL"
+
+        # Still warming up
+        if self.baseline_curvature_var is None:
+            return "WARMUP"
+
+        # Classify by temperature band
+        if rho < self.COLD_THRESHOLD:
+            return "COLD"
+        elif rho > self.HOT_THRESHOLD:
+            return "HOT"
+        else:
+            return "OPTIMAL"
+
+    def compute_dynamic_temperature(
+        self,
+        base_temp: float = 0.7,
+        gain: float = 0.6,
+        min_temp: float = 0.2,
+        max_temp: float = 1.5,
+    ) -> float:
+        """
+        Compute dynamic LLM temperature based on current ρ.
+
+        Control law: T = base + (target_ρ - ρ) × gain
+
+        When ρ < target: T increases → more exploration
+        When ρ > target: T decreases → more grounding
+        """
+        if self._rho_ema is None:
+            return base_temp
+
+        temp = base_temp + (self.TARGET_RHO - self._rho_ema) * gain
+        return float(np.clip(temp, min_temp, max_temp))
+
+    def get_diagnostics(self) -> Dict[str, Any]:
+        """Get comprehensive diagnostics for logging."""
+        rho = self._rho_ema or 0.0
+        curv = float(np.var(self.curv_history)) if self.curv_history else 0.0
+
+        return {
+            "rho": rho,
+            "target_rho": self.TARGET_RHO,
+            "rho_deviation": abs(rho - self.TARGET_RHO),
+            "curvature_var": curv,
+            "baseline_curvature": self.baseline_curvature_var,
+            "status": self._classify_status(rho, curv),
+            "n_samples": len(self.activations),
+            "suggested_temp": self.compute_dynamic_temperature(),
+        }
+
+    def reset(self):
+        """Reset monitor state."""
+        self.gradients.clear()
+        self.activations.clear()
+        self.curv_history.clear()
+        self.baseline_curvature_var = None
+        self._rho_ema = None
+
+
+def test_gradient_monitor():
+    """Test gradient-based criticality monitor."""
+    monitor = GradientCriticalityMonitor(history_window=200)
+
+    # Simulate training with varying dynamics
+    for i in range(300):
+        # Fake gradients and activations
+        grads = np.random.randn(1000) * (1.0 + 0.1 * np.sin(i / 20))
+        acts = np.random.randn(500) * 0.9  # Slightly subcritical
+
+        state = monitor.update(grads, acts)
+
+        if i % 50 == 49:
+            print(f"  Step {i+1}: ρ={state.rho:.3f}, status={state.status}")
+
+    diag = monitor.get_diagnostics()
+    print(f"  Final: ρ={diag['rho']:.3f}, suggested_temp={diag['suggested_temp']:.3f}")
+    print("✓ Gradient criticality monitor")
+
+
+# =============================================================================
 # Tests
 # =============================================================================
 
@@ -865,6 +1168,7 @@ def run_all_tests():
     test_branching_estimator()
     test_criticality_monitor()
     test_controller()
+    test_gradient_monitor()
 
     print("\n" + "=" * 60)
     print("All tests passed!")

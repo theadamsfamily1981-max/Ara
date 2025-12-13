@@ -40,7 +40,7 @@ See Also:
 """
 
 from .criticality_monitor import (
-    # Core monitor
+    # Core monitor (activity-based)
     CriticalityMonitor,
     CriticalityController,
 
@@ -53,10 +53,14 @@ from .criticality_monitor import (
     BranchingRatioEstimator,
     AvalancheCollector,
     AvalancheEvent,
+
+    # Gradient-based monitor (for LM training)
+    GradientCriticalityMonitor,
+    GradientCriticalityState,
 )
 
 __all__ = [
-    # Core
+    # Core (activity-based)
     "CriticalityMonitor",
     "CriticalityController",
 
@@ -69,6 +73,10 @@ __all__ = [
     "BranchingRatioEstimator",
     "AvalancheCollector",
     "AvalancheEvent",
+
+    # Gradient-based (LM training)
+    "GradientCriticalityMonitor",
+    "GradientCriticalityState",
 ]
 
 __version__ = "1.0.0"
