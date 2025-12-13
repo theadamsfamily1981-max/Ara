@@ -6,11 +6,16 @@ Criticality Monitor - Edge-of-Chaos Dynamics for Ara
 Implements the Information-Criticality framework:
 
     E(θ) = 1 - ρ(W)  (edge function, distance from criticality)
-    J(θ) ~ |E(θ)|^(-γ)  (Fisher information singularity)
+    g(θ) ~ |E(θ)|^(-γ)  (Fisher information metric singularity)
+    R_eff(θ) ~ |E(θ)|^(-β)  (curvature proxy singularity)
 
-Key insight: Near criticality (E→0), Fisher information (sensitivity/curvature)
-diverges. This creates a "reframing" regime where the system is maximally
-sensitive to inputs and can rapidly adapt.
+where:
+    γ = ν(1-α)     (Fisher exponent)
+    β = γ + 2      (curvature exponent, diverges faster)
+
+Key insight: Near criticality (E→0), both Fisher information and curvature
+diverge, but curvature diverges FASTER (β > γ). This creates a "reframing"
+regime where the system is maximally sensitive to inputs.
 
 MEIS Strategy:
 - Phase I (Explore): Push λ toward E≈0 for high sensitivity, rapid learning
@@ -22,27 +27,32 @@ the critical manifold.
 Theory:
     - Correlation length: ξ(θ) ~ |E(θ)|^(-ν)
     - Auto-correlation: C(τ) ~ τ^(-α) exp(-τ/ξ)
-    - Fisher info: J(θ) ~ ξ^(1-α) ~ |E(θ)|^(-γ) where γ = ν(1-α)
+    - Fisher metric: g(θ) ~ ξ^(1-α) ~ |E(θ)|^(-γ)
+    - Curvature proxy: R_eff(θ) ~ g^(-1)(∂g)² ~ |E(θ)|^(-β)
+
+GEOMETRIC CAVEAT:
+    A 1D Riemannian manifold has zero intrinsic scalar curvature.
+    R_eff is a "curvature-like sensitivity functional" built from the
+    metric and its derivatives, not the true Riemann curvature. In higher-
+    dimensional parameter spaces, the full Ricci scalar inherits the same
+    leading divergence. For Ara's purposes, R_eff captures "how sharply
+    the metric changes" which is the relevant control signal.
 
 Usage:
     from ara.cognition.criticality import CriticalityMonitor
 
     monitor = CriticalityMonitor()
-
-    # Update with current weight matrix
     state = monitor.update(weight_matrix)
 
-    # Get recommended lambda adjustment
-    if state.should_explore:
-        increase_lambda()
-    elif state.should_consolidate:
-        decrease_lambda()
+    # Both metrics available:
+    print(f"Fisher info: {state.fisher_info}")
+    print(f"Curvature proxy: {state.curvature_proxy}")
 
 References:
     - Langton (1990) - Computation at the Edge of Chaos
     - Bertschinger & Natschläger (2004) - Real-Time Computation at the Edge of Chaos
-    - Toyoizumi et al. (2011) - Beyond the edge of chaos: Amplification and
-      temporal integration by recurrent networks
+    - Toyoizumi et al. (2011) - Beyond the edge of chaos
+    - Amari (1998) - Natural Gradient Works Efficiently in Learning
 """
 
 from __future__ import annotations
@@ -87,7 +97,14 @@ class CriticalityState:
     """
     Current state of the system relative to criticality.
 
-    Contains edge function E(θ), estimated curvature, and control signals.
+    Contains edge function E(θ), Fisher information, curvature proxy,
+    and control signals.
+
+    Two key metrics:
+    - fisher_info: g(θ) ~ |E|^(-γ) - the Fisher information metric
+    - curvature_proxy: R_eff(θ) ~ |E|^(-β) - curvature-like sensitivity
+
+    Note: β = γ + 2, so curvature_proxy diverges faster than fisher_info.
     """
     # Edge function E(θ) = 1 - ρ(W)
     # E < 0: subcritical (stable)
@@ -98,9 +115,19 @@ class CriticalityState:
     # Spectral radius ρ(W)
     spectral_radius: float = 0.0
 
-    # Estimated Fisher information / curvature
-    # High value = high sensitivity, near criticality
-    curvature: float = 0.0
+    # Fisher information metric g(θ) ~ |E|^(-γ)
+    fisher_info: float = 0.0
+
+    # Curvature proxy R_eff(θ) ~ |E|^(-β) where β = γ + 2
+    # This is NOT true Riemann curvature (1D manifolds have R=0)
+    # but a sensitivity functional capturing "how sharply g changes"
+    curvature_proxy: float = 0.0
+
+    # Legacy alias for backward compatibility
+    @property
+    def curvature(self) -> float:
+        """Alias for curvature_proxy (backward compatibility)."""
+        return self.curvature_proxy
 
     # Regime classification
     regime: CriticalityRegime = CriticalityRegime.SUBCRITICAL
@@ -110,7 +137,7 @@ class CriticalityState:
     lambda_adjustment: float = 0.0  # Suggested change to adrenaline
 
     # History
-    curvature_trend: float = 0.0    # Rate of change of curvature
+    curvature_trend: float = 0.0    # Rate of change of curvature_proxy
     stability_score: float = 1.0    # Overall stability (0-1)
 
     # Metadata
@@ -130,7 +157,9 @@ class CriticalityState:
         return {
             "edge_distance": self.edge_distance,
             "spectral_radius": self.spectral_radius,
-            "curvature": self.curvature,
+            "fisher_info": self.fisher_info,
+            "curvature_proxy": self.curvature_proxy,
+            "curvature": self.curvature_proxy,  # Legacy alias
             "regime": self.regime.value,
             "recommended_phase": self.recommended_phase.value,
             "lambda_adjustment": self.lambda_adjustment,
@@ -151,9 +180,9 @@ class CriticalityConfig:
     # Safe edge distance for consolidation
     target_edge_safe: float = -0.1     # Comfortably subcritical
 
-    # Curvature thresholds
-    curvature_high: float = 10.0       # Trigger consolidation
-    curvature_low: float = 0.5         # Trigger exploration
+    # Curvature thresholds (for R_eff, not g)
+    curvature_high: float = 100.0      # Trigger consolidation (R_eff)
+    curvature_low: float = 1.0         # Trigger exploration (R_eff)
 
     # Lambda adjustment rate
     lambda_rate: float = 0.01          # How fast to adjust adrenaline
@@ -167,8 +196,13 @@ class CriticalityConfig:
 
     @property
     def gamma(self) -> float:
-        """Fisher info exponent γ = ν(1-α)"""
+        """Fisher metric exponent: γ = ν(1-α)"""
         return self.nu * (1.0 - self.alpha)
+
+    @property
+    def beta(self) -> float:
+        """Curvature proxy exponent: β = γ + 2 (diverges faster than Fisher)"""
+        return self.gamma + 2.0
 
 
 # =============================================================================
@@ -204,20 +238,72 @@ def compute_edge_distance(spectral_radius: float) -> float:
     return 1.0 - spectral_radius
 
 
-def estimate_curvature(
+def estimate_fisher_info(
     edge_distance: float,
     gamma: float = 0.5,
     regularize: float = 0.01,
 ) -> float:
     """
-    Estimate Fisher information / curvature from edge distance.
+    Estimate Fisher information metric g(θ) from edge distance.
 
-    J(θ) ~ |E(θ)|^(-γ)
+    g(θ) ~ |E(θ)|^(-γ)
 
+    where γ = ν(1-α) from correlation scaling.
     The regularization prevents division by zero near criticality.
+
+    Args:
+        edge_distance: E(θ) = 1 - ρ(W)
+        gamma: Fisher exponent (default 0.5 for ν=1, α=0.5)
+        regularize: Small constant to avoid singularity
+
+    Returns:
+        Estimated Fisher information metric value
     """
     abs_e = abs(edge_distance) + regularize
     return abs_e ** (-gamma)
+
+
+def estimate_curvature_proxy(
+    edge_distance: float,
+    beta: float = 2.5,
+    regularize: float = 0.01,
+) -> float:
+    """
+    Estimate curvature proxy R_eff(θ) from edge distance.
+
+    R_eff(θ) ~ |E(θ)|^(-β)
+
+    where β = γ + 2 (curvature diverges faster than Fisher).
+
+    GEOMETRIC NOTE:
+    This is NOT the true Riemann scalar curvature (which is zero for 1D
+    manifolds). It's a curvature-like sensitivity functional:
+
+        R_eff ~ g^(-1) (∂g)² ~ |E|^(γ) · |E|^(-2γ-2) = |E|^(-γ-2) = |E|^(-β)
+
+    This captures "how sharply the metric changes" which is the relevant
+    control signal for MEIS.
+
+    Args:
+        edge_distance: E(θ) = 1 - ρ(W)
+        beta: Curvature exponent β = γ + 2 (default 2.5 for γ=0.5)
+        regularize: Small constant to avoid singularity
+
+    Returns:
+        Estimated curvature proxy value
+    """
+    abs_e = abs(edge_distance) + regularize
+    return abs_e ** (-beta)
+
+
+# Legacy alias
+def estimate_curvature(
+    edge_distance: float,
+    gamma: float = 0.5,
+    regularize: float = 0.01,
+) -> float:
+    """Legacy alias for estimate_fisher_info (backward compatibility)."""
+    return estimate_fisher_info(edge_distance, gamma, regularize)
 
 
 def estimate_correlation_length(
@@ -297,6 +383,10 @@ class CriticalityMonitor:
         """
         Update criticality state with new weight matrix or spectral radius.
 
+        Computes both:
+        - Fisher information g(θ) ~ |E|^(-γ)
+        - Curvature proxy R_eff(θ) ~ |E|^(-β) where β = γ + 2
+
         Args:
             W: Weight matrix (will compute spectral radius)
             spectral_radius: Pre-computed spectral radius (if W not provided)
@@ -318,33 +408,37 @@ class CriticalityMonitor:
         # Apply lambda scaling
         rho_scaled = rho * self._lambda
 
-        # Compute edge distance
+        # Compute edge distance E(θ) = 1 - ρ(W)
         edge = compute_edge_distance(rho_scaled)
 
-        # Estimate curvature (Fisher info)
-        curvature = estimate_curvature(edge, self.config.gamma)
+        # Estimate Fisher information g(θ) ~ |E|^(-γ)
+        fisher = estimate_fisher_info(edge, self.config.gamma)
+
+        # Estimate curvature proxy R_eff(θ) ~ |E|^(-β) where β = γ + 2
+        r_eff = estimate_curvature_proxy(edge, self.config.beta)
 
         # Classify regime
         regime = classify_regime(edge, self.config.epsilon)
 
-        # Update history
+        # Update history (track curvature proxy for control decisions)
         self._edge_history.append(edge)
-        self._curvature_history.append(curvature)
+        self._curvature_history.append(r_eff)
 
         # Compute trend
         curvature_trend = self._compute_trend(self._curvature_history)
 
-        # Compute stability score
-        stability = self._compute_stability(edge, curvature)
+        # Compute stability score (uses curvature proxy)
+        stability = self._compute_stability(edge, r_eff)
 
-        # Determine recommended phase and lambda adjustment
-        phase, lambda_adj = self._determine_phase(edge, curvature, regime)
+        # Determine recommended phase and lambda adjustment (uses R_eff)
+        phase, lambda_adj = self._determine_phase(edge, r_eff, regime)
 
-        # Build state
+        # Build state with both metrics
         state = CriticalityState(
             edge_distance=edge,
             spectral_radius=rho_scaled,
-            curvature=curvature,
+            fisher_info=fisher,
+            curvature_proxy=r_eff,
             regime=regime,
             recommended_phase=phase,
             lambda_adjustment=lambda_adj,
@@ -356,7 +450,7 @@ class CriticalityMonitor:
 
         # Log significant changes
         if regime == CriticalityRegime.CRITICAL:
-            logger.debug(f"At criticality: E={edge:.4f}, J={curvature:.2f}")
+            logger.debug(f"At criticality: E={edge:.4f}, g={fisher:.2f}, R_eff={r_eff:.2f}")
         elif regime == CriticalityRegime.SUPERCRITICAL:
             logger.warning(f"Supercritical! E={edge:.4f}, recommend consolidation")
 
@@ -458,15 +552,21 @@ class CriticalityMonitor:
         n_neurons: int = 100,
         lambda_range: Tuple[float, float] = (0.5, 1.5),
         steps: int = 50,
-    ) -> Dict[str, List[float]]:
+    ) -> Dict[str, Any]:
         """
-        Simulate the Fisher information spike as λ sweeps through criticality.
+        Simulate Fisher and curvature proxy spikes as λ sweeps through criticality.
 
-        This demonstrates the core theory: J(θ) ~ |E(θ)|^(-γ).
+        Demonstrates both scaling laws:
+        - Fisher info: g(θ) ~ |E(θ)|^(-γ)
+        - Curvature proxy: R_eff(θ) ~ |E(θ)|^(-β) where β = γ + 2
 
-        Returns dict with lambda_values, edge_distances, curvatures.
+        Returns dict with:
+        - lambda_values, spectral_radii, edge_distances
+        - fisher_infos (g), curvature_proxies (R_eff)
+        - critical_lambda, exponents (gamma, beta)
         """
         logger.info(f"Simulating RNN criticality sweep (n={n_neurons}, λ∈{lambda_range})")
+        logger.info(f"Exponents: γ={self.config.gamma:.2f}, β={self.config.beta:.2f}")
 
         # Generate random RNN weight matrix with ρ(W) ≈ 0.9
         rng = np.random.default_rng(42)
@@ -479,31 +579,44 @@ class CriticalityMonitor:
         # Sweep lambda
         lambda_values = np.linspace(lambda_range[0], lambda_range[1], steps)
         edge_distances = []
-        curvatures = []
+        fisher_infos = []
+        curvature_proxies = []
         spectral_radii = []
 
         for lam in lambda_values:
             W_scaled = W_base * lam
             rho = compute_spectral_radius(W_scaled)
             edge = compute_edge_distance(rho)
-            curv = estimate_curvature(edge, self.config.gamma)
+
+            # Compute both metrics
+            fisher = estimate_fisher_info(edge, self.config.gamma)
+            r_eff = estimate_curvature_proxy(edge, self.config.beta)
 
             spectral_radii.append(rho)
             edge_distances.append(edge)
-            curvatures.append(curv)
+            fisher_infos.append(fisher)
+            curvature_proxies.append(r_eff)
 
         # Find criticality point
         critical_idx = np.argmin(np.abs(edge_distances))
-        critical_lambda = lambda_values[critical_idx]
+        critical_lambda = float(lambda_values[critical_idx])
 
-        logger.info(f"Criticality at λ≈{critical_lambda:.3f}, peak curvature={max(curvatures):.2f}")
+        # Log results
+        logger.info(f"Criticality at λ≈{critical_lambda:.3f}")
+        logger.info(f"  Peak Fisher info g: {max(fisher_infos):.2f}")
+        logger.info(f"  Peak curvature R_eff: {max(curvature_proxies):.2f}")
+        logger.info(f"  R_eff/g ratio at peak: {max(curvature_proxies)/max(fisher_infos):.1f}x")
 
         return {
             "lambda_values": lambda_values.tolist(),
             "spectral_radii": spectral_radii,
             "edge_distances": edge_distances,
-            "curvatures": curvatures,
+            "fisher_infos": fisher_infos,
+            "curvature_proxies": curvature_proxies,
+            "curvatures": curvature_proxies,  # Legacy alias
             "critical_lambda": critical_lambda,
+            "gamma": self.config.gamma,
+            "beta": self.config.beta,
         }
 
     # =========================================================================
@@ -531,12 +644,15 @@ class CriticalityMonitor:
         if not state:
             return "🔵 Criticality: No data"
 
+        # Show both g (Fisher) and R_eff (curvature proxy)
+        metrics = f"E={state.edge_distance:.3f}, g={state.fisher_info:.1f}, R={state.curvature_proxy:.1f}"
+
         if state.regime == CriticalityRegime.SUPERCRITICAL:
-            return f"🔴 SUPERCRITICAL: E={state.edge_distance:.3f}, J={state.curvature:.1f}"
+            return f"🔴 SUPERCRITICAL: {metrics}"
         elif state.regime == CriticalityRegime.CRITICAL:
-            return f"🟡 CRITICAL: E={state.edge_distance:.3f}, J={state.curvature:.1f}"
+            return f"🟡 CRITICAL: {metrics}"
         else:
-            return f"🟢 Subcritical: E={state.edge_distance:.3f}, J={state.curvature:.1f}"
+            return f"🟢 Subcritical: {metrics}"
 
 
 # =============================================================================
@@ -573,11 +689,16 @@ def criticality_status() -> str:
 
 def demo():
     """Demo the criticality monitor with a simulated sweep."""
-    print("=" * 60)
-    print("Criticality Monitor Demo - Information Singularity")
-    print("=" * 60)
+    print("=" * 70)
+    print("Criticality Monitor Demo - Fisher & Curvature Singularities")
+    print("=" * 70)
 
     monitor = CriticalityMonitor()
+
+    print(f"\nExponents:")
+    print(f"  γ (Fisher):    {monitor.config.gamma:.2f}  →  g(θ) ~ |E|^(-γ)")
+    print(f"  β (Curvature): {monitor.config.beta:.2f}  →  R_eff(θ) ~ |E|^(-β)")
+    print(f"  Note: β = γ + 2, so curvature diverges faster!")
 
     # Run simulation
     results = monitor.simulate_rnn_sweep(n_neurons=100, steps=50)
@@ -585,25 +706,38 @@ def demo():
     print(f"\nSweep results:")
     print(f"  λ range: {results['lambda_values'][0]:.2f} to {results['lambda_values'][-1]:.2f}")
     print(f"  Critical λ: {results['critical_lambda']:.3f}")
-    print(f"  Peak curvature: {max(results['curvatures']):.2f}")
+    print(f"  Peak Fisher g: {max(results['fisher_infos']):.2f}")
+    print(f"  Peak R_eff: {max(results['curvature_proxies']):.2f}")
+    print(f"  R_eff/g ratio: {max(results['curvature_proxies'])/max(results['fisher_infos']):.1f}x")
 
     # Show regime transitions
     print(f"\nRegime transitions:")
     prev_regime = None
-    for i, (lam, edge) in enumerate(zip(results['lambda_values'], results['edge_distances'])):
+    for lam, edge in zip(results['lambda_values'], results['edge_distances']):
         regime = classify_regime(edge)
         if regime != prev_regime:
             print(f"  λ={lam:.3f}: {regime.value} (E={edge:.4f})")
             prev_regime = regime
 
     # Interactive update demo
-    print(f"\nInteractive updates:")
+    print(f"\nInteractive updates (both metrics):")
+    print(f"  {'ρ':>5}  {'Regime':12}  {'E':>8}  {'g':>8}  {'R_eff':>10}  Phase")
+    print(f"  {'-'*5}  {'-'*12}  {'-'*8}  {'-'*8}  {'-'*10}  {'-'*12}")
     for rho in [0.8, 0.9, 0.95, 1.0, 1.05]:
         state = monitor.update(spectral_radius=rho)
-        print(f"  ρ={rho:.2f}: {state.regime.value:12s} E={state.edge_distance:+.3f} "
-              f"J={state.curvature:6.2f} → {state.recommended_phase.value}")
+        print(f"  {rho:5.2f}  {state.regime.value:12s}  {state.edge_distance:+8.4f}  "
+              f"{state.fisher_info:8.2f}  {state.curvature_proxy:10.2f}  "
+              f"{state.recommended_phase.value}")
 
     print(f"\nFinal status: {monitor.status_string()}")
+
+    # Demonstrate the geometric caveat
+    print(f"\n{'='*70}")
+    print("GEOMETRIC CAVEAT:")
+    print("  R_eff is a 'curvature proxy' not true Riemann curvature (R=0 in 1D).")
+    print("  It captures 'how sharply the Fisher metric changes' - the relevant")
+    print("  control signal for MEIS to decide explore vs consolidate.")
+    print("=" * 70)
 
 
 if __name__ == "__main__":
