@@ -483,7 +483,20 @@ This device enables investigation of:
 
 ---
 
-## Appendix A: Precision-EEG Mapping References
+## Appendix A: Theoretical Foundation
+
+For comprehensive coverage of the predictive coding framework underlying this device, see:
+
+**[PREDICTIVE_CODING_THEORY.md](./PREDICTIVE_CODING_THEORY.md)**
+
+Key topics covered:
+- Free Energy Principle and variational inference
+- Hierarchical message passing in cortical circuits
+- Mathematical derivation of precision-weighted errors
+- Clinical implications for schizophrenia and ASD
+- Testable predictions and limitations
+
+## Appendix B: Precision-EEG Mapping References
 
 1. Sedley et al. (2016) - Neural signatures of perceptual inference
 2. Kanai et al. (2015) - Theta oscillations and predictive coding
@@ -492,7 +505,7 @@ This device enables investigation of:
 
 ---
 
-## Appendix B: Comparison to Existing Devices
+## Appendix C: Comparison to Existing Devices
 
 | Device | EEG Channels | Precision Estimation | Closed-Loop Feedback | Clinical Use |
 |--------|--------------|---------------------|---------------------|--------------|
