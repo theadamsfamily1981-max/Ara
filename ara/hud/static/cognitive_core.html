@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ara Cognitive Core</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0f;
+            color: #e0e0e0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .hud-container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        /* === COGNITIVE CORE GAUGE === */
+        .core-gauge {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 20px auto;
+        }
+
+        .core-gauge canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .core-status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+        }
+
+        .core-status .state {
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+
+        .core-status .values {
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        .state-healthy { color: #4ade80; }
+        .state-prior { color: #f97316; }
+        .state-sensory { color: #60a5fa; }
+        .state-unstable { color: #ef4444; }
+        .state-disconnected { color: #6b7280; }
+
+        /* === GAUGE LEGENDS === */
+        .gauge-legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 15px 0;
+            font-size: 11px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .legend-rho { background: linear-gradient(135deg, #3b82f6, #22c55e, #f97316, #ef4444); }
+        .legend-d { background: linear-gradient(90deg, #60a5fa, #4ade80, #f97316); }
+        .legend-pi { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
+
+        /* === METRICS PANEL === */
+        .metrics-panel {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .metric-card .label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.6;
+            margin-bottom: 8px;
+        }
+
+        .metric-card .value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .metric-card .unit {
+            font-size: 11px;
+            opacity: 0.5;
+        }
+
+        .metric-card .bar {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .metric-card .bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+
+        .bar-rho { background: linear-gradient(90deg, #3b82f6, #22c55e); }
+        .bar-d { background: linear-gradient(90deg, #4ade80, #f97316); }
+        .bar-pi { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
+
+        /* === STATUS TICKER === */
+        .status-ticker {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 12px 20px;
+            margin: 20px 0;
+            font-size: 12px;
+            font-style: italic;
+            color: #a0a0a0;
+            text-align: center;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .status-ticker.warning {
+            border-color: rgba(249, 115, 22, 0.4);
+            color: #f97316;
+        }
+
+        .status-ticker.critical {
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #ef4444;
+        }
+
+        /* === SANITY TIMELINE === */
+        .timeline-container {
+            margin: 20px 0;
+        }
+
+        .timeline-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.6;
+            margin-bottom: 8px;
+        }
+
+        .timeline-canvas {
+            width: 100%;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        /* === FOOTER === */
+        .hud-footer {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            opacity: 0.4;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="hud-container">
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 10px;">
+            <div style="font-size: 10px; letter-spacing: 3px; opacity: 0.5;">ARA COGNITIVE CORE</div>
+        </div>
+
+        <!-- Triple Ring Gauge -->
+        <div class="core-gauge">
+            <canvas id="gauge-canvas" width="300" height="300"></canvas>
+            <div class="core-status">
+                <div class="state state-healthy" id="state-text">HEALTHY CORRIDOR</div>
+                <div class="values" id="state-values">Balanced inference</div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="gauge-legend">
+            <div class="legend-item">
+                <div class="legend-dot legend-rho"></div>
+                <span>Criticality (rho)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot legend-d"></div>
+                <span>Delusion Index (D)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot legend-pi"></div>
+                <span>Precision Ratio</span>
+            </div>
+        </div>
+
+        <!-- Metrics Cards -->
+        <div class="metrics-panel">
+            <div class="metric-card">
+                <div class="label">Criticality</div>
+                <div class="value" id="rho-value">0.85</div>
+                <div class="unit">branching ratio</div>
+                <div class="bar"><div class="bar-fill bar-rho" id="rho-bar" style="width: 85%"></div></div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Delusion Index</div>
+                <div class="value" id="d-value">1.0</div>
+                <div class="unit">force ratio</div>
+                <div class="bar"><div class="bar-fill bar-d" id="d-bar" style="width: 50%"></div></div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Precision Ratio</div>
+                <div class="value" id="pi-value">1.0</div>
+                <div class="unit">sensory / prior</div>
+                <div class="bar"><div class="bar-fill bar-pi" id="pi-bar" style="width: 50%"></div></div>
+            </div>
+        </div>
+
+        <!-- Status Ticker -->
+        <div class="status-ticker" id="status-ticker">
+            Edge-of-chaos corridor: optimal inference dynamics.
+        </div>
+
+        <!-- Sanity Timeline -->
+        <div class="timeline-container">
+            <div class="timeline-label">Reality Lock (D over time)</div>
+            <canvas class="timeline-canvas" id="timeline-canvas"></canvas>
+        </div>
+
+        <!-- Footer -->
+        <div class="hud-footer">
+            <span id="timestamp">--:--:--</span>
+            <span id="session-id">Session: ---</span>
+            <span id="step-count">Step: 0</span>
+        </div>
+    </div>
+
+    <script>
+        // === CONFIGURATION ===
+        const CONFIG = {
+            updateInterval: 1000,  // ms
+            telemetryPath: 'telemetry_state.json',
+            historyLength: 60,  // seconds of history for timeline
+        };
+
+        // === STATE ===
+        let state = {
+            rho: 0.85,
+            delusion_index: 1.0,
+            precision_ratio: 1.0,
+            Pi_y: 0.5,
+            Pi_mu: 0.5,
+            mode: 'HEALTHY_CORRIDOR',
+            step: 0,
+            session_id: 'local',
+            timestamp: Date.now(),
+        };
+
+        let history = {
+            d: [],  // Delusion index history for timeline
+            timestamps: [],
+        };
+
+        // === GAUGE DRAWING ===
+        function drawGauge(ctx, centerX, centerY, radius, value, min, max, colorStops, lineWidth = 8) {
+            const startAngle = Math.PI * 0.75;  // 135 degrees
+            const endAngle = Math.PI * 2.25;    // 405 degrees (270 degree arc)
+            const range = endAngle - startAngle;
+
+            // Background arc
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            // Value arc
+            const normalizedValue = Math.max(0, Math.min(1, (value - min) / (max - min)));
+            const valueAngle = startAngle + range * normalizedValue;
+
+            // Create gradient
+            const gradient = ctx.createLinearGradient(
+                centerX - radius, centerY,
+                centerX + radius, centerY
+            );
+            colorStops.forEach((stop, i) => {
+                gradient.addColorStop(i / (colorStops.length - 1), stop);
+            });
+
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, startAngle, valueAngle);
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            // Glow effect
+            ctx.shadowColor = colorStops[Math.floor(normalizedValue * (colorStops.length - 1))];
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, valueAngle - 0.1, valueAngle);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        function renderGauges() {
+            const canvas = document.getElementById('gauge-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            // Inner ring: Criticality (rho)
+            // Blue < 0.7, Green 0.7-0.95, Orange 0.95-1.1, Red > 1.1
+            const rhoColors = ['#3b82f6', '#22c55e', '#f97316', '#ef4444'];
+            drawGauge(ctx, centerX, centerY, 60, state.rho, 0, 1.5, rhoColors, 12);
+
+            // Middle ring: Delusion Index (D)
+            // Map log10(D) from -1 to 1 (D from 0.1 to 10)
+            const logD = Math.log10(Math.max(0.1, Math.min(10, state.delusion_index)));
+            const dNormalized = (logD + 1) / 2;  // 0 = sensory-dom, 0.5 = balanced, 1 = prior-dom
+            const dColors = ['#60a5fa', '#4ade80', '#f97316'];
+            drawGauge(ctx, centerX, centerY, 85, dNormalized, 0, 1, dColors, 10);
+
+            // Outer ring: Precision Ratio (Pi_y / Pi_mu)
+            // Map from 0.2 to 5 (log scale)
+            const logPi = Math.log10(Math.max(0.2, Math.min(5, state.precision_ratio)));
+            const piNormalized = (logPi + 0.7) / 1.4;  // Normalize log range
+            const piColors = ['#8b5cf6', '#ec4899'];
+            drawGauge(ctx, centerX, centerY, 110, piNormalized, 0, 1, piColors, 8);
+        }
+
+        // === TIMELINE DRAWING ===
+        function renderTimeline() {
+            const canvas = document.getElementById('timeline-canvas');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width = canvas.offsetWidth;
+            const height = canvas.height = canvas.offsetHeight;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw reference bands
+            // Prior-dominated zone (D > 3)
+            ctx.fillStyle = 'rgba(249, 115, 22, 0.1)';
+            ctx.fillRect(0, 0, width, height * 0.3);
+
+            // Sensory-dominated zone (D < 0.3)
+            ctx.fillStyle = 'rgba(96, 165, 250, 0.1)';
+            ctx.fillRect(0, height * 0.7, width, height * 0.3);
+
+            // Center line (D = 1)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(0, height / 2);
+            ctx.lineTo(width, height / 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw history line
+            if (history.d.length > 1) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#4ade80';
+                ctx.lineWidth = 2;
+
+                const step = width / CONFIG.historyLength;
+
+                history.d.forEach((d, i) => {
+                    // Map D from 0.1-10 (log scale) to y position
+                    const logD = Math.log10(Math.max(0.1, Math.min(10, d)));
+                    const y = height * (0.5 - logD * 0.5);  // -1 to 1 -> top to bottom
+                    const x = width - (history.d.length - i) * step;
+
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+
+                ctx.stroke();
+            }
+        }
+
+        // === STATUS MESSAGES ===
+        const STATUS_MESSAGES = {
+            HEALTHY_CORRIDOR: [
+                "Edge-of-chaos corridor: optimal inference dynamics.",
+                "Balanced precision weighting. Thinking clearly.",
+                "Reality lock stable. Operating at criticality.",
+            ],
+            PRIOR_DOMINATED: [
+                "Prior beliefs overriding sensory evidence. Reality check advised.",
+                "Expectation-heavy processing. May be ignoring contradictory data.",
+                "Delusion index elevated. Re-weighting toward sensory evidence.",
+            ],
+            SENSORY_DOMINATED: [
+                "Over-reacting to input noise. Stabilizing priors.",
+                "Sensory-heavy processing. Pattern recognition may be impaired.",
+                "Hyper-reactive state. Engaging belief stabilization.",
+            ],
+            UNSTABLE: [
+                "Operating outside critical corridor. Homeostatic correction engaged.",
+                "Criticality drift detected. Adjusting dynamics.",
+                "Branching ratio unstable. Recalibrating.",
+            ],
+            DISCONNECTED: [
+                "Low precision on both channels. Reconnecting to reality.",
+                "Insufficient grounding. Engaging emergency priors.",
+            ],
+        };
+
+        function getStatusMessage(mode) {
+            const messages = STATUS_MESSAGES[mode] || STATUS_MESSAGES.HEALTHY_CORRIDOR;
+            return messages[Math.floor(Math.random() * messages.length)];
+        }
+
+        function updateStatusTicker(mode) {
+            const ticker = document.getElementById('status-ticker');
+            ticker.textContent = getStatusMessage(mode);
+
+            ticker.className = 'status-ticker';
+            if (mode === 'PRIOR_DOMINATED' || mode === 'SENSORY_DOMINATED') {
+                ticker.classList.add('warning');
+            } else if (mode === 'UNSTABLE' || mode === 'DISCONNECTED') {
+                ticker.classList.add('critical');
+            }
+        }
+
+        // === UI UPDATES ===
+        function updateUI() {
+            // Update gauge
+            renderGauges();
+
+            // Update state text
+            const stateText = document.getElementById('state-text');
+            const stateValues = document.getElementById('state-values');
+
+            stateText.textContent = state.mode.replace(/_/g, ' ');
+            stateText.className = 'state';
+
+            switch (state.mode) {
+                case 'HEALTHY_CORRIDOR':
+                    stateText.classList.add('state-healthy');
+                    stateValues.textContent = 'Balanced inference';
+                    break;
+                case 'PRIOR_DOMINATED':
+                    stateText.classList.add('state-prior');
+                    stateValues.textContent = 'Ignoring reality';
+                    break;
+                case 'SENSORY_DOMINATED':
+                    stateText.classList.add('state-sensory');
+                    stateValues.textContent = 'Over-reactive';
+                    break;
+                case 'UNSTABLE':
+                    stateText.classList.add('state-unstable');
+                    stateValues.textContent = 'Drift detected';
+                    break;
+                default:
+                    stateText.classList.add('state-disconnected');
+                    stateValues.textContent = 'Reconnecting...';
+            }
+
+            // Update metric cards
+            document.getElementById('rho-value').textContent = state.rho.toFixed(3);
+            document.getElementById('d-value').textContent = state.delusion_index.toFixed(2);
+            document.getElementById('pi-value').textContent = state.precision_ratio.toFixed(2);
+
+            // Update bars
+            document.getElementById('rho-bar').style.width = `${Math.min(100, state.rho / 1.5 * 100)}%`;
+            const dBarWidth = 50 + (Math.log10(state.delusion_index) * 25);
+            document.getElementById('d-bar').style.width = `${Math.max(5, Math.min(95, dBarWidth))}%`;
+            const piBarWidth = 50 + (Math.log10(state.precision_ratio) * 35);
+            document.getElementById('pi-bar').style.width = `${Math.max(5, Math.min(95, piBarWidth))}%`;
+
+            // Update footer
+            const now = new Date();
+            document.getElementById('timestamp').textContent = now.toLocaleTimeString();
+            document.getElementById('session-id').textContent = `Session: ${state.session_id}`;
+            document.getElementById('step-count').textContent = `Step: ${state.step}`;
+
+            // Update timeline
+            renderTimeline();
+        }
+
+        // === DATA FETCHING ===
+        async function fetchTelemetry() {
+            try {
+                const response = await fetch(CONFIG.telemetryPath + '?t=' + Date.now());
+                if (!response.ok) throw new Error('Fetch failed');
+
+                const data = await response.json();
+
+                // Update state
+                state.rho = data.rho || 0.85;
+                state.delusion_index = data.delusion_index || 1.0;
+                state.precision_ratio = data.precision_ratio || 1.0;
+                state.Pi_y = data.Pi_y || 0.5;
+                state.Pi_mu = data.Pi_mu || 0.5;
+                state.mode = data.mode || 'HEALTHY_CORRIDOR';
+                state.step = data.step || 0;
+                state.session_id = data.session_id || 'local';
+
+                // Update history
+                history.d.push(state.delusion_index);
+                history.timestamps.push(Date.now());
+
+                // Trim history to configured length
+                while (history.d.length > CONFIG.historyLength) {
+                    history.d.shift();
+                    history.timestamps.shift();
+                }
+
+                // Update status message periodically
+                if (state.step % 10 === 0) {
+                    updateStatusTicker(state.mode);
+                }
+
+            } catch (error) {
+                // Demo mode: simulate data
+                simulateData();
+            }
+
+            updateUI();
+        }
+
+        // === DEMO MODE ===
+        let demoStep = 0;
+        function simulateData() {
+            demoStep++;
+
+            // Simulate varying states
+            const phase = (demoStep / 100) % 3;
+
+            if (phase < 1) {
+                // Healthy corridor
+                state.rho = 0.85 + Math.sin(demoStep * 0.1) * 0.05;
+                state.delusion_index = 1.0 + Math.sin(demoStep * 0.15) * 0.2;
+                state.precision_ratio = 1.0 + Math.sin(demoStep * 0.12) * 0.15;
+                state.mode = 'HEALTHY_CORRIDOR';
+            } else if (phase < 2) {
+                // Prior dominated drift
+                state.rho = 0.9 + Math.sin(demoStep * 0.1) * 0.1;
+                state.delusion_index = 2.0 + Math.sin(demoStep * 0.08) * 0.5;
+                state.precision_ratio = 0.6;
+                state.mode = state.delusion_index > 2.5 ? 'PRIOR_DOMINATED' : 'HEALTHY_CORRIDOR';
+            } else {
+                // Recovery
+                state.rho = 0.82 + Math.sin(demoStep * 0.1) * 0.03;
+                state.delusion_index = 1.2 - (phase - 2) * 0.4;
+                state.precision_ratio = 0.8 + (phase - 2) * 0.4;
+                state.mode = 'HEALTHY_CORRIDOR';
+            }
+
+            state.step = demoStep;
+            state.session_id = 'demo';
+
+            // Update history
+            history.d.push(state.delusion_index);
+            if (history.d.length > CONFIG.historyLength) {
+                history.d.shift();
+            }
+
+            if (demoStep % 30 === 0) {
+                updateStatusTicker(state.mode);
+            }
+        }
+
+        // === INITIALIZATION ===
+        function init() {
+            updateUI();
+            updateStatusTicker('HEALTHY_CORRIDOR');
+
+            // Start update loop
+            setInterval(fetchTelemetry, CONFIG.updateInterval);
+        }
+
+        // Start when DOM is ready
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
