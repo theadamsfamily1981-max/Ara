@@ -103,6 +103,27 @@ from .visual_cortex import (
     CrossModalBridge,
 )
 
+# Vestibular Cortex - GUTC-integrated balance/motion sensing
+from .vestibular_cortex import (
+    VestibularStatus,
+    VestibularState,
+    IMUReading,
+    VestibularIntegrator,
+    VestibularCriticalityMetrics,
+    VestibularCriticalityMonitor,
+    VestibularDisorderSimulator,
+)
+
+# Body Schema - Unified embodied self-model
+from .body_schema import (
+    BodyStatus,
+    ModalityState,
+    BodyState,
+    BodySchema,
+    BodyCriticalityMetrics,
+    BodyCriticalityMonitor,
+)
+
 __all__ = [
     # Sensory
     'SenseReading',
@@ -156,4 +177,19 @@ __all__ = [
     'VisualCortexMonitor',
     'VisualCriticalityMetrics',
     'CrossModalBridge',
+    # Vestibular Cortex (GUTC)
+    'VestibularStatus',
+    'VestibularState',
+    'IMUReading',
+    'VestibularIntegrator',
+    'VestibularCriticalityMetrics',
+    'VestibularCriticalityMonitor',
+    'VestibularDisorderSimulator',
+    # Body Schema (GUTC)
+    'BodyStatus',
+    'ModalityState',
+    'BodyState',
+    'BodySchema',
+    'BodyCriticalityMetrics',
+    'BodyCriticalityMonitor',
 ]
