@@ -11,7 +11,14 @@ Key Components:
 - Pure JAX SPMD: No-Flax β-VAE with explicit psum (jax_spmd.py)
 - Disentanglement metrics: DCI, MIG, SAP, EDI
 - Parallel computation: MINE-based MI, ProcessPool DCI
+- Ara interface: State readout combining HGF + VAE + disentanglement
 """
+
+# Ara interface (always available)
+from ara.vae.ara_interface import (
+    AraStateReader,
+    StateReadout,
+)
 
 from ara.vae.core import (
     TrajectoryVAE,
@@ -115,6 +122,9 @@ __all__ = [
     # Parallel (CPU)
     "compute_dci_parallel",
     "generate_dataset_parallel",
+    # Ara Interface
+    "AraStateReader",
+    "StateReadout",
 ]
 
 # Conditionally add JAX/Flax exports
