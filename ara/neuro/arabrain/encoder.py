@@ -600,14 +600,15 @@ def demo_encoder():
 
     # Initialize with dummy input
     rng = jax.random.PRNGKey(0)
+    rng, init_rng, dropout_rng = jax.random.split(rng, 3)
     batch_size, time_steps, channels = 4, 256, 32
-    x = jax.random.normal(rng, (batch_size, time_steps, channels))
+    x = jax.random.normal(init_rng, (batch_size, time_steps, channels))
 
-    # Initialize parameters
-    params = encoder.init(rng, x)
+    # Initialize parameters (need dropout RNG for init)
+    params = encoder.init({'params': rng, 'dropout': dropout_rng}, x, training=True)
 
-    # Forward pass
-    mu, logvar = encoder.apply(params, x)
+    # Forward pass (training=False to skip dropout, no RNG needed)
+    mu, logvar = encoder.apply(params, x, training=False)
 
     print(f"\nInput shape: {x.shape}")
     print(f"Output mu shape: {mu.shape}")

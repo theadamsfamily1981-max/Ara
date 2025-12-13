@@ -534,13 +534,20 @@ if FLAX_AVAILABLE:
         Returns:
             Initialized train state
         """
-        rng, init_rng, sample_rng = jax.random.split(rng, 3)
+        rng, init_rng, sample_rng, dropout_rng = jax.random.split(rng, 4)
 
         # Dummy input for initialization
         x = jax.random.normal(init_rng, input_shape)
 
-        # Initialize parameters
-        variables = model.init(rng, x, sample_rng, training=True)
+        # Dummy labels to ensure telepathy head is initialized
+        dummy_labels = jnp.zeros(input_shape[0])
+
+        # Initialize parameters (need dropout RNG for training mode)
+        # Pass labels to ensure telepathy head params are created
+        variables = model.init(
+            {'params': rng, 'dropout': dropout_rng},
+            x, sample_rng, labels=dummy_labels, training=True
+        )
         params = variables.get('params', variables)
         batch_stats = variables.get('batch_stats', None)
 
@@ -611,15 +618,19 @@ def demo_model():
 
     # Initialize
     rng = jax.random.PRNGKey(42)
-    rng, init_rng, sample_rng = jax.random.split(rng, 3)
+    rng, init_rng, sample_rng, dropout_rng = jax.random.split(rng, 4)
 
     x = jax.random.normal(init_rng, (batch_size, time_steps, channels))
     labels = jax.random.bernoulli(init_rng, 0.3, (batch_size,)).astype(jnp.float32)
 
-    params = model.init(rng, x, sample_rng, labels=labels)
+    # Initialize with dropout RNG for training mode
+    params = model.init(
+        {'params': rng, 'dropout': dropout_rng},
+        x, sample_rng, labels=labels, training=True
+    )
 
-    # Forward pass
-    loss, outputs = model.apply(params, x, sample_rng, labels=labels)
+    # Forward pass (training=False to skip dropout)
+    loss, outputs = model.apply(params, x, sample_rng, labels=labels, training=False)
 
     print(f"\nInput shape: {x.shape}")
     print(f"Labels shape: {labels.shape}")
@@ -634,12 +645,12 @@ def demo_model():
     param_count = sum(p.size for p in jax.tree_util.tree_leaves(params))
     print(f"\nTotal parameters: {param_count:,}")
 
-    # Test encode
-    z = model.apply(params, x, sample_rng, method=model.encode)
+    # Test encode (training=False)
+    z = model.apply(params, x, sample_rng, training=False, method=model.encode)
     print(f"\nLatent z shape: {z.shape}")
 
-    # Test predict_overload
-    probs = model.apply(params, x, sample_rng, method=model.predict_overload)
+    # Test predict_overload (training=False)
+    probs = model.apply(params, x, sample_rng, training=False, method=model.predict_overload)
     print(f"Overload probs shape: {probs.shape}")
     print(f"Overload probs mean: {float(jnp.mean(probs)):.4f}")
 

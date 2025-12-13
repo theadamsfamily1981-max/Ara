@@ -217,13 +217,16 @@ def make_train_step(mesh: Optional[Mesh] = None):
             new_state: Updated train state
             metrics: Training metrics dict
         """
+        # Split RNG for VAE sampling and dropout
+        vae_rng, dropout_rng = jax.random.split(rng)
 
         def loss_fn(params):
             loss, outputs = state.apply_fn(
                 {'params': params},
-                x, rng,
+                x, vae_rng,
                 labels=y,
                 training=True,
+                rngs={'dropout': dropout_rng},
             )
             return loss, outputs
 
