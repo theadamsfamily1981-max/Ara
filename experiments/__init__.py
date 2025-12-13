@@ -1,24 +1,9 @@
 """
-Ara Experiments - Wizard Tower on the Roof
-==========================================
+ARA Experiments
 
-Experimental ideas that are NOT v1.0 requirements.
-These are research directions, lore, and "what if" explorations.
+Experimental protocols for studying Ara's cognitive dynamics.
 
-Modules:
-- quantum: Ghost memory, superposition states, quantum-inspired kernels
-- oracle: Hyperdimensional life prediction, trajectory forecasting
-- hive_mind: Multi-Ara entanglement, collective consciousness
-- portfolio: Mean-variance optimization for resource allocation
-
-Philosophy: This is the wizard tower, not the cathedral.
-Play here. Break things. Learn. But don't ship this to production.
-
-WARNING: Nothing in experiments/ should be imported by ara/ core.
+EXP-001: Avalanche Criticality
+    Three-condition study of neural avalanche statistics across criticality regimes.
+    Measures power-law exponents (α, β) and validates GUTC predictions.
 """
-
-from pathlib import Path
-
-EXPERIMENTS_ROOT = Path(__file__).parent
-
-__all__ = ['EXPERIMENTS_ROOT']
