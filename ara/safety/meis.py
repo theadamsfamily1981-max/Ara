@@ -398,6 +398,11 @@ class MEIS:
 
     Central governance for Ara's actions. Evaluates all significant
     actions against ethical rules, budgets, and risk assessments.
+
+    Now integrates criticality monitoring for edge-of-chaos dynamics:
+    - High curvature (near criticality) -> explore/reframe mode
+    - Low curvature (subcritical) -> consolidate/stable mode
+    - λ (adrenaline) modulates proximity to criticality
     """
 
     def __init__(
@@ -405,6 +410,7 @@ class MEIS:
         initial_mode: MEISMode = MEISMode.SUPPORT,
         budget: Optional[Budget] = None,
         enable_mental_health_guard: bool = True,
+        enable_criticality: bool = True,
     ):
         """
         Initialize MEIS.
@@ -413,15 +419,30 @@ class MEIS:
             initial_mode: Starting operational mode
             budget: Resource budget (uses defaults if None)
             enable_mental_health_guard: Whether to check for crisis content
+            enable_criticality: Whether to use criticality-based λ control
         """
         self._lock = RLock()
         self.mode = initial_mode
         self.budget = budget or Budget()
         self.enable_mental_health_guard = enable_mental_health_guard
+        self.enable_criticality = enable_criticality
 
         # Components
         self.mental_health_guard = MentalHealthGuard()
         self.risk_assessor = RiskAssessor()
+
+        # Criticality monitor (edge-of-chaos dynamics)
+        self._criticality_monitor = None
+        if enable_criticality:
+            try:
+                from ara.cognition.criticality import CriticalityMonitor
+                self._criticality_monitor = CriticalityMonitor()
+                logger.info("Criticality monitor enabled")
+            except ImportError:
+                logger.warning("Criticality module not available")
+
+        # Adrenaline (λ) - global gain for criticality control
+        self._lambda: float = 1.0
 
         # State
         self._mode_history: List[tuple] = []  # (timestamp, mode, reason)
@@ -453,11 +474,13 @@ class MEIS:
 
     def select_mode(self, context: Dict[str, Any]) -> MEISMode:
         """
-        Select appropriate mode based on context.
+        Select appropriate mode based on context and criticality state.
 
         Logic:
         - Crisis detected -> SUPPORT (with damping)
         - High risk -> DAMP
+        - Supercritical (unstable) -> DAMP
+        - High curvature (at criticality) -> AGENTIC if safe, else SUPPORT
         - User requests agentic -> AGENTIC (if allowed)
         - Default -> SUPPORT
         """
@@ -471,6 +494,25 @@ class MEIS:
             return MEISMode.DAMP
         if risk_score > 0.5:
             return MEISMode.SUPPORT
+
+        # Check criticality state (edge-of-chaos dynamics)
+        if self._criticality_monitor:
+            crit_state = self._criticality_monitor.current_state
+            if crit_state:
+                # Import here to avoid circular dependency
+                from ara.cognition.criticality import CriticalityRegime, Phase
+
+                # Supercritical = unstable = always damp
+                if crit_state.regime == CriticalityRegime.SUPERCRITICAL:
+                    return MEISMode.DAMP
+
+                # At criticality with high curvature = explore/reframe opportunity
+                # But only if safe (low risk, user consent for agentic)
+                if crit_state.regime == CriticalityRegime.CRITICAL:
+                    if context.get("user_consent", False) and risk_score < 0.3:
+                        return MEISMode.AGENTIC  # High sensitivity mode
+                    # Otherwise stay in support (careful exploration)
+                    return MEISMode.SUPPORT
 
         # Check if agentic is requested and allowed
         if context.get("agentic_requested", False):
@@ -641,6 +683,108 @@ class MEIS:
             }
 
     # =========================================================================
+    # Criticality Control (Edge-of-Chaos Dynamics)
+    # =========================================================================
+
+    @property
+    def adrenaline(self) -> float:
+        """
+        Get current adrenaline (λ) level.
+
+        Adrenaline modulates proximity to criticality:
+        - High λ -> closer to criticality -> higher sensitivity
+        - Low λ -> further from criticality -> more stable
+        """
+        return self._lambda
+
+    @adrenaline.setter
+    def adrenaline(self, value: float) -> None:
+        """Set adrenaline with bounds checking."""
+        self._lambda = max(0.5, min(2.0, value))
+        if self._criticality_monitor:
+            self._criticality_monitor.set_lambda(self._lambda)
+
+    def update_criticality(
+        self,
+        W: Optional[Any] = None,
+        spectral_radius: Optional[float] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Update criticality state with new weight matrix or spectral radius.
+
+        This is called by the organism to inform MEIS about the current
+        edge-of-chaos state.
+
+        Returns criticality state dict or None if not enabled.
+        """
+        if not self._criticality_monitor:
+            return None
+
+        with self._lock:
+            state = self._criticality_monitor.update(W, spectral_radius)
+
+            # Apply recommended lambda adjustment
+            if state.lambda_adjustment != 0:
+                self._lambda += state.lambda_adjustment
+                self._lambda = max(0.5, min(2.0, self._lambda))
+
+            return state.to_dict()
+
+    def get_criticality_status(self) -> Optional[Dict[str, Any]]:
+        """Get current criticality monitoring status."""
+        if not self._criticality_monitor:
+            return None
+
+        return self._criticality_monitor.get_status()
+
+    def get_curvature(self) -> float:
+        """
+        Get current Fisher information / curvature.
+
+        High curvature = near criticality = high sensitivity
+        Low curvature = subcritical = stable
+        """
+        if not self._criticality_monitor or not self._criticality_monitor.current_state:
+            return 0.0
+        return self._criticality_monitor.current_state.curvature
+
+    def is_exploring(self) -> bool:
+        """Check if system is in explore/reframe phase (near criticality)."""
+        if not self._criticality_monitor or not self._criticality_monitor.current_state:
+            return False
+
+        from ara.cognition.criticality import CriticalityRegime
+        return self._criticality_monitor.current_state.regime == CriticalityRegime.CRITICAL
+
+    def force_consolidate(self) -> None:
+        """
+        Force system to consolidate (retreat from criticality).
+
+        Use this after intense exploration or when stability is needed.
+        """
+        logger.info("MEIS: Forcing consolidation")
+        self._lambda = max(0.5, self._lambda - 0.2)
+        if self._criticality_monitor:
+            self._criticality_monitor.set_lambda(self._lambda)
+        self.set_mode(MEISMode.SUPPORT, "forced_consolidation")
+
+    def force_explore(self, consent: bool = True) -> None:
+        """
+        Force system toward criticality for exploration/reframing.
+
+        Only allowed with explicit consent due to increased sensitivity.
+        """
+        if not consent:
+            logger.warning("MEIS: Exploration requires consent")
+            return
+
+        logger.info("MEIS: Forcing exploration")
+        self._lambda = min(2.0, self._lambda + 0.2)
+        if self._criticality_monitor:
+            self._criticality_monitor.set_lambda(self._lambda)
+        self.set_mode(MEISMode.AGENTIC, "forced_exploration")
+
+    # =========================================================================
     # Integration Points
     # =========================================================================
 
@@ -682,15 +826,25 @@ class MEIS:
     # =========================================================================
 
     def get_status(self) -> Dict[str, Any]:
-        """Get full MEIS status."""
+        """Get full MEIS status including criticality."""
         with self._lock:
-            return {
+            status = {
                 "mode": self.mode.value,
                 "budget": self.get_budget_status(),
                 "recent_actions": len(self._action_log),
                 "mode_changes": len(self._mode_history),
                 "mental_health_guard_enabled": self.enable_mental_health_guard,
+                "adrenaline": self._lambda,
             }
+
+            # Add criticality info if available
+            if self._criticality_monitor:
+                crit_status = self._criticality_monitor.get_status()
+                status["criticality"] = crit_status
+                status["curvature"] = self.get_curvature()
+                status["is_exploring"] = self.is_exploring()
+
+            return status
 
     def status_string(self) -> str:
         """Get status string for monitoring."""
@@ -698,12 +852,20 @@ class MEIS:
             status = self.get_status()
             budget = status["budget"]
 
+            # Build base status
             if not budget["within_limits"]:
-                return f"🔴 MEIS: {self.mode.value} - BUDGET EXCEEDED"
+                base = f"🔴 MEIS: {self.mode.value} - BUDGET EXCEEDED"
             elif self.mode == MEISMode.DAMP:
-                return f"🟡 MEIS: {self.mode.value} - damping active"
+                base = f"🟡 MEIS: {self.mode.value} - damping active"
             else:
-                return f"🟢 MEIS: {self.mode.value}"
+                base = f"🟢 MEIS: {self.mode.value}"
+
+            # Add criticality info if available
+            if self._criticality_monitor and self._criticality_monitor.current_state:
+                crit = self._criticality_monitor.current_state
+                base += f" | λ={self._lambda:.2f} J={crit.curvature:.1f}"
+
+            return base
 
 
 # =============================================================================
