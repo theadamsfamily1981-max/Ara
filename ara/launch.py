@@ -74,10 +74,14 @@ except ImportError as e:
 # Safety
 try:
     from ara.safety.autonomy import AutonomyController
+    from ara.safety.meis import MEIS, MEISMode, get_meis
     SAFETY_AVAILABLE = True
 except ImportError:
     SAFETY_AVAILABLE = False
     AutonomyController = None
+    MEIS = None
+    MEISMode = None
+    get_meis = None
 
 # Avatar server
 try:
@@ -183,6 +187,7 @@ class AraLauncher:
         self.axis: Optional[AxisMundi] = None
         self.memory: Optional[EternalMemory] = None
         self.safety: Optional[AutonomyController] = None
+        self.meis: Optional[MEIS] = None
         self.avatar_server: Optional[AvatarServer] = None
         self.organism: Optional[OrganismRuntime] = None
         self.voice_bridge: Optional[VoiceBridge] = None
@@ -319,17 +324,33 @@ class AraLauncher:
             )
 
     async def _init_safety(self) -> None:
-        """Initialize safety controller."""
+        """Initialize safety controller and MEIS governance."""
         if not SAFETY_AVAILABLE:
             logger.warning("Safety controller not available")
             return
 
+        # Initialize AutonomyController
         self.safety = AutonomyController(
             initial_level=1,
             max_level=2,
             require_human_for_level_3=True,
         )
         logger.info("AutonomyController initialized (level 1)")
+
+        # Initialize MEIS (Meta-Ethical Inference System)
+        if MEIS is not None:
+            self.meis = MEIS(
+                initial_mode=MEISMode.SUPPORT,
+                enable_mental_health_guard=True,
+            )
+
+            # Wire MEIS to receive autonomy level changes
+            def on_autonomy_change(old: int, new: int, reason: str):
+                if self.meis:
+                    self.meis.on_autonomy_change(old, new, reason)
+
+            self.safety.register_callback(on_autonomy_change)
+            logger.info(f"MEIS initialized ({self.meis.status_string()})")
 
     async def _init_organism(self) -> None:
         """Initialize organism runtime."""
