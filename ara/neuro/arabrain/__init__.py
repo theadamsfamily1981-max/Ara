@@ -96,6 +96,18 @@ from .train import (
     make_eval_step,
 )
 
+from .edge_of_autumn import (
+    MetricPoint,
+    BalancedRegime,
+    EdgeOfAutumnResult,
+    find_edge_of_autumn,
+    compute_structure_metric,
+    compute_performance_metric,
+    compute_robustness_metric,
+    compute_deficits,
+    is_in_balanced_region,
+)
+
 __all__ = [
     # Encoders
     "EEGEncoder",
@@ -139,6 +151,16 @@ __all__ = [
     "create_data_iterator",
     "make_train_step",
     "make_eval_step",
+    # Edge of Autumn
+    "MetricPoint",
+    "BalancedRegime",
+    "EdgeOfAutumnResult",
+    "find_edge_of_autumn",
+    "compute_structure_metric",
+    "compute_performance_metric",
+    "compute_robustness_metric",
+    "compute_deficits",
+    "is_in_balanced_region",
 ]
 
 __version__ = "0.1.0"
