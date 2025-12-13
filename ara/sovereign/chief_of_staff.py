@@ -60,6 +60,33 @@ except ImportError:
     TaskKind = None
     get_queen = lambda: None
 
+# Import Active Inference for EFE-based decision making
+try:
+    from ara.gutc.active_inference import (
+        ActiveInferenceController,
+        ActiveInferenceConfig,
+        PolicyEstimate,
+        PolicyType,
+        SystemState,
+        WORKER_MODE,
+        SCIENTIST_MODE,
+        BALANCED_MODE,
+        CRISIS_MODE,
+        create_controller,
+    )
+    HAS_ACTIVE_INFERENCE = True
+except ImportError:
+    HAS_ACTIVE_INFERENCE = False
+    ActiveInferenceController = None
+
+# Import Body Interface for physical state awareness
+try:
+    from ara.sovereign.body_interface import BodyInterface
+    HAS_BODY_INTERFACE = True
+except ImportError:
+    HAS_BODY_INTERFACE = False
+    BodyInterface = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -112,6 +139,8 @@ class ChiefOfStaff:
         covenant: Optional[Covenant] = None,
         teleology: Optional[TeleologyEngine] = None,
         queen: Optional[QueenOrchestrator] = None,
+        mode: str = "balanced",
+        use_active_inference: bool = True,
     ):
         """
         Initialize the Chief of Staff.
@@ -120,10 +149,25 @@ class ChiefOfStaff:
             covenant: The relationship covenant
             teleology: Vision/purpose engine for strategic scoring
             queen: HiveHD Queen for delegated task execution
+            mode: Decision mode - "worker", "scientist", "balanced", or "crisis"
+            use_active_inference: Whether to use EFE-based scoring
         """
         self.covenant = covenant or get_covenant()
         self.teleology = teleology or (get_teleology_engine() if get_teleology_engine else None)
         self.queen = queen or (get_queen() if get_queen else None)
+
+        # Active Inference controller for EFE-based decisions
+        self.use_active_inference = use_active_inference and HAS_ACTIVE_INFERENCE
+        if self.use_active_inference:
+            self.inference_controller = create_controller(mode, adaptive=True)
+        else:
+            self.inference_controller = None
+
+        # Body interface for physical state awareness
+        if HAS_BODY_INTERFACE:
+            self.body_interface = BodyInterface()
+        else:
+            self.body_interface = None
 
         # Track decisions
         self._decision_history: List[CEODecisionResult] = []
@@ -139,7 +183,12 @@ class ChiefOfStaff:
         self._daily_kills: int = 0
         self._last_reset: datetime = datetime.utcnow()
 
-        logger.info("ChiefOfStaff initialized (queen=%s)", self.queen is not None)
+        logger.info(
+            "ChiefOfStaff initialized (queen=%s, active_inference=%s, mode=%s)",
+            self.queen is not None,
+            self.use_active_inference,
+            mode,
+        )
 
     # =========================================================================
     # Core Decision Making
@@ -477,6 +526,205 @@ class ChiefOfStaff:
             initiative.blocked_by_founder_protection = True
             initiative.protection_reason = result.reasoning
 
+    # =========================================================================
+    # Active Inference Integration
+    # =========================================================================
+
+    def _update_system_state(self, user_state: Optional[UserState] = None) -> None:
+        """
+        Update the Active Inference controller with current system state.
+
+        Pulls from body interface and user state for adaptive weighting.
+        """
+        if not self.use_active_inference or not self.inference_controller:
+            return
+
+        user_state = user_state or get_user_state()
+
+        # Get body state
+        body_stress = 0.0
+        thermal_state = "NOMINAL"
+        if self.body_interface:
+            ctx = self.body_interface.get_context()
+            body_stress = ctx.get("stress_index", 0.0)
+            thermal_state = ctx.get("thermal_flag", "NOMINAL")
+
+        # Build system state
+        state = SystemState(
+            body_stress=body_stress,
+            thermal_state=thermal_state,
+            in_conversation=user_state.current_mode != CognitiveMode.IDLE,
+            pending_tasks=len(self._active_initiatives),
+            # Could add criticality monitor integration here
+        )
+
+        self.inference_controller.set_system_state(state)
+
+    def _initiative_to_policy(self, initiative: Initiative) -> PolicyEstimate:
+        """
+        Convert an Initiative to a PolicyEstimate for Active Inference scoring.
+
+        Maps initiative metrics to the EFE framework:
+        - goal_divergence: How far from preferred outcome (inverse of strategic value)
+        - expected_info_gain: Research/epistemic initiatives have higher info gain
+        - expected_energy_cost: Cognitive burn
+        - expected_risk: Risk level
+        """
+        if not HAS_ACTIVE_INFERENCE:
+            return None
+
+        # Map initiative type to policy type
+        type_mapping = {
+            InitiativeType.CATHEDRAL: PolicyType.PRAGMATIC,
+            InitiativeType.EMERGENCY: PolicyType.PRAGMATIC,
+            InitiativeType.RESEARCH: PolicyType.EPISTEMIC,
+            InitiativeType.CREATIVE: PolicyType.MIXED,
+            InitiativeType.INFRASTRUCTURE: PolicyType.PRAGMATIC,
+            InitiativeType.MAINTENANCE: PolicyType.MAINTENANCE,
+            InitiativeType.RECOVERY: PolicyType.MAINTENANCE,
+        }
+        policy_type = type_mapping.get(initiative.type, PolicyType.MIXED)
+
+        # Goal divergence: inverse of strategic value (0 = perfect alignment)
+        strategic = initiative.metrics.strategic_value
+        goal_div = 1.0 - strategic if strategic > 0 else 0.5
+
+        # Info gain: higher for research/epistemic initiatives
+        info_gain_map = {
+            InitiativeType.RESEARCH: 0.8,
+            InitiativeType.CREATIVE: 0.5,
+            InitiativeType.EMERGENCY: 0.3,  # Learn about what went wrong
+            InitiativeType.INFRASTRUCTURE: 0.4,
+            InitiativeType.CATHEDRAL: 0.3,
+            InitiativeType.MAINTENANCE: 0.2,
+            InitiativeType.RECOVERY: 0.1,
+        }
+        info_gain = info_gain_map.get(initiative.type, 0.3)
+
+        # Urgency mapping
+        urgency_map = {
+            InitiativeType.EMERGENCY: 0.95,
+            InitiativeType.RECOVERY: 0.7,
+            InitiativeType.CATHEDRAL: 0.6,
+            InitiativeType.RESEARCH: 0.4,
+            InitiativeType.INFRASTRUCTURE: 0.5,
+            InitiativeType.CREATIVE: 0.3,
+            InitiativeType.MAINTENANCE: 0.2,
+        }
+        urgency = urgency_map.get(initiative.type, 0.5)
+
+        return PolicyEstimate(
+            name=initiative.name,
+            policy_type=policy_type,
+            goal_divergence=goal_div,
+            expected_info_gain=info_gain,
+            expected_energy_cost=initiative.metrics.cognitive_burn,
+            expected_risk=initiative.metrics.risk_level,
+            urgency=urgency,
+            metadata={
+                "initiative_id": initiative.id,
+                "initiative_type": initiative.type.value,
+            },
+        )
+
+    def propose_policies(
+        self,
+        initiatives: List[Initiative],
+        user_state: Optional[UserState] = None,
+    ) -> List[PolicyEstimate]:
+        """
+        Convert a list of initiatives to policy estimates for EFE scoring.
+
+        This is the interface for Active Inference based decision making.
+
+        Example:
+            initiatives = [fix_bug_init, run_tests_init, refactor_init]
+            policies = cos.propose_policies(initiatives)
+            best = cos.inference_controller.select_policy(policies)
+        """
+        if not self.use_active_inference:
+            return []
+
+        user_state = user_state or get_user_state()
+
+        # First compute metrics for all initiatives
+        for init in initiatives:
+            if init.metrics.strategic_value == 0:
+                init.metrics.strategic_value = self._score_strategic_value(init)
+            if init.metrics.cognitive_burn == 0:
+                init.metrics.cognitive_burn = self._estimate_cognitive_cost(init, user_state)
+            if init.metrics.risk_level == 0:
+                init.metrics.risk_level = self._assess_risk(init)
+
+        # Convert to policy estimates
+        policies = [self._initiative_to_policy(init) for init in initiatives]
+        return [p for p in policies if p is not None]
+
+    def select_best_initiative(
+        self,
+        initiatives: List[Initiative],
+        user_state: Optional[UserState] = None,
+    ) -> Optional[Initiative]:
+        """
+        Use Active Inference to select the best initiative from a list.
+
+        Returns the initiative with lowest G (best EFE score).
+        """
+        if not self.use_active_inference or not initiatives:
+            return initiatives[0] if initiatives else None
+
+        user_state = user_state or get_user_state()
+
+        # Update system state for adaptive weighting
+        self._update_system_state(user_state)
+
+        # Convert to policies
+        policies = self.propose_policies(initiatives, user_state)
+        if not policies:
+            return initiatives[0] if initiatives else None
+
+        # Select best
+        best = self.inference_controller.select_policy(policies)
+        if best is None:
+            return None
+
+        # Find matching initiative
+        for init in initiatives:
+            if init.name == best.estimate.name:
+                logger.info(
+                    f"Active Inference selected: {init.name} (G={best.G:.4f}, "
+                    f"type={best.estimate.policy_type.name})"
+                )
+                return init
+
+        return initiatives[0]
+
+    def set_decision_mode(self, mode: str) -> None:
+        """
+        Set the decision-making mode.
+
+        Args:
+            mode: "worker", "scientist", "balanced", or "crisis"
+        """
+        if self.inference_controller:
+            self.inference_controller.set_mode(mode)
+            logger.info(f"Decision mode set to: {mode}")
+
+    def get_policy_comparison(self, initiatives: List[Initiative]) -> str:
+        """
+        Get a formatted comparison of initiatives as policies.
+
+        Useful for debugging and explaining decisions.
+        """
+        if not self.use_active_inference:
+            return "Active Inference not enabled"
+
+        policies = self.propose_policies(initiatives)
+        if not policies:
+            return "No policies to compare"
+
+        return self.inference_controller.compare_policies(policies)
+
     def _delegate_to_hive(self, initiative: Initiative, result: CEODecisionResult) -> None:
         """
         Delegate an initiative to the HiveHD Queen.
@@ -674,4 +922,6 @@ __all__ = [
     'CEODecisionResult',
     'ChiefOfStaff',
     'get_chief_of_staff',
+    # Re-export Active Inference components for convenience
+    'HAS_ACTIVE_INFERENCE',
 ]

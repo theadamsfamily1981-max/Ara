@@ -24,7 +24,8 @@ Interventions:
 Usage:
     from ara_core.cadd import (
         CADDSentinel, AssociationMatrix, DriftAlert,
-        sentinel_tick, get_sentinel, sentinel_status
+        sentinel_tick, get_sentinel, sentinel_status,
+        DrugSynthesisOrchestrator, CodeSnippetConfig, JobResult
     )
 
     # Initialize sentinel
@@ -38,6 +39,10 @@ Usage:
     if alerts:
         for alert in alerts:
             handle_alert(alert)
+
+    # Use orchestrator for gated execution
+    orch = DrugSynthesisOrchestrator(sentinel, run_code_fn=sandbox.run)
+    result = orch.run_synthesis_job("job_1", "code")
 """
 
 from .sentinel import (
@@ -53,7 +58,14 @@ from .sentinel import (
     sentinel_alerts,
 )
 
+from .orchestrator import (
+    DrugSynthesisOrchestrator,
+    CodeSnippetConfig,
+    JobResult,
+)
+
 __all__ = [
+    # Sentinel
     "DriftType",
     "DriftAlert",
     "AssociationMatrix",
@@ -64,4 +76,8 @@ __all__ = [
     "sentinel_tick",
     "sentinel_status",
     "sentinel_alerts",
+    # Orchestrator
+    "DrugSynthesisOrchestrator",
+    "CodeSnippetConfig",
+    "JobResult",
 ]

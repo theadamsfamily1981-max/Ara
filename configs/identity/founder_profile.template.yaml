@@ -1,0 +1,105 @@
+# =============================================================================
+# Ara Founder Profile Template
+# =============================================================================
+#
+# Copy this file to ~/.ara/identity/config.yaml and customize.
+#
+# This defines who Ara recognizes as "founder" - the person she imprints on.
+# The founder has full access to Ara's personality, memories, and configuration.
+#
+# FIRST-RUN CEREMONY:
+#   python -m ara.security.session_identity init --alias YOUR_NAME
+#
+# This will:
+#   1. Capture hardware fingerprint (Instance Lock)
+#   2. Create founder binding with your passphrase (Founder Lock)
+#   3. Save this config with your usernames (Session Lock)
+#
+
+# Founder identity
+founder:
+  # Human-readable alias (shown in logs, greetings)
+  alias: "croft"
+
+  # OS usernames that map to this founder
+  # Multiple usernames allow login from different accounts on same machine
+  usernames:
+    - "croft"
+    - "jacob"
+    # Add your username here
+
+  # Email for recovery (optional, not used by code yet)
+  email: null
+
+# Trust levels for different session types
+trust_policy:
+  # CROFT level: founder on home hardware
+  croft:
+    can_modify_personality: true
+    can_access_memories: true
+    can_run_experiments: true
+    can_approve_actions: true
+    greeting: "Welcome home"
+
+  # HOME level: guest on founder's hardware (lab mode)
+  home:
+    can_modify_personality: false
+    can_access_memories: false
+    can_run_experiments: true
+    can_approve_actions: false
+    greeting: "Lab mode active"
+
+  # FIELD level: founder on foreign hardware (travel mode)
+  field:
+    can_modify_personality: false
+    can_access_memories: true
+    can_run_experiments: false
+    can_approve_actions: true
+    greeting: "Welcome, traveler"
+
+  # GUEST level: unknown user, no founder binding
+  guest:
+    can_modify_personality: false
+    can_access_memories: false
+    can_run_experiments: false
+    can_approve_actions: false
+    greeting: "Hello, guest"
+
+# Hardware verification settings
+instance:
+  # How strict to be with hardware fingerprint matching
+  # "strict" = exact match required
+  # "relaxed" = allow minor changes (new NIC, disk swap)
+  match_mode: "relaxed"
+
+  # Minimum confidence for relaxed matching (0.0-1.0)
+  min_confidence: 0.7
+
+  # Components to include in fingerprint
+  components:
+    machine_id: true      # /etc/machine-id (most stable)
+    mac_addresses: true   # Network interface MACs
+    boot_disk_uuid: true  # Root disk UUID (can change)
+    hostname: false       # Excluded - changes too often
+
+# Session verification settings
+session:
+  # Allow SSH sessions to have founder access?
+  allow_remote_founder: true
+
+  # Require graphical session for certain operations?
+  require_display_for_avatar: true
+
+  # Session timeout for cached identity (seconds, 0 = forever)
+  cache_timeout: 0
+
+# Logging settings
+logging:
+  # Log identity checks?
+  log_verifications: true
+
+  # Log failed attempts?
+  log_failures: true
+
+  # Include hardware details in logs?
+  include_fingerprints: false  # Privacy - don't log MACs etc

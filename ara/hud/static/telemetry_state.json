@@ -1,0 +1,14 @@
+{
+  "rho": 0.8782321236697518,
+  "delusion_index": 1.1566653819254968,
+  "precision_ratio": 1.1570392675638412,
+  "Pi_y": 0.540776045305957,
+  "Pi_mu": 0.46737916375523436,
+  "mode": "HEALTHY_CORRIDOR",
+  "step": 6,
+  "session_id": "demo",
+  "timestamp": 1765621579.7418716,
+  "temperature": 0.7,
+  "avalanche_tau": 1.5,
+  "avalanche_alpha": 2.0
+}

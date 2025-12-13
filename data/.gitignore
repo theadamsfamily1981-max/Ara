@@ -1,1 +1,10 @@
-*.h5
+# Experiment data (generated outputs)
+# Keep this .gitignore but ignore generated data files
+experiments/
+*.csv
+*.json
+*.png
+*.npy
+
+# Keep README if present
+!README.md
