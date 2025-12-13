@@ -12,6 +12,7 @@ Key Components:
 - Disentanglement metrics: DCI, MIG, SAP, EDI
 - Parallel computation: MINE-based MI, ProcessPool DCI
 - Ara interface: State readout combining HGF + VAE + disentanglement
+- AraBrain: Flax β-VAE + telepathy head (flax_brain.py)
 """
 
 # Ara interface (always available)
@@ -159,4 +160,35 @@ if HAS_MINE:
         "estimate_mi_mine",
         "compute_mi_matrix_parallel",
         "compute_edi_parallel",
+    ])
+
+# Optional Flax AraBrain (β-VAE + telepathy head)
+try:
+    from ara.vae.flax_brain import (
+        AraBrain,
+        BetaVAE,
+        NeuroBalanceHead,
+        AraBrainTrainState,
+        create_train_state,
+        train_step,
+        train_ara_brain,
+        encode_dataset,
+        predict_overload,
+    )
+    HAS_FLAX_BRAIN = True
+except ImportError:
+    HAS_FLAX_BRAIN = False
+
+# Conditionally add Flax AraBrain exports
+if HAS_FLAX_BRAIN:
+    __all__.extend([
+        "AraBrain",
+        "BetaVAE",
+        "NeuroBalanceHead",
+        "AraBrainTrainState",
+        "create_train_state",
+        "train_step",
+        "train_ara_brain",
+        "encode_dataset",
+        "predict_overload",
     ])
