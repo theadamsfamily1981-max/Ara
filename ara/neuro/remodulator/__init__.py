@@ -74,6 +74,7 @@ from .core import (
     InterventionType,
     # Data structures
     PrecisionState,
+    HierarchicalPrecisionState,  # v2.0: D_low, D_high, ΔH
     CriticalityState,
     BrainState,
     Intervention,
@@ -101,6 +102,7 @@ __all__ = [
     "InterventionType",
     # Data structures
     "PrecisionState",
+    "HierarchicalPrecisionState",  # v2.0
     "CriticalityState",
     "BrainState",
     "Intervention",

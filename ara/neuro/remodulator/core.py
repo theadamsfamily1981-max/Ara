@@ -150,6 +150,74 @@ class PrecisionState:
 
 
 @dataclass
+class HierarchicalPrecisionState(PrecisionState):
+    """
+    Extended precision state with hierarchical D metrics (v2.0).
+
+    D_low: Precision ratio at high (slow, cognitive) levels
+           Derived from theta/alpha bands
+           High D_low = rigid beliefs, cognitive inflexibility
+
+    D_high: Precision ratio at low (fast, perceptual) levels
+            Derived from gamma/beta bands
+            High D_high = sensory hypervigilance
+
+    ΔH: Hierarchical discrepancy = |D_low - D_high|
+        High ΔH = hierarchy disconnected
+    """
+    # Hierarchical components
+    theta_frontal: float = 1.0      # 4-8 Hz frontal power (high-level priors)
+    alpha_posterior: float = 1.0    # 8-12 Hz posterior (sensory gating)
+    gamma_posterior: float = 1.0    # 30-80 Hz posterior (sensory binding)
+    beta_frontal: float = 1.0       # 12-30 Hz frontal (motor/cognitive)
+    theta_gamma_coupling: float = 0.5  # Phase-amplitude coupling
+
+    @property
+    def D_low(self) -> float:
+        """
+        Low-frequency D: High-level cognitive precision ratio.
+        Reflects belief rigidity vs flexibility.
+        """
+        prior_component = self.theta_frontal * (1 + self.theta_gamma_coupling)
+        sensory_component = self.alpha_posterior + self.beta_frontal * 0.5
+        return prior_component / max(sensory_component, 0.001)
+
+    @property
+    def D_high(self) -> float:
+        """
+        High-frequency D: Low-level perceptual precision ratio.
+        Reflects sensory hypervigilance vs filtering.
+        """
+        prior_component = self.gamma_posterior * (1 + self.beta_frontal * 0.3)
+        sensory_component = self.gamma_posterior + self.alpha_posterior * 0.5
+        return prior_component / max(sensory_component, 0.001)
+
+    @property
+    def delta_H(self) -> float:
+        """Hierarchical discrepancy: |D_low - D_high|."""
+        return abs(self.D_low - self.D_high)
+
+    @property
+    def hierarchical_sync(self) -> float:
+        """Hierarchical synchronization: 1 / (1 + ΔH). Higher = better integrated."""
+        return 1.0 / (1.0 + self.delta_H)
+
+    def to_dict(self) -> Dict[str, float]:
+        base = super().to_dict()
+        base.update({
+            "D_low": round(self.D_low, 4),
+            "D_high": round(self.D_high, 4),
+            "delta_H": round(self.delta_H, 4),
+            "hierarchical_sync": round(self.hierarchical_sync, 4),
+            "theta_frontal": round(self.theta_frontal, 4),
+            "alpha_posterior": round(self.alpha_posterior, 4),
+            "gamma_posterior": round(self.gamma_posterior, 4),
+            "theta_gamma_coupling": round(self.theta_gamma_coupling, 4),
+        })
+        return base
+
+
+@dataclass
 class CriticalityState:
     """Current criticality state."""
     rho: float = 0.88               # Branching ratio
