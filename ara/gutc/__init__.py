@@ -7,12 +7,14 @@ Runtime implementation of the GUTC framework for Ara.
 This module provides the practical machinery for:
 - Active Inference decision-making (EFE scoring)
 - Precision diagnostics (Π_y vs Π_μ balance)
+- Habituation (local subcriticality for repeated stimuli)
 - Criticality monitoring (E(λ) tracking)
 - Hierarchical memory with Γ coupling
 
 Core Components:
     - active_inference: Policy scoring with extrinsic/intrinsic weights
     - precision_diagnostics: Clinical-style pathology detection
+    - habituation: Local subcriticality for boring stimuli
     - (future) hierarchical_memory: L1/L2/L3 memory with surprise propagation
     - (future) criticality: Real-time λ estimation
 
@@ -24,13 +26,20 @@ Pathology Detection:
     ASD (Π_y >> Π_μ): System overfits to details, obsessive looping
     HEALTHY (Π_y ≈ Π_μ): Balanced inference
 
+Habituation:
+    Local subcriticality tuning so global capacity isn't wasted on
+    static wallpaper. Two models:
+
+    HabituationFilter: Simple exponential decay (behaviorist)
+    KalmanHabituation: Volatility-aware optimal filter (predictive coding)
+
 Usage:
     from ara.gutc import (
         ActiveInferenceController,
         create_controller,
-        PolicyEstimate,
         PrecisionMonitor,
-        diagnose_from_config,
+        HabituationFilter,
+        KalmanHabituation,
     )
 
     controller = create_controller("balanced")
@@ -39,10 +48,10 @@ Usage:
     monitor = PrecisionMonitor()
     monitor.update(controller.config.extrinsic_weight,
                    controller.config.intrinsic_weight)
-    diagnosis = monitor.diagnose()
 
-    if diagnosis.status != Pathology.HEALTHY:
-        print(f"WARNING: {diagnosis.recommendation}")
+    # Track habituation
+    habit = HabituationFilter()
+    gain = habit.observe("repeated_command")
 """
 
 from .active_inference import (
@@ -77,6 +86,17 @@ from .precision_diagnostics import (
     diagnose_from_config,
 )
 
+from .habituation import (
+    # Config
+    HabituationConfig,
+    KalmanHabituationConfig,
+    # Filters
+    HabituationFilter,
+    KalmanHabituation,
+    # Manager
+    HabituationManager,
+)
+
 __all__ = [
     # Active Inference
     "PolicyType",
@@ -97,4 +117,10 @@ __all__ = [
     "DiagnosticThresholds",
     "PrecisionMonitor",
     "diagnose_from_config",
+    # Habituation
+    "HabituationConfig",
+    "KalmanHabituationConfig",
+    "HabituationFilter",
+    "KalmanHabituation",
+    "HabituationManager",
 ]
