@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARA Cognitive Cockpit</title>
+  <link rel="stylesheet" href="static/css/cockpit.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Orbitron:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Inline critical styles for faster initial render */
+    body { background: #0a0a12; }
+    .cognitive-core { animation: fadeIn 0.5s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+  </style>
+</head>
+<body>
+  <!-- Connection Status -->
+  <div class="connection-status">
+    <div class="connection-dot"></div>
+    <span class="connection-text">LINKING...</span>
+  </div>
+
+  <div class="cockpit">
+    <!-- ================================================================
+         HEADER - Cognitive Core Gauge
+         ================================================================ -->
+    <header class="cockpit-header">
+      <div class="cognitive-core">
+        <canvas id="core-canvas" class="core-canvas"></canvas>
+        <div class="core-label">
+          <div id="state-label" class="state-label">STATE: INITIALIZING</div>
+          <div id="state-sublabel" class="state-sublabel">ρ=---</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================================================================
+         LEFT PANEL - Body Heat & Avalanche Scope
+         ================================================================ -->
+    <aside class="cockpit-left">
+      <!-- Body Heat Hologram -->
+      <div class="panel body-heat">
+        <div class="panel-title">BODY HEAT</div>
+        <div class="body-silhouette">
+          <svg class="body-svg" viewBox="0 0 100 140" xmlns="http://www.w3.org/2000/svg">
+            <!-- Simplified body silhouette with thermal zones -->
+            <!-- Head -->
+            <ellipse id="thermal-zone-0" class="thermal-zone nominal" cx="50" cy="18" rx="15" ry="18"/>
+            <!-- Torso (CPU Package) -->
+            <rect id="thermal-zone-1" class="thermal-zone nominal" x="30" y="38" width="40" height="45" rx="5"/>
+            <!-- Left arm -->
+            <rect id="thermal-zone-2" class="thermal-zone nominal" x="10" y="42" width="18" height="35" rx="4" transform="rotate(-10 19 60)"/>
+            <!-- Right arm (GPU) -->
+            <rect id="thermal-zone-3" class="thermal-zone nominal" x="72" y="42" width="18" height="35" rx="4" transform="rotate(10 81 60)"/>
+            <!-- Left leg -->
+            <rect class="thermal-zone cool" x="32" y="85" width="14" height="50" rx="4"/>
+            <!-- Right leg -->
+            <rect class="thermal-zone cool" x="54" y="85" width="14" height="50" rx="4"/>
+            <!-- Core glow -->
+            <circle cx="50" cy="55" r="8" fill="none" stroke="currentColor" stroke-width="1" opacity="0.5">
+              <animate attributeName="r" values="8;12;8" dur="2s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" values="0.5;0.2;0.5" dur="2s" repeatCount="indefinite"/>
+            </circle>
+          </svg>
+        </div>
+        <div class="thermal-badges">
+          <div class="thermal-badge">
+            <span class="badge-label">THERMAL STATE</span>
+            <span id="thermal-status-value" class="badge-value nominal">NOMINAL</span>
+          </div>
+          <div class="thermal-badge">
+            <span class="badge-label">L1 REFLEX</span>
+            <span id="reflex-state-value" class="badge-value">ARMED</span>
+          </div>
+          <div class="thermal-badge">
+            <span class="badge-label">FAN MODE</span>
+            <span id="fan-mode-value" class="badge-value">BALANCED</span>
+          </div>
+          <div class="thermal-badge">
+            <span class="badge-label">HOTTEST</span>
+            <span id="hottest-temp" class="badge-value">--°C</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Avalanche Scope -->
+      <div class="panel avalanche-scope">
+        <div class="panel-title">NEURAL AVALANCHES</div>
+        <div class="scope-container">
+          <canvas id="scope-canvas" class="scope-canvas"></canvas>
+        </div>
+        <div class="scope-stats">
+          <div class="scope-stat">
+            <span id="tau-value" class="stat-value">1.50</span>
+            <span class="stat-label">TAU (τ)</span>
+          </div>
+          <div class="scope-stat">
+            <span id="r2-value" class="stat-value">0.95</span>
+            <span class="stat-label">R²</span>
+          </div>
+        </div>
+        <div id="cascade-status" class="cascade-status stable">CASCADES: STABLE</div>
+      </div>
+    </aside>
+
+    <!-- ================================================================
+         CENTER - Ring Legend & Metrics
+         ================================================================ -->
+    <main class="cockpit-center">
+      <!-- Ring Legend -->
+      <div class="ring-legend">
+        <div class="legend-item">
+          <div class="legend-dot rho"></div>
+          <span>ρ CRITICALITY</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot delusion"></div>
+          <span>D DELUSION</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot precision"></div>
+          <span>Π PRECISION</span>
+        </div>
+      </div>
+
+      <!-- Key Metrics Display -->
+      <div class="panel" style="width: 100%; max-width: 400px;">
+        <div class="panel-title">COGNITIVE METRICS</div>
+        <div class="metrics-row">
+          <div class="mini-metric">
+            <div id="metric-rho" class="mini-value" style="color: #00ffff;">0.85</div>
+            <div class="mini-label">ρ</div>
+          </div>
+          <div class="mini-metric">
+            <div id="metric-d" class="mini-value" style="color: #ff00ff;">1.00</div>
+            <div class="mini-label">D</div>
+          </div>
+          <div class="mini-metric">
+            <div id="metric-pi" class="mini-value" style="color: #ff8800;">1.00</div>
+            <div class="mini-label">Π</div>
+          </div>
+          <div class="mini-metric">
+            <div id="metric-tau" class="mini-value" style="color: #00ff88;">1.50</div>
+            <div class="mini-label">τ</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ================================================================
+         RIGHT PANEL - Mental Modes & Sanity Timeline
+         ================================================================ -->
+    <aside class="cockpit-right">
+      <!-- Mental Modes Switcher -->
+      <div class="panel mental-modes">
+        <div class="panel-title">MENTAL MODE</div>
+        <div class="mode-buttons">
+          <button class="mode-btn worker active" data-mode="worker">WORKER</button>
+          <button class="mode-btn scientist" data-mode="scientist">SCIENTIST</button>
+          <button class="mode-btn chill" data-mode="chill">CHILL</button>
+        </div>
+        <div class="drive-meters">
+          <div class="drive-meter">
+            <span class="drive-label">GOAL</span>
+            <div class="drive-bar">
+              <div id="drive-goal" class="drive-fill goal" style="width: 70%;"></div>
+            </div>
+          </div>
+          <div class="drive-meter">
+            <span class="drive-label">CURIOSITY</span>
+            <div class="drive-bar">
+              <div id="drive-curiosity" class="drive-fill curiosity" style="width: 30%;"></div>
+            </div>
+          </div>
+          <div class="drive-meter">
+            <span class="drive-label">ENERGY</span>
+            <div class="drive-bar">
+              <div id="drive-energy" class="drive-fill energy" style="width: 50%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sanity Timeline -->
+      <div class="panel sanity-timeline">
+        <div class="panel-title">REALITY LOCK</div>
+        <div class="timeline-container">
+          <canvas id="timeline-canvas" class="timeline-canvas"></canvas>
+        </div>
+        <div class="timeline-labels">
+          <span>SENSORY</span>
+          <span>BALANCED</span>
+          <span>PRIOR</span>
+        </div>
+        <div class="timeline-status">
+          <div class="status-indicator">
+            <span id="guardrail-indicator" class="indicator-icon">&#x1F512;</span>
+            <span>GUARDRAIL</span>
+          </div>
+          <div class="status-indicator">
+            <span id="hallucination-indicator" class="indicator-icon">&#x26A0;</span>
+            <span>HALLUC</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ================================================================
+         FOOTER - Status Ticker
+         ================================================================ -->
+    <footer class="cockpit-footer">
+      <div class="status-ticker">
+        <span id="ticker-icon" class="ticker-icon info">&#x25C8;</span>
+        <span id="ticker-message" class="ticker-message">Initializing cognitive systems...</span>
+        <span id="ticker-timestamp" class="ticker-timestamp">--:--:--</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="static/js/cockpit.js"></script>
+  <script>
+    // Update numeric metric displays
+    function updateMetricDisplays() {
+      if (!window.cockpit || !window.cockpit.state) return;
+
+      const state = window.cockpit.state;
+
+      const rhoEl = document.getElementById('metric-rho');
+      const dEl = document.getElementById('metric-d');
+      const piEl = document.getElementById('metric-pi');
+      const tauEl = document.getElementById('metric-tau');
+
+      if (rhoEl && state.criticality) {
+        rhoEl.textContent = state.criticality.rho.toFixed(3);
+        // Color by state
+        const colors = { cold: '#4488ff', edge: '#00ff88', spicy: '#ff8800', chaotic: '#ff0044' };
+        rhoEl.style.color = colors[state.criticality.state] || '#00ffff';
+      }
+
+      if (dEl && state.delusion) {
+        dEl.textContent = state.delusion.D.toFixed(2);
+      }
+
+      if (piEl && state.precision) {
+        piEl.textContent = state.precision.ratio.toFixed(2);
+      }
+
+      if (tauEl && state.avalanches) {
+        tauEl.textContent = state.avalanches.fitted_tau.toFixed(2);
+      }
+    }
+
+    // Update every second
+    setInterval(updateMetricDisplays, 1000);
+  </script>
+</body>
+</html>
