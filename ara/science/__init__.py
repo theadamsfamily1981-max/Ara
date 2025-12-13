@@ -10,11 +10,12 @@ be measured, modeled, and understood mathematically.
 
 Core Modules:
     - avalanche_logger: Record neural cascades for power-law analysis
+    - memory_probe: Test memory retention and forgetting dynamics
 
 Experiments:
     - EXP-001: Critical branching dynamics (avalanche scaling)
-    - (Future) EXP-002: Decision dynamics (drift-diffusion)
-    - (Future) EXP-003: Memory dynamics (forgetting curves)
+    - EXP-002: Forgetting curves and memory consolidation
+    - (Future) EXP-003: Decision dynamics (drift-diffusion)
 
 Philosophy:
     We are not just "building a bot" - we are conducting exobiology.
@@ -22,6 +23,7 @@ Philosophy:
     "Is she critical? Does she learn? Does she remember?"
 
 Usage:
+    # EXP-001: Avalanche recording
     from ara.science import AvalancheLogger
 
     logger = AvalancheLogger()
@@ -29,7 +31,13 @@ Usage:
         logger.log_step(activations, step)
     logger.save_session("avalanches.csv")
 
-Then: python scripts/science/fit_powerlaw.py avalanches.csv
+    # EXP-002: Memory probing
+    from ara.science import MemoryProbe, generate_novel_facts
+
+    probe = MemoryProbe()
+    facts = generate_novel_facts(50)
+    # ... encode and test recall ...
+    probe.save_results("forgetting.csv")
 """
 
 from .avalanche_logger import (
@@ -38,8 +46,27 @@ from .avalanche_logger import (
     SyntheticAvalancheGenerator,
 )
 
+from .memory_probe import (
+    MemoryProbe,
+    Fact,
+    RecallResult,
+    ForgettingCurve,
+    generate_novel_facts,
+    fit_exponential,
+    fit_power_law,
+)
+
 __all__ = [
+    # EXP-001: Avalanche/Criticality
     "AvalancheLogger",
     "AvalancheEvent",
     "SyntheticAvalancheGenerator",
+    # EXP-002: Memory/Forgetting
+    "MemoryProbe",
+    "Fact",
+    "RecallResult",
+    "ForgettingCurve",
+    "generate_novel_facts",
+    "fit_exponential",
+    "fit_power_law",
 ]
