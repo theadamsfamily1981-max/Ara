@@ -1,7 +1,26 @@
 # NeuroBalance™ Personal Unit
 ## Conceptual Device Specification v0.1
 
-A wearable precision-thermostat for neural dynamics, implementing the Brain Remodulator framework as a consumer/clinical neurofeedback device.
+> **IMPORTANT FRAMING**
+>
+> This document describes a **research prototype concept**, not a validated
+> therapeutic device. All clinical protocols are **hypothetical targets**
+> to be tested in proper trials, not proven interventions.
+>
+> The "Delusion Index" (D = Π_prior / Π_sensory) is a **model-dependent
+> heuristic** derived from predictive processing theory, not a clinically
+> validated biomarker. EEG-based estimation of such abstract quantities
+> is noisy, indirect, and subject to large individual variability.
+>
+> **This is:** A design doc for research, a testable hypothesis generator,
+> a biofeedback training aid concept.
+>
+> **This is NOT:** A proven treatment for schizophrenia, ASD, or any
+> psychiatric condition. No claims of therapeutic efficacy are made.
+
+---
+
+A wearable precision-thermostat for neural dynamics, implementing the Brain Remodulator framework as a research/biofeedback device.
 
 ---
 
